@@ -32,9 +32,10 @@ git push origin rc          # -> images :rc
 Les images versionnées (`:0.2.0`, `:0.2`, `:latest`) sortent du merge de la PR de
 release ouverte par `release-please` sur `main` — pas d'un `git tag` manuel.
 
-Sur GHCR, les paquets sont **privés** à leur création : soit tu les
-passes en public (Package settings → Change visibility), soit le serveur se
-connecte avec un PAT `read:packages` :
+Le paquet GHCR est **public** (vérifié : `GET /v2/yabison/releasechronicle/manifests/rc`
+répond 200 sans identifiants), donc le serveur tire sans authentification. S'il
+repassait en privé — Package settings → Change visibility — il faudrait s'y
+connecter avec un PAT `read:packages` :
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <user> --password-stdin

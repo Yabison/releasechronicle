@@ -85,7 +85,8 @@ sudo systemctl start releasechronicle-demo-update.service  # forcer maintenant
 Latence entre le merge sur `rc` et la démo à jour : le temps de la CI (~5 min) plus
 au plus 5 min de timer.
 
-> Si le paquet GHCR est privé, le `docker login ghcr.io` doit avoir été fait par
+> Le paquet GHCR est public, le pull se fait sans identifiants. S'il repassait en
+> privé, le `docker login ghcr.io` devrait avoir été fait par
 > l'utilisateur qui exécute le timer (root ici) — le token est écrit dans
 > `~/.docker/config.json`. Un PAT expiré fait échouer le pull en silence côté
 > service : le `journalctl` est le seul endroit où ça se voit.
