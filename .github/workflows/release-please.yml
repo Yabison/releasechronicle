@@ -1,0 +1,55 @@
+# Automatic versioning, driven by the Conventional Commits landed on main.
+#
+# release-please keeps a "chore(main): release X.Y.Z" pull request up to date with
+# everything merged since the last release. Merging it is the release: it bumps
+# package.json, writes CHANGELOG.md, creates the tag vX.Y.Z and the GitHub Release,
+# and this workflow then pushes the release images.
+#
+# The images are pushed from here rather than from a `tags: ["v*"]` trigger on
+# ci.yml because a tag created with GITHUB_TOKEN does not start another workflow.
+# The commit is not untested: it went through the full CI as a pull request and
+# again on the push to main.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Maintain the release PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+      major: ${{ steps.release.outputs.major }}
+      minor: ${{ steps.release.outputs.minor }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish-release:
+    name: Publish the release images
+    needs: [release-please]
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-images.yml
+    with:
+      # Build the tagged commit, not whatever main points at by then.
+      ref: ${{ needs.release-please.outputs.tag_name }}
+      tag-rules: |
+        type=raw,value=${{ needs.release-please.outputs.version }}
+        type=raw,value=${{ needs.release-please.outputs.major }}.${{ needs.release-please.outputs.minor }}
+        type=raw,value=latest

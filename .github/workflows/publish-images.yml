@@ -1,0 +1,76 @@
+# Single definition of "how we build and push the two images". Called by ci.yml
+# (branches rc / main) and by release-please.yml (tag v*), so the build never drifts
+# between the two paths.
+name: Publish images
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to build. Defaults to the caller's ref.
+        type: string
+        required: false
+        default: ""
+      tag-rules:
+        description: docker/metadata-action `tags` input, one rule per line.
+        type: string
+        required: true
+
+jobs:
+  publish:
+    name: Push to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: ${{ inputs.tag-rules }}
+
+      - name: Push the runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runner
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The demo instance also needs the seeders + ticker, which the runtime image
+      # deliberately excludes. Same tags with a -demo-tools suffix; the layers are
+      # shared with the build above, so this is nearly free.
+      - id: meta_demo
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            suffix=-demo-tools,onlatest=true
+          tags: ${{ inputs.tag-rules }}
+
+      - name: Push the demo-tools image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: demo-tools
+          push: true
+          tags: ${{ steps.meta_demo.outputs.tags }}
+          labels: ${{ steps.meta_demo.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

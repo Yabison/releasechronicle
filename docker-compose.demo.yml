@@ -1,0 +1,86 @@
+# Public demo instance, for a Linux server behind Traefik.
+#
+# Standalone: use it on its own, NOT as an overlay of docker-compose.yml (that one
+# is the dev stack and builds from source). Nothing is built here — both images are
+# pulled from GHCR, published by .github/workflows/ci.yml.
+#
+#   docker compose -f docker-compose.demo.yml --env-file .env.demo pull
+#   docker compose -f docker-compose.demo.yml --env-file .env.demo up -d
+#
+# See docs/demo-deploy.md.
+
+name: releasechronicle-demo
+
+services:
+  db_demo:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rc
+      POSTGRES_PASSWORD: ${DEMO_DB_PASSWORD:?set DEMO_DB_PASSWORD in .env.demo}
+      # The name must contain "demo": the seeding jobs refuse anything else
+      # (prisma/demo-guard.ts).
+      POSTGRES_DB: releasechronicle_demo
+    volumes:
+      - db_demo_data:/var/lib/postgresql/data
+    # No published port on purpose: only the two app containers need it.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rc -d releasechronicle_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app_demo:
+    image: ghcr.io/yabison/releasechronicle:${RC_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://rc:${DEMO_DB_PASSWORD}@db_demo:5432/releasechronicle_demo
+      # Published credentials (config/auth-users.demo.yml, in the repo), so this
+      # instance must never hold real data.
+      AUTH_USERS_FILE: /app/config/auth-users.demo.yml
+      AUTH_SECRET: ${DEMO_AUTH_SECRET:?generate one with `openssl rand -base64 32`}
+      RC_WRITE_TOKEN: ${DEMO_WRITE_TOKEN:?generate one with `openssl rand -base64 32`}
+      # Must be the public https URL: it is what action links in emails point to.
+      APP_BASE_URL: https://${DEMO_DOMAIN:?set DEMO_DOMAIN in .env.demo}
+      # No outbound notifications from a public instance.
+      RC_WEBHOOK_BLOCK_PRIVATE: "true"
+    depends_on:
+      db_demo:
+        condition: service_healthy
+    networks:
+      - default
+      - traefik
+    labels:
+      traefik.enable: "true"
+      # The proxy is on several networks; name the one it should reach us on.
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik_webgateway}
+      traefik.http.routers.rc-demo.rule: Host(`${DEMO_DOMAIN}`)
+      traefik.http.routers.rc-demo.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.rc-demo.tls: "true"
+      traefik.http.routers.rc-demo.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      # The standalone Next server listens on 3000 inside the container.
+      traefik.http.services.rc-demo.loadbalancer.server.port: "3000"
+
+  # Drives the world: a tick every RC_DEMO_TICK_SECONDS, full rebuild at 00:00 UTC.
+  # Separate image (demo-tools target): it carries tsx, the seeders and the sources,
+  # which the runtime image deliberately does not.
+  demo_driver:
+    image: ghcr.io/yabison/releasechronicle:${RC_IMAGE_TAG:-latest}-demo-tools
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://rc:${DEMO_DB_PASSWORD}@db_demo:5432/releasechronicle_demo
+      # Both guards must pass or the seeders refuse to run (prisma/demo-guard.ts).
+      RC_DEMO_MODE: "true"
+      RC_DEMO_TICK_SECONDS: ${DEMO_TICK_SECONDS:-180}
+    depends_on:
+      db_demo:
+        condition: service_healthy
+
+networks:
+  # Created by the Traefik stack, not by this file.
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik_webgateway}
+
+volumes:
+  db_demo_data:

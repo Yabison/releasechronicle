@@ -122,6 +122,9 @@ Le ticker et le reset **refusent de s'exécuter** si `RC_DEMO_MODE` n'est pas à
 *et* si le nom de la base ne contient pas `demo` : un `DATABASE_URL` mal saisi ne peut
 pas effacer autre chose. Exécution manuelle : `npm run demo:tick` / `npm run demo:reset`.
 
+Pour publier cette instance sur un serveur (images GHCR + Traefik) :
+[docs/demo-deploy.md](docs/demo-deploy.md).
+
 ---
 
 ## Développement local
