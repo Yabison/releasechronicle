@@ -11,6 +11,7 @@ import { buildServiceTimeline, groupByMonth, type EntryCategory, type TimelineEn
 import { categoryLabel, changeTypeLabel } from "@/i18n/labels";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 import type { ClientEvent } from "@/lib/timeline";
 import { siblings, lotKey } from "@/lib/deployLot";
 import styles from "./DetailPane.module.css";
@@ -61,7 +62,8 @@ export function DetailPane({
   envWorkflow: string[];
   canWrite?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { mode: timeMode } = useTimeFormat();
   // Environment is a global filter at the title level, scoping every event below.
   const environments = useMemo(
     () => [...new Set(events.map((e) => e.environment))].sort(),
@@ -70,7 +72,13 @@ export function DetailPane({
   const [env, setEnv] = useState<string>(ALL_ENV);
   // Environment groups (e.g. ALLPROD = run+secure+prod) shown as extra filter options.
   const [envGroups, setEnvGroups] = useState<{ slug: string; name: string; members: string[] }[]>([]);
-  useEffect(() => { fetch("/api/v1/environment-groups").then((r) => r.json()).then(setEnvGroups).catch(() => {}); }, []);
+  const [loadWarn, setLoadWarn] = useState(false);
+  useEffect(() => {
+    fetch("/api/v1/environment-groups")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(setEnvGroups)
+      .catch(() => setLoadWarn(true));
+  }, []);
   // When a group is selected, env holds "group:<slug>"; resolve its member set.
   const groupMembers = useMemo(() => {
     if (!env.startsWith("group:")) return null;
@@ -125,6 +133,7 @@ export function DetailPane({
       const m: Record<string, string> = {};
       for (const t of rows) if (t.color) { m[t.name] = t.color; m[t.slug] = t.color; }
       setTagColors(m);
+      // Cosmetic on purpose: a failure here only means uncoloured tag chips.
     }).catch(() => {});
   }, []);
 
@@ -157,7 +166,10 @@ export function DetailPane({
     () => timeline.history.filter((e) => active.has(entryFilterKey(e))),
     [timeline.history, active],
   );
-  const groups = useMemo(() => groupByMonth(historyToShow), [historyToShow]);
+  const groups = useMemo(
+    () => groupByMonth(historyToShow, { mode: timeMode, locale }),
+    [historyToShow, timeMode, locale],
+  );
   const selectedEvent = events.find((e) => e.id === selected) ?? null;
   const nothing = maintenancesToShow.length === 0 && groups.length === 0;
 
@@ -172,6 +184,7 @@ export function DetailPane({
 
   return (
     <div>
+      {loadWarn && <p role="alert" style={{ color: "var(--cat-incident, #dc2626)", fontSize: 13 }}>{t("common.loadFailed")}</p>}
       <div className={styles.head}>
         <div className={styles.crumb}>
           <span className={styles.crumbProduct}>{productName}</span> / <span className={styles.crumbService}>{serviceName}</span>

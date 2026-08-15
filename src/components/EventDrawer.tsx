@@ -14,19 +14,9 @@ import { STATUS_META } from "@/lib/deployStatusMeta";
 import type { DeployStatus } from "@prisma/client";
 import { DeployTimeline } from "./DeployTimeline";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 import { actionMessage, changeTypeLabel, phaseLabel, rollbackText } from "@/i18n/labels";
 import styles from "./EventDrawer.module.css";
-
-function toLocalInput(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-function traceStamp(iso: string): string {
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
-}
 
 function truncate(s: string, n = 48): string {
   return s.length > n ? `${s.slice(0, n)}…` : s;
@@ -39,6 +29,7 @@ function Comments({ event, path, canWrite = true }: { event: ClientEvent; path: 
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { t } = useI18n();
+  const { stampShort } = useTimeFormat();
   return (
     <div className={styles.section}>
       <h2 className={styles.secTitle}>{t("drawer.comments")}</h2>
@@ -51,7 +42,7 @@ function Comments({ event, path, canWrite = true }: { event: ClientEvent; path: 
         )}
         {event.comments.map((c) => (
           <div key={c.id} className={styles.commentItem}>
-            <span className={styles.commentMeta}>{c.author ?? "—"} · {traceStamp(c.createdAt)}</span>
+            <span className={styles.commentMeta}>{c.author ?? "—"} · {stampShort(c.createdAt)}</span>
             <div>{c.body}</div>
           </div>
         ))}
@@ -94,6 +85,7 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
       const m: Record<string, string> = {};
       for (const t of rows) { m[t.slug] = t.color; m[t.name] = t.color; }
       setTagColors(m);
+      // Cosmetic on purpose: a failure here only means uncoloured tag chips.
     }).catch(() => {});
   }, []);
   const colorOf = (t: string) => tagColors[t] ?? tagColors[slugify(t)] ?? null;
@@ -152,11 +144,12 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
 /** Edit an event's date (occurredAt). */
 function DateEdit({ event, path }: { event: ClientEvent; path: string }) {
   const router = useRouter();
-  const [val, setVal] = useState(toLocalInput(new Date(event.occurredAt)));
+  const { toInput, fromInput } = useTimeFormat();
+  const [val, setVal] = useState(toInput(event.occurredAt));
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { t } = useI18n();
-  const dirty = val !== toLocalInput(new Date(event.occurredAt));
+  const dirty = val !== toInput(event.occurredAt);
   return (
     <div className={styles.dateEdit}>
       <span className={styles.key}>{t("common.date")}</span>
@@ -167,7 +160,7 @@ function DateEdit({ event, path }: { event: ClientEvent; path: string }) {
         onClick={() => {
           setErr(null);
           startTransition(async () => {
-            const res = await updateEventDateAction({ eventId: event.id, occurredAt: new Date(val).toISOString(), path });
+            const res = await updateEventDateAction({ eventId: event.id, occurredAt: fromInput(val), path });
             if (res.ok) router.refresh();
             else setErr(actionMessage(t, res));
           });
@@ -262,6 +255,7 @@ export function EventDrawer({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const { t } = useI18n();
+  const { stampShort, stampFull, toInput, fromInput } = useTimeFormat();
 
   // Incident editing (status + end time)
   const INCIDENT_STATUSES = ["INVESTIGATING", "IDENTIFIED", "MONITORING", "RESOLVED"] as const;
@@ -269,7 +263,7 @@ export function EventDrawer({
     (event.incidentStatus as (typeof INCIDENT_STATUSES)[number] | null) ??
     (event.resolvedAt ? "RESOLVED" : "INVESTIGATING");
   const [incStatus, setIncStatus] = useState<(typeof INCIDENT_STATUSES)[number]>(initialStatus);
-  const [endInput, setEndInput] = useState(event.resolvedAt ? toLocalInput(new Date(event.resolvedAt)) : "");
+  const [endInput, setEndInput] = useState(event.resolvedAt ? toInput(event.resolvedAt) : "");
   const [incError, setIncError] = useState<string | null>(null);
   const [lotInput, setLotInput] = useState(event.lot ?? "");
   const [lotErr, setLotErr] = useState<string | null>(null);
@@ -297,7 +291,7 @@ export function EventDrawer({
     if (!path) return;
     setIncError(null);
     const resolvedAt =
-      incStatus === "RESOLVED" ? new Date(endInput || Date.now()).toISOString() : undefined;
+      incStatus === "RESOLVED" ? (endInput ? fromInput(endInput) : new Date().toISOString()) : undefined;
     startTransition(async () => {
       const res = await updateIncidentAction({ eventId: event.id, path, status: incStatus, resolvedAt });
       if (res.ok) {
@@ -346,7 +340,7 @@ export function EventDrawer({
               <span className={styles.hdrPhase}>{changeTypeLabel(t, event.changeType)}</span>
             )}
             {event.externalLink && (
-              <a className={styles.hdrLink} href={event.externalLink} target="_blank" rel="noreferrer" title="Lien externe">{t("drawer.link")}</a>
+              <a className={styles.hdrLink} href={event.externalLink} target="_blank" rel="noreferrer" title={t("drawer.externalLink")}>{t("drawer.link")}</a>
             )}
             {pending && <span className={styles.typeSaving}>…</span>}
             {changeErr && <span className={styles.error}>{changeErr}</span>}
@@ -359,7 +353,7 @@ export function EventDrawer({
           <>
             <div className={styles.metaLine}>
               <b>{event.deployStatus ?? event.derived.status ?? "—"}</b>
-              {" · "}{traceStamp(event.occurredAt)}
+              {" · "}{stampShort(event.occurredAt)}
               {event.requester ? ` · ${event.requester}` : ""}
               {event.version ? ` · v${event.version}` : ""}
               {event.hourType ? ` · ${t(`hour.${event.hourType}`)}` : ""}
@@ -436,7 +430,7 @@ export function EventDrawer({
                               href={`${path}?event=${step.eventId}`}
                               target="_blank"
                               rel="noreferrer"
-                              title={`${env} — ${new Date(step.occurredAt).toUTCString()} · ouvrir la MEP`}
+                              title={`${env} — ${stampFull(step.occurredAt)} · ${t("drawer.openMep")}`}
                             >
                               {env}
                             </a>
@@ -462,7 +456,7 @@ export function EventDrawer({
                     {buildMeps.map((e) => (
                       <a key={e.id} className={styles.buildRow} href={`${path}?event=${e.id}`} target="_blank" rel="noreferrer">
                         <span className={styles.buildEnv} style={{ background: envColors[e.environment] ?? "#64748b" }}>{e.environment}</span>
-                        <span className={styles.buildDate}>{traceStamp(e.occurredAt)}</span>
+                        <span className={styles.buildDate}>{stampShort(e.occurredAt)}</span>
                         <span className={styles.buildComment}>{truncate(e.comment ?? "")}</span>
                       </a>
                     ))}
@@ -520,12 +514,15 @@ export function EventDrawer({
           </>
         ) : (
           <>
-            <Row k="Environment" v={event.environment} />
-            <Row k="When" v={new Date(event.occurredAt).toUTCString()} />
+            <Row k={t("drawer.env")} v={event.environment} />
+            <Row k={t("drawer.when")} v={stampFull(event.occurredAt)} />
             {editable && <DateEdit event={event} path={path!} />}
             <Row k="Incident" v={event.incidentType} />
-            <Row k="Duration (min)" v={event.derived.minutes} />
-            <Row k="Window" v={event.windowStart ? `${event.windowStart} → ${event.windowEnd}` : null} />
+            <Row k={t("drawer.durationMin")} v={event.derived.minutes} />
+            <Row
+              k={t("drawer.window")}
+              v={event.windowStart ? `${stampFull(event.windowStart)} → ${event.windowEnd ? stampFull(event.windowEnd) : "?"}` : null}
+            />
             {event.externalLink && (
               <Row k="Link" v={<a href={event.externalLink} target="_blank" rel="noreferrer">open</a>} />
             )}
@@ -542,8 +539,8 @@ export function EventDrawer({
           <div className={styles.section}>
             <h2>{t("drawer.incident")}</h2>
             <Row k={t("common.status")} v={event.incidentStatus ?? (event.resolvedAt ? "RESOLVED" : "INVESTIGATING")} />
-            <Row k={t("drawer.incStart")} v={incStart ? incStart.toUTCString() : null} />
-            <Row k={t("drawer.incEnd")} v={event.resolvedAt ? new Date(event.resolvedAt).toUTCString() : t("drawer.ongoing")} />
+            <Row k={t("drawer.incStart")} v={incStart ? stampFull(incStart) : null} />
+            <Row k={t("drawer.incEnd")} v={event.resolvedAt ? stampFull(event.resolvedAt) : t("drawer.ongoing")} />
             {dur && <Row k={t("drawer.duration")} v={dur.label} />}
 
             {editable && (
@@ -573,7 +570,7 @@ export function EventDrawer({
 
         {(causal.causedBy || causal.led.length > 0) && (
           <div className={styles.section}>
-            <h2>Causality</h2>
+            <h2>{t("drawer.causality")}</h2>
             {causal.causedBy && <p className={styles.causal}>caused by → {causal.causedBy.type} ({causal.causedBy.environment})</p>}
             {causal.led.map((l) => (
               <p key={l.id} className={styles.causal}>led to ← {l.type} ({l.environment})</p>

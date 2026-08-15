@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 
 type Row = {
   id: string;
@@ -31,6 +32,7 @@ const PAGE = 50;
 
 export default function AuditPage() {
   const { t } = useI18n();
+  const { stampFull } = useTimeFormat();
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -107,7 +109,7 @@ export default function AuditPage() {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
-              <td>{new Date(r.at).toISOString().slice(0, 19).replace("T", " ")}</td>
+              <td>{stampFull(r.at)}</td>
               <td>{r.action}</td>
               <td>{r.actor ?? "—"}</td>
               <td>{r.actorIp ?? "—"}</td>

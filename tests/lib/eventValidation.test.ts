@@ -37,6 +37,22 @@ describe("validateDeploymentBody", () => {
       expect(r.value.occurredAt).toBeInstanceOf(Date);
     }
   });
+  it("accepts an occurredAt with a non-UTC offset and normalizes the instant", () => {
+    // 12:00 in Paris (UTC+2 in summer) is 10:00 UTC — the API is not GMT-only.
+    const r = validateDeploymentBody({ ...ref, version: "1", requester: "ci", changeType: "NORMAL", occurredAt: "2026-06-25T12:00:00+02:00" });
+    expect(r.ok && r.value.occurredAt.toISOString()).toBe("2026-06-25T10:00:00.000Z");
+  });
+  it("accepts negative offsets too", () => {
+    const r = validateDeploymentBody({ ...ref, version: "1", requester: "ci", changeType: "NORMAL", occurredAt: "2026-06-24T22:30:00-05:00" });
+    expect(r.ok && r.value.occurredAt.toISOString()).toBe("2026-06-25T03:30:00.000Z");
+  });
+  it("accepts offsets on scheduledAt as well", () => {
+    const r = validateDeploymentBody({
+      ...ref, version: "1", requester: "ci", changeType: "NORMAL",
+      deployStatus: "SCHEDULED", scheduledAt: "2026-09-01T09:00:00+02:00",
+    });
+    expect(r.ok && (r.value.fields as { scheduledAt: Date }).scheduledAt.toISOString()).toBe("2026-09-01T07:00:00.000Z");
+  });
   it("uses provided occurredAt", () => {
     const r = validateDeploymentBody({ ...ref, version: "1", requester: "ci", changeType: "POSTMEP_SQL", occurredAt: "2026-06-25T10:00:00Z" });
     expect(r.ok && r.value.occurredAt.toISOString()).toBe("2026-06-25T10:00:00.000Z");

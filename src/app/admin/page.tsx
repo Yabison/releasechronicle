@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import styles from "./admin.module.css";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 import { LOCALES, DEFAULT_LOCALE, type Locale } from "@/i18n";
 import { TRANSITION_OPTIONS } from "@/lib/hooks/transitions";
 
@@ -45,6 +46,7 @@ type CalFeed = { id: string; name: string; token: string; company: string | null
 
 export default function AdminPage() {
   const { t: tr } = useI18n();
+  const { stampFull } = useTimeFormat();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [name, setName] = useState("");
   const [status, setStatus] = useState("");
@@ -138,6 +140,7 @@ export default function AdminPage() {
     else setStatus(`Error ${res.status}`);
   }
   async function deleteFeed(id: string) {
+    if (!window.confirm(tr("confirm.deleteFeed"))) return;
     await fetch(`/api/v1/calendar-feeds/${id}`, { method: "DELETE" });
     await loadFeeds();
   }
@@ -168,6 +171,8 @@ export default function AdminPage() {
     if (res.ok) await loadTags(); else setStatus(`Error ${res.status}`);
   }
   async function deleteTag(name: string) {
+    // Not a config-only delete: it strips the tag from every event carrying it.
+    if (!window.confirm(tr("confirm.deleteTag", { name }))) return;
     await tagReq("DELETE", { name });
     await loadTags();
   }
@@ -224,6 +229,7 @@ export default function AdminPage() {
     if (res.ok) { setNewGroupName(""); setNewGroupMembers([]); await loadEnvs(); } else setStatus(`Error ${res.status}`);
   }
   async function deleteEnvGroup(id: string) {
+    if (!window.confirm(tr("confirm.deleteEnvGroup"))) return;
     await fetch(`/api/v1/environment-groups/${id}`, { method: "DELETE" });
     await loadEnvs();
   }
@@ -255,6 +261,7 @@ export default function AdminPage() {
     await loadEnvs();
   }
   async function deleteEnv(id: string) {
+    if (!window.confirm(tr("confirm.deleteEnv"))) return;
     await fetch(`/api/v1/environments/${id}`, { method: "DELETE" });
     await loadEnvs();
   }
@@ -276,6 +283,7 @@ export default function AdminPage() {
     else setStatus(`Error ${res.status}`);
   }
   async function deleteTarget(id: string) {
+    if (!window.confirm(tr("confirm.deleteTarget"))) return;
     const res = await fetch(`/api/v1/notification-targets/${id}`, { method: "DELETE" });
     if (!res.ok) { const d = await res.json().catch(() => ({})); setStatus(d.error ?? `Error ${res.status}`); }
     await loadTargets();
@@ -515,6 +523,7 @@ export default function AdminPage() {
     }
   }
   async function removeHook(id: string) {
+    if (!window.confirm(tr("confirm.deleteHook"))) return;
     await fetch(`/api/v1/products/${hookProduct}/hooks/${id}?company=${prodCompany}`, {
       method: "DELETE",
     });
@@ -537,6 +546,7 @@ export default function AdminPage() {
     if (res.ok) { setSrcLabel(""); await loadSources(srcService); } else setStatus(`Error ${res.status}`);
   }
   async function removeSource(id: string) {
+    if (!window.confirm(tr("confirm.deleteSource"))) return;
     await fetch(`/api/v1/services/${srcService}/ingest-sources/${id}?company=${prodCompany}&product=${hookProduct}`, { method: "DELETE" });
     await loadSources(srcService);
   }
@@ -566,6 +576,7 @@ export default function AdminPage() {
     if (res.ok) { setSrcLabel(""); await loadScopedSources(); } else setStatus(`Error ${res.status}`);
   }
   async function removeScopedSource(id: string) {
+    if (!window.confirm(tr("confirm.deleteSource"))) return;
     await fetch(`/api/v1/ingest-sources/${id}`, { method: "DELETE" });
     await loadScopedSources();
   }
@@ -1130,7 +1141,7 @@ ${fields.join(",\n")}
                     <strong>{u.username}</strong>
                     <span className={styles.slug}>{u.name}</span>
                     <span className={styles.badge}>{u.roles.join(", ") || "—"}</span>
-                    <span className={styles.muted}>{new Date(u.syncedAt).toLocaleString()}</span>
+                    <span className={styles.muted}>{stampFull(u.syncedAt)}</span>
                   </li>
                 ))}
               </ul>

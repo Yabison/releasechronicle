@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 
 type Company = { id: string; name: string; slug: string };
 type Product = { id: string; name: string; slug: string };
@@ -12,6 +13,7 @@ const PAGE = 50;
 
 export default function LogsPage() {
   const { t } = useI18n();
+  const { stampFull } = useTimeFormat();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [company, setCompany] = useState("");
@@ -83,7 +85,7 @@ export default function LogsPage() {
         <tbody>
           {rows.map((d) => (
             <tr key={d.id}>
-              <td>{new Date(d.createdAt).toISOString().slice(0, 19).replace("T", " ")}</td>
+              <td>{stampFull(d.createdAt)}</td>
               <td>{d.kind}</td>
               <td>{d.hookType}</td>
               <td>{d.ok ? "✓" : "✗"}</td>

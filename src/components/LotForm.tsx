@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { createLotAction } from "@/app/actions/events";
 import { defaultLotNumber } from "@/lib/lot";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 import { actionMessage, changeTypeLabel } from "@/i18n/labels";
 import styles from "./EventForm.module.css";
 
@@ -33,13 +34,6 @@ function emptyItem(): Item {
   return { id: `row-${itemSeq++}`, company: "", product: "", service: "", version: "", externalLink: "" };
 }
 
-// datetime-local value (YYYY-MM-DDTHH:mm) for "now" in the local timezone.
-function nowLocal(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
 export function LotForm({
   path,
   onSuccess,
@@ -47,6 +41,8 @@ export function LotForm({
   path: string;
   onSuccess: () => void;
 }) {
+  const { toInput, fromInput } = useTimeFormat();
+  const nowInput = () => toInput(new Date());
   const [common, setCommon] = useState({
     environment: "",
     requester: "",
@@ -54,7 +50,7 @@ export function LotForm({
     deployStatus: "SCHEDULED",
     lot: defaultLotNumber(),
     occurredAt: "",
-    scheduledAt: nowLocal(),
+    scheduledAt: nowInput(),
   });
   const [items, setItems] = useState<Item[]>([emptyItem()]);
   const [companies, setCompanies] = useState<Opt[]>([]);
@@ -155,10 +151,10 @@ export function LotForm({
         deployStatus: common.deployStatus,
         lot: common.lot,
         ...(common.occurredAt
-          ? { occurredAt: new Date(common.occurredAt).toISOString() }
+          ? { occurredAt: fromInput(common.occurredAt) }
           : {}),
         ...(common.deployStatus === "SCHEDULED" && common.scheduledAt
-          ? { scheduledAt: new Date(common.scheduledAt).toISOString() }
+          ? { scheduledAt: fromInput(common.scheduledAt) }
           : {}),
       },
       items: valid.map((it) => ({
@@ -224,7 +220,7 @@ export function LotForm({
             onChange={(e) => {
               const v = e.target.value;
               set("deployStatus", v);
-              if (v === "SCHEDULED" && !common.scheduledAt) set("scheduledAt", nowLocal());
+              if (v === "SCHEDULED" && !common.scheduledAt) set("scheduledAt", nowInput());
             }}
           >
             {DEPLOY_STATUSES.map((x) => (
