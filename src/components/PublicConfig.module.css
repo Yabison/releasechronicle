@@ -1,0 +1,31 @@
+.wrap { max-width: 720px; padding: 8px 4px 40px; display: flex; flex-direction: column; gap: 22px; }
+.head { display: flex; align-items: baseline; gap: 14px; }
+.back { color: var(--muted); text-decoration: none; font-size: 0.85em; }
+.back:hover { text-decoration: underline; }
+.title { font-size: 1.1rem; margin: 0; }
+.intro { color: var(--muted); margin: 0; font-size: 0.9em; }
+
+.section { display: flex; flex-direction: column; gap: 10px; }
+.h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0; }
+.hint { color: var(--muted); font-size: 0.82em; margin: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; font-size: 0.9em;
+}
+.chip[data-on="true"] { border-color: var(--cat-deploy); background: var(--cat-deploy-bg); color: var(--cat-deploy); }
+
+.tree { display: flex; flex-direction: column; gap: 12px; }
+.company { display: flex; flex-direction: column; gap: 3px; }
+.product { display: flex; flex-direction: column; gap: 3px; }
+.row {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 3px 6px; border-radius: var(--radius);
+}
+.row:hover { background: var(--cat-deploy-bg); }
+.row[data-level="product"] { margin-left: 20px; }
+.row[data-level="service"] { margin-left: 40px; color: var(--muted); }
+.row[data-dim="true"] { opacity: 0.5; }
+
+.muted { color: var(--muted); font-size: 0.9em; }

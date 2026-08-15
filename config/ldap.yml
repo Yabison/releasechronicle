@@ -1,0 +1,14 @@
+# Configuration LDAP (filtres + mapping groupes→rôles). Les secrets de connexion
+# (URL, baseDN, bindDN, bindPassword) sont dans les variables d'environnement.
+userSearchFilter: "(uid={username})"
+nameAttr: cn
+emailAttr: mail
+groupSearchFilter: "(&(objectClass=groupOfNames)(member={dn}))"
+groupNameAttr: cn
+groupRoles:
+  admins: admin
+  devops-team: devops
+  qa-team: qa
+  everyone: viewer
+userListFilter: "(objectClass=inetOrgPerson)"
+usernameAttr: uid

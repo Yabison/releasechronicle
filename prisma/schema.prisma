@@ -1,0 +1,375 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ServiceType {
+  APP
+  COMPONENT
+  API
+}
+
+enum IngestScope {
+  SERVICE
+  COMPANY
+  GLOBAL
+}
+
+model Company {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  products  Product[]
+  ingestSources IngestSource[]
+  autoLotNaming String @default("master")
+  public    Boolean   @default(false)
+  sortOrder Int       @default(0)
+}
+
+model Product {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String
+  companyId String
+  company   Company   @relation(fields: [companyId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  services  Service[]
+  hooks     Hook[]
+  envWorkflow String[] @default([])
+  sortOrder Int       @default(0)
+  public    Boolean   @default(false)
+
+  @@unique([companyId, slug])
+}
+
+model Service {
+  id        String      @id @default(cuid())
+  name      String
+  slug      String
+  type      ServiceType
+  productId String
+  product   Product     @relation(fields: [productId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  deletedAt DateTime?
+  events    Event[]
+  ingestSources IngestSource[]
+  runtimeStates RuntimeState[]
+  buildUrlTemplate String?
+  isMaster  Boolean     @default(false)
+  // Env workflow: inherits the product's by default; when envWorkflowOverride is true,
+  // the service uses its own envWorkflow instead (no more inheritance).
+  envWorkflow String[]  @default([])
+  envWorkflowOverride Boolean @default(false)
+  sortOrder Int         @default(0)
+  public    Boolean     @default(false)
+
+  @@unique([productId, slug])
+}
+
+model EnvironmentConfig {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  name      String
+  color     String
+  sortOrder Int       @default(0)
+  deletedAt DateTime?
+  public    Boolean   @default(false)
+}
+
+/// Singleton (id = "singleton") holding global public-mode settings.
+model PublicSetting {
+  id         String   @id @default("singleton")
+  eventTypes String[] @default(["DEPLOYMENT", "MAINTENANCE"])
+  updatedAt  DateTime @updatedAt
+}
+
+model CalendarFeed {
+  id          String   @id @default(cuid())
+  name        String
+  token       String   @unique
+  company     String?
+  product     String?
+  service     String?
+  environment String?
+  types       String[] @default([])
+  createdAt   DateTime @default(now())
+}
+
+model RuntimeState {
+  id          String   @id @default(cuid())
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id])
+  environment String
+  build       String
+  reportedAt  DateTime @default(now())
+
+  @@unique([serviceId, environment])
+}
+
+model TagConfig {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  name      String
+  color     String
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+}
+
+model EnvironmentGroup {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  name      String
+  members   String[]  @default([])
+  sortOrder Int       @default(0)
+  deletedAt DateTime?
+}
+
+enum EventType {
+  DEPLOYMENT
+  INCIDENT
+  MAINTENANCE
+}
+
+enum EventSource {
+  UI
+  API
+}
+
+enum ChangeType {
+  POSTMEP_SQL
+  HOTFIX
+  NORMAL
+  PRE_MEP
+  POST_MEP
+}
+
+// Declaration order matches the physical Postgres enum (GO_CONFIRMED was appended by
+// migration). The workflow order is defined by DEPLOY_ORDER in src/lib/deployWorkflow.ts:
+// SCHEDULED → GO_CONFIRMED → PENDING → IN_PROGRESS → DEPLOYED → TESTING → VALIDATE.
+enum DeployStatus {
+  SCHEDULED
+  PENDING
+  IN_PROGRESS
+  DEPLOYED
+  TESTING
+  VALIDATE
+  GO_CONFIRMED
+}
+
+enum IncidentStatus {
+  INVESTIGATING
+  IDENTIFIED
+  MONITORING
+  RESOLVED
+}
+
+model Event {
+  id           String        @id @default(cuid())
+  serviceId    String
+  service      Service       @relation(fields: [serviceId], references: [id])
+  environment  String
+  type         EventType
+  occurredAt   DateTime
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  source       EventSource   @default(API)
+  externalId   String?
+  metadata     Json?
+  tags         String[]
+  causedById   String?
+  causedBy     Event?        @relation("EventCausation", fields: [causedById], references: [id])
+  causes       Event[]       @relation("EventCausation")
+  // PRE_MEP / POST_MEP deployments link to their parent MEP/HOTFIX deployment.
+  parentId     String?
+  parent       Event?        @relation("MepPhase", fields: [parentId], references: [id])
+  phases       Event[]       @relation("MepPhase")
+  hourType     String?       // HO (heures ouvrées) | HNO (heures non ouvrées)
+  version      String?
+  lot          String?
+  requester    String?
+  changeType   ChangeType?
+  externalLink String?
+  deployStatus DeployStatus?
+  incidentType String?
+  incidentStatus IncidentStatus?
+  startedAt    DateTime?
+  resolvedAt   DateTime?
+  comment      String?
+  windowStart  DateTime?
+  windowEnd    DateTime?
+  scheduledAt  DateTime?
+  autoLot      Boolean       @default(false)
+
+  rollbacks         Rollback[]
+  qaValidations     QaValidation[]
+  observations      Observation[]
+  statusTransitions StatusTransition[]
+  comments          EventComment[]
+
+  @@unique([source, externalId])
+  @@index([serviceId, environment, occurredAt])
+  @@index([lot])
+}
+
+model EventComment {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id])
+  author    String?
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([eventId, createdAt])
+}
+
+model Rollback {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id])
+  /// Free-text reason given by the user; null when they gave none — the UI then
+  /// composes a localized sentence from previousVersion/actorName.
+  comment   String?
+  /// Version that was live before the rolled-back deployment, when known.
+  previousVersion String?
+  /// Who triggered the rollback; null for rows created before this was recorded.
+  actorName String?
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+model QaValidation {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id])
+  validatedBy String
+  comment     String?
+  validatedAt DateTime @default(now())
+}
+
+model Observation {
+  id              String   @id @default(cuid())
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id])
+  who             String
+  durationMinutes Int
+  comment         String?
+  createdAt       DateTime @default(now())
+}
+
+model StatusTransition {
+  id         String        @id @default(cuid())
+  eventId    String
+  event      Event         @relation(fields: [eventId], references: [id])
+  fromStatus DeployStatus?
+  toStatus   DeployStatus
+  /// Null when no actor is known (e.g. a creation with no requester).
+  actorName  String?
+  actorEmail String?
+  comment    String?
+  createdAt  DateTime      @default(now())
+
+  @@index([eventId, createdAt])
+}
+
+model Hook {
+  id         String         @id @default(cuid())
+  productId  String
+  product    Product        @relation(fields: [productId], references: [id])
+  type       String
+  events     String[]
+  transitions String[]      @default([])
+  config     Json
+  enabled    Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  deliveries HookDelivery[]
+  targetId   String?
+  target     NotificationTarget? @relation(fields: [targetId], references: [id], onDelete: Restrict)
+  @@index([productId])
+}
+
+model NotificationTarget {
+  id        String   @id @default(cuid())
+  type      String
+  label     String
+  config    Json
+  createdAt DateTime @default(now())
+  hooks     Hook[]
+}
+
+model HookDelivery {
+  id         String   @id @default(cuid())
+  hookId     String
+  hook       Hook     @relation(fields: [hookId], references: [id])
+  kind       String
+  ok         Boolean
+  statusCode Int?
+  error      String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+  @@index([hookId, createdAt])
+}
+
+model IngestSource {
+  id                 String      @id @default(cuid())
+  scope              IngestScope @default(SERVICE)
+  serviceId          String?
+  service            Service?    @relation(fields: [serviceId], references: [id])
+  companyId          String?
+  company            Company?    @relation(fields: [companyId], references: [id])
+  label              String
+  token              String      @unique
+  defaultEnvironment String?
+  enabled            Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  @@index([serviceId])
+  @@index([companyId])
+}
+
+model DirectoryUser {
+  id       String   @id @default(cuid())
+  username String   @unique
+  name     String
+  email    String?
+  roles    String[]
+  syncedAt DateTime @default(now())
+}
+
+/// Security-relevant events: logins, admin changes to secrets, one-click link use.
+/// Append-only; nothing in the app updates or deletes a row.
+model AuditLog {
+  id       String   @id @default(cuid())
+  at       DateTime @default(now())
+  /// Dotted name, e.g. "auth.login", "auth.login_failed", "hook.created".
+  action   String
+  /// Session display name, or null when the caller was anonymous.
+  actor    String?
+  actorIp  String?
+  /// Id or slug of whatever the action touched.
+  target   String?
+  detail   Json?
+  ok       Boolean  @default(true)
+  @@index([at])
+  @@index([action, at])
+}
+
+/// One row per consumed one-click token. The unique jti is what makes a token
+/// single-use: a replay loses the insert race and is refused.
+model ActionTokenUse {
+  id      String   @id @default(cuid())
+  jti     String   @unique
+  eventId String
+  usedAt  DateTime @default(now())
+  usedIp  String?
+  @@index([usedAt])
+}

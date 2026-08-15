@@ -1,0 +1,5 @@
+.wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+.step { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 2px solid transparent; }
+.current { font-weight: 700; }
+.upcoming { opacity: 0.4; }
+.sep { color: #a1a1aa; }

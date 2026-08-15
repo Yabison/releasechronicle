@@ -1,0 +1,27 @@
+# Accounts for the public demo instance. Point AUTH_USERS_FILE at this file and
+# leave AUTH_PROVIDER unset (local provider).
+#
+# The password is "demo" for all three, on purpose: the point is to let a visitor
+# try the validation workflow, which needs two different roles to be interesting —
+# a QA validates TESTING → VALIDATE, a devops does everything else.
+#
+# Never load this file on an instance holding real data: these credentials are
+# published in the repository.
+users:
+  - username: demo
+    name: Démo (devops)
+    email: demo@yabison.example
+    roles: [devops]
+    passwordHash: "scrypt:114d913450f06698c6d30fb4b9fe040f:078f2a132437024b361634d01b9b34d5ed088c5af0e094dafc89ec0584b059b788f2b957c2f74b0044acdd5bdfb60b733b78b3d8387471e3a5a04377630a937a"
+
+  - username: demo-qa
+    name: Démo (QA)
+    email: demo-qa@yabison.example
+    roles: [qa]
+    passwordHash: "scrypt:9d432cfd14ffbfc504960b316c34056f:ed1074d125dcb29ee657236fa3bb59741184174868d676123e76f24a9ed5ce27b47ee2283eb5dbbe61958a0f5b2bb0e008af0bd965190f43b1a9f6441a0570dc"
+
+  - username: demo-admin
+    name: Démo (admin)
+    email: demo-admin@yabison.example
+    roles: [admin, devops, qa]
+    passwordHash: "scrypt:3c739cbf1024f475474f654b9c960413:f595ff10b362f0fab053dbd3c02245a02dbf38a22df79e2f87ba25694060c7336a4305e36dd7d8dab2c4f499e0df6021dce19572fd76cddb136d9e44fe1de967"

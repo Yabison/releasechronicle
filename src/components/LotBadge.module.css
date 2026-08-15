@@ -1,0 +1,9 @@
+.wrap { position: relative; display: inline-flex; cursor: default; }
+.icon { font-size: 13px; }
+.tip { position: absolute; top: 120%; left: 0; z-index: 20; display: none; flex-direction: column; gap: 4px; min-width: 260px; padding: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+.wrap:hover .tip, .wrap:focus .tip, .wrap:focus-within .tip { display: flex; }
+.row { display: flex; align-items: center; gap: 6px; font-size: 0.78em; }
+.name { flex: 1; }
+.ver { color: var(--muted); }
+.env { color: var(--muted); font-size: 0.9em; }
+.pill { color: #fff; border-radius: 999px; padding: 0 6px; font-size: 10px; font-weight: 700; }

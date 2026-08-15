@@ -1,0 +1,3 @@
+.shell { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
+.side { border-right: 1px solid var(--line); padding: calc(var(--space) * 3); }
+.content { padding: calc(var(--space) * 3) calc(var(--space) * 5); min-width: 0; }

@@ -1,0 +1,13 @@
+# Template orange — MEP en cours (deploying / in progress / testing).
+# Variables: {kind} {company} {product} {service} {environment} {actor}
+#            {version} {status} {comment} {fromStatus} {toStatus} {actionUrl}
+email:
+  subject: "🟠 [{product}/{service}] {kind}"
+  body: |
+    MEP en cours sur {product}/{service} ({environment})
+    Version {version} · {fromStatus} → {toStatus} · statut {status} · par {actor}
+    {comment}
+    Action : {actionUrl}
+teams:
+  title: "🟠 {kind} — {product}/{service} ({environment})"
+  text: "Version {version} · {fromStatus} → {toStatus} · par {actor}. {comment} · {actionUrl}"

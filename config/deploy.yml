@@ -1,0 +1,3 @@
+# Délai (minutes) avant la date planifiée où un déploiement SCHEDULED passe en PENDING.
+scheduledLeadMinutes: 15
+autoLotWindowMinutes: 30

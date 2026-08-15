@@ -1,0 +1,47 @@
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --text: #1f2328;
+  --muted: #8a8f98;
+  --line: #ececf0;
+  --accent: #3b5bdb;
+  --space: 8px;
+  --radius: 10px;
+  --font: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --cat-deploy: #2f9e44;     --cat-deploy-bg: #ebfbee;
+  --cat-hotfix: #7048e8;     --cat-hotfix-bg: #f3f0ff;
+  --cat-rollback: #f08c00;   --cat-rollback-bg: #fff4e6;
+  --cat-incident: #e03131;   --cat-incident-bg: #fff0f0;
+  --cat-maint: #1971c2;      --cat-maint-bg: #e7f5ff;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+h1 { font-size: 1.3rem; font-weight: 600; margin: 0 0 calc(var(--space) * 2); }
+h2 { font-size: 1rem; font-weight: 600; margin: calc(var(--space) * 3) 0 var(--space); }
+
+/* Category dot + pastel badge, selected via data-cat */
+.catDot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.catBadge { font-size: 0.8em; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+[data-cat="DEPLOY"].catDot { background: var(--cat-deploy); }
+[data-cat="HOTFIX"].catDot { background: var(--cat-hotfix); }
+[data-cat="ROLLBACK"].catDot { background: var(--cat-rollback); }
+[data-cat="INCIDENT"].catDot { background: var(--cat-incident); }
+[data-cat="MAINTENANCE"].catDot { background: var(--cat-maint); }
+[data-cat="DEPLOY"].catBadge { color: var(--cat-deploy); background: var(--cat-deploy-bg); }
+[data-cat="HOTFIX"].catBadge { color: var(--cat-hotfix); background: var(--cat-hotfix-bg); }
+[data-cat="ROLLBACK"].catBadge { color: var(--cat-rollback); background: var(--cat-rollback-bg); }
+[data-cat="INCIDENT"].catBadge { color: var(--cat-incident); background: var(--cat-incident-bg); }
+[data-cat="MAINTENANCE"].catBadge { color: var(--cat-maint); background: var(--cat-maint-bg); }
+
+.deployPill { display: inline-block; padding: 1px 7px; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.02em; }

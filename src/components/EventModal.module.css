@@ -1,0 +1,26 @@
+.overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.3);
+  display: grid; place-items: start center; padding: 6vh 16px; z-index: 50; overflow: auto;
+}
+.panel {
+  position: relative; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: calc(var(--space) * 3); width: min(680px, 100%);
+}
+.close { position: absolute; top: 8px; right: 12px; border: none; background: none; font-size: 1.4rem; cursor: pointer; color: var(--muted); }
+
+/* "Créer un lot" — tabs + existing-deployments picker. */
+.lotTabs { display: flex; gap: 6px; margin: 6px 0 12px; }
+.lotTabs button { font: inherit; padding: 4px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: transparent; color: var(--muted); cursor: pointer; }
+.lotTabs button[data-active="true"] { background: var(--cat-deploy-bg); color: var(--text); border-color: var(--cat-deploy); }
+.form { display: flex; flex-direction: column; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; color: var(--muted); }
+.field select, .field input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
+.candList { display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: 6px; }
+.candRow { display: flex; align-items: baseline; gap: 8px; font-size: 0.85em; padding: 2px 0; cursor: pointer; }
+.candRow:hover { background: var(--cat-deploy-bg); }
+.candMain { color: var(--text); }
+.candMeta { color: var(--muted); font-size: 0.9em; margin-left: auto; }
+.submit { align-self: flex-start; font: inherit; border: none; background: var(--accent); color: #fff; border-radius: var(--radius); padding: 7px 16px; cursor: pointer; }
+.submit:disabled { opacity: 0.6; cursor: default; }
+.error { color: var(--cat-incident); font-size: 0.85em; }
+.muted { color: var(--muted); }

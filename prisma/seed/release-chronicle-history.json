@@ -1,0 +1,1332 @@
+[
+    {
+        "sha":  "0001e66",
+        "at":  "2026-06-24T22:19:53",
+        "subject":  "feat: add Company/Product/Service Prisma schema and migration"
+    },
+    {
+        "sha":  "9df7db0",
+        "at":  "2026-06-24T22:21:17",
+        "subject":  "feat: add Prisma client singleton"
+    },
+    {
+        "sha":  "dbf74a4",
+        "at":  "2026-06-24T22:23:03",
+        "subject":  "feat: add slugify and uniqueSlug helpers"
+    },
+    {
+        "sha":  "c30d40d",
+        "at":  "2026-06-24T22:27:17",
+        "subject":  "refactor: drop unreachable hyphen-collapse pass in slugify"
+    },
+    {
+        "sha":  "c4697e1",
+        "at":  "2026-06-24T22:28:42",
+        "subject":  "feat: add write-token auth helpers"
+    },
+    {
+        "sha":  "f52210b",
+        "at":  "2026-06-24T22:32:11",
+        "subject":  "fix: compare write tokens via sha256 digest to avoid length-leak timing side channel"
+    },
+    {
+        "sha":  "70d77c7",
+        "at":  "2026-06-24T23:01:22",
+        "subject":  "feat: add hierarchy service layer with slug disambiguation"
+    },
+    {
+        "sha":  "4de9b2a",
+        "at":  "2026-06-24T23:08:38",
+        "subject":  "feat: add companies API routes with token gating"
+    },
+    {
+        "sha":  "3393a13",
+        "at":  "2026-06-24T23:12:39",
+        "subject":  "fix: return 409 on duplicate company and trim stored name"
+    },
+    {
+        "sha":  "6541d28",
+        "at":  "2026-06-24T23:16:58",
+        "subject":  "feat: add products API routes with token gating"
+    },
+    {
+        "sha":  "9314cf8",
+        "at":  "2026-06-25T06:05:23",
+        "subject":  "feat: add services API routes with type validation"
+    },
+    {
+        "sha":  "8d7cc36",
+        "at":  "2026-06-25T06:11:36",
+        "subject":  "feat: add slug-based deep-link read pages"
+    },
+    {
+        "sha":  "40b755b",
+        "at":  "2026-06-25T06:17:12",
+        "subject":  "feat: add token-gated admin page for hierarchy CRUD"
+    },
+    {
+        "sha":  "1eea571",
+        "at":  "2026-06-25T06:24:46",
+        "subject":  "feat: add OpenAPI document and Swagger UI for the v1 API"
+    },
+    {
+        "sha":  "a9f6d4f",
+        "at":  "2026-06-25T06:36:28",
+        "subject":  "fix: return 400 instead of 500 on non-existent parent id (P2003)"
+    },
+    {
+        "sha":  "15f9872",
+        "at":  "2026-06-25T04:52:40",
+        "subject":  "Merge branch \u0027feat/phase1-hierarchy\u0027 into \u0027main\u0027"
+    },
+    {
+        "sha":  "b515ac0",
+        "at":  "2026-06-25T06:54:22",
+        "subject":  "Merge branch \u0027main\u0027 of ssh://gitlab.seedevops.com:2230/devops/releasechronicle"
+    },
+    {
+        "sha":  "ea9902e",
+        "at":  "2026-06-25T07:05:12",
+        "subject":  "feat: add Event and annotation models + migration"
+    },
+    {
+        "sha":  "4b98a73",
+        "at":  "2026-06-25T07:15:37",
+        "subject":  "feat: add derived resolvers (maintenance status, incident duration, current-per-env)"
+    },
+    {
+        "sha":  "447ef23",
+        "at":  "2026-06-25T07:19:36",
+        "subject":  "feat: add per-type event body validators"
+    },
+    {
+        "sha":  "e737d04",
+        "at":  "2026-06-25T07:24:00",
+        "subject":  "feat: add events service layer (create/upsert/list/current/annotations)"
+    },
+    {
+        "sha":  "433c645",
+        "at":  "2026-06-25T07:50:25",
+        "subject":  "fix: use atomic upsert for event idempotency; cover maintenance-derived + qa/observation"
+    },
+    {
+        "sha":  "a85a947",
+        "at":  "2026-06-25T14:11:00",
+        "subject":  "feat: add deployment ingestion routes with idempotent upsert"
+    },
+    {
+        "sha":  "f5b5fd3",
+        "at":  "2026-06-25T21:15:00",
+        "subject":  "feat: add incident ingestion routes"
+    },
+    {
+        "sha":  "91a3ed2",
+        "at":  "2026-06-25T22:08:47",
+        "subject":  "feat: add maintenance ingestion routes"
+    },
+    {
+        "sha":  "72beac6",
+        "at":  "2026-06-25T22:12:02",
+        "subject":  "feat: add service events feed and current-versions read routes"
+    },
+    {
+        "sha":  "0c0d5c9",
+        "at":  "2026-06-26T06:39:14",
+        "subject":  "feat: add deployment annotation routes (rollback/qa/observation)"
+    },
+    {
+        "sha":  "5f58d43",
+        "at":  "2026-06-26T06:43:35",
+        "subject":  "feat: document Phase 2 event endpoints in OpenAPI"
+    },
+    {
+        "sha":  "ae4781d",
+        "at":  "2026-06-26T07:05:35",
+        "subject":  "fix: validate event-feed filters (400 not 500), clamp incident duration, document qa/observation"
+    },
+    {
+        "sha":  "42adacb",
+        "at":  "2026-06-26T18:18:32",
+        "subject":  "feat: add listProductEvents (aggregate events across a product\u0027s services)"
+    },
+    {
+        "sha":  "79c4dcc",
+        "at":  "2026-06-26T18:21:13",
+        "subject":  "feat: add timeline helpers (client shape, filter, group, appearance)"
+    },
+    {
+        "sha":  "4ef6109",
+        "at":  "2026-06-28T10:04:04",
+        "subject":  "feat: add calendar layout and causal resolution helpers"
+    },
+    {
+        "sha":  "e8a5d52",
+        "at":  "2026-06-28T10:07:03",
+        "subject":  "feat: add light-UI global styles and design tokens"
+    },
+    {
+        "sha":  "ff0876f",
+        "at":  "2026-06-28T11:32:24",
+        "subject":  "feat: add event detail drawer (fields, annotations, causal links)"
+    },
+    {
+        "sha":  "b159079",
+        "at":  "2026-06-28T11:36:19",
+        "subject":  "feat: wire timeline views, filters, and current-version display into pages"
+    },
+    {
+        "sha":  "17a0fc3",
+        "at":  "2026-06-28T11:43:34",
+        "subject":  "fix: CurrentBand shows all environments (— when undeployed), matching CurrentMatrix"
+    },
+    {
+        "sha":  "d1e3295",
+        "at":  "2026-06-28T15:07:35",
+        "subject":  "feat: add month calendar view with maintenance shading"
+    },
+    {
+        "sha":  "98b7cd6",
+        "at":  "2026-06-28T15:52:52",
+        "subject":  "fix: strip Prisma internals from client annotations; tidy UI edge cases"
+    },
+    {
+        "sha":  "a42da6e",
+        "at":  "2026-06-28T16:41:44",
+        "subject":  "Merge branch \u0027main\u0027 into \u0027feat/phase3-ui\u0027"
+    },
+    {
+        "sha":  "b8059c6",
+        "at":  "2026-06-28T16:41:49",
+        "subject":  "Merge branch \u0027feat/phase3-ui\u0027 into \u0027main\u0027"
+    },
+    {
+        "sha":  "79ad074",
+        "at":  "2026-06-29T23:59:55",
+        "subject":  "feat: thread rollback createdAt to client events; reset event tables in tests"
+    },
+    {
+        "sha":  "c5bdfef",
+        "at":  "2026-06-30T00:05:35",
+        "subject":  "feat: pure event-timeline classification (deploy/hotfix/rollback/incident) + month grouping"
+    },
+    {
+        "sha":  "3e4833c",
+        "at":  "2026-06-30T00:10:21",
+        "subject":  "feat: getSidebarTree with per-service event and deployment counts"
+    },
+    {
+        "sha":  "15bd06f",
+        "at":  "2026-06-30T06:46:20",
+        "subject":  "feat: monospace theme tokens + category dot/badge utilities"
+    },
+    {
+        "sha":  "f6a536a",
+        "at":  "2026-06-30T06:54:09",
+        "subject":  "feat: app shell with company/product/service sidebar tree"
+    },
+    {
+        "sha":  "4cf321d",
+        "at":  "2026-06-30T06:59:33",
+        "subject":  "feat: detail pane with tabs, counters, filters, month-grouped timeline + event modal"
+    },
+    {
+        "sha":  "78bd445",
+        "at":  "2026-06-30T07:17:01",
+        "subject":  "feat: wire shell pages — service detail pane + empty states"
+    },
+    {
+        "sha":  "639d039",
+        "at":  "2026-06-30T07:19:23",
+        "subject":  "fix: restore Event/Rollback/QaValidation/Observation models lost from prisma schema"
+    },
+    {
+        "sha":  "b583fb8",
+        "at":  "2026-06-30T07:19:45",
+        "subject":  "feat: containerize the app (multi-stage Dockerfile + compose with db + migrate-on-start)"
+    },
+    {
+        "sha":  "fba0294",
+        "at":  "2026-06-30T07:20:23",
+        "subject":  "feat: YAML-driven database seeder"
+    },
+    {
+        "sha":  "59809a2",
+        "at":  "2026-06-30T07:20:24",
+        "subject":  "feat: manual event creation via server action + EventForm"
+    },
+    {
+        "sha":  "a4d0373",
+        "at":  "2026-06-30T07:33:50",
+        "subject":  "fix: address review — tab filter leak, modal close on success, UTC month label"
+    },
+    {
+        "sha":  "d73d84e",
+        "at":  "2026-06-30T08:05:16",
+        "subject":  "feat: single event list with pinned maintenances, maintenance filter, rollback creation"
+    },
+    {
+        "sha":  "758c6f1",
+        "at":  "2026-06-30T09:21:35",
+        "subject":  "feat: incident lifecycle + maintenance past/upcoming split + sidebar status triangles"
+    },
+    {
+        "sha":  "a1bdef2",
+        "at":  "2026-06-30T18:21:04",
+        "subject":  "feat: incident duration as a single adaptive field (s / m s / h m s / j h m s)"
+    },
+    {
+        "sha":  "5e6da52",
+        "at":  "2026-07-01T07:09:50",
+        "subject":  "feat: global env filter, struck-through finished events, incident \u0026 deploy status enums"
+    },
+    {
+        "sha":  "ee87acd",
+        "at":  "2026-07-23T23:21:58",
+        "subject":  "feat: pure row\u003c-\u003eevent mapping for Excel"
+    },
+    {
+        "sha":  "790e52b",
+        "at":  "2026-07-23T23:41:20",
+        "subject":  "feat: StatusTransition model for deploy status history"
+    },
+    {
+        "sha":  "74f4def",
+        "at":  "2026-07-23T23:42:50",
+        "subject":  "feat: deploy status state machine"
+    },
+    {
+        "sha":  "de58591",
+        "at":  "2026-07-23T23:44:02",
+        "subject":  "feat: requester identity cookie codec"
+    },
+    {
+        "sha":  "5075115",
+        "at":  "2026-07-23T23:46:29",
+        "subject":  "feat: transitionDeployStatus + rollback actor name"
+    },
+    {
+        "sha":  "4fd3ee8",
+        "at":  "2026-07-23T23:52:34",
+        "subject":  "fix: race-safe deploy status transition + edge tests"
+    },
+    {
+        "sha":  "ac84897",
+        "at":  "2026-07-24T00:07:35",
+        "subject":  "feat: transitionDeployStatusAction + rollback actor wiring"
+    },
+    {
+        "sha":  "dd99f20",
+        "at":  "2026-07-24T07:56:19",
+        "subject":  "feat: deploy status display metadata"
+    },
+    {
+        "sha":  "7ed6478",
+        "at":  "2026-07-24T07:57:36",
+        "subject":  "feat: deploy timeline stepper state derivation"
+    },
+    {
+        "sha":  "39af0e0",
+        "at":  "2026-07-24T07:59:04",
+        "subject":  "feat: optional explicit comment on rollback"
+    },
+    {
+        "sha":  "f993282",
+        "at":  "2026-07-24T08:01:54",
+        "subject":  "feat: expose statusTransitions in projection + deployStatus on row entry"
+    },
+    {
+        "sha":  "9c93e9d",
+        "at":  "2026-07-24T08:03:44",
+        "subject":  "feat: transition and rollback modals"
+    },
+    {
+        "sha":  "a17bbee",
+        "at":  "2026-07-24T08:10:51",
+        "subject":  "feat: deploy status timeline in event drawer"
+    },
+    {
+        "sha":  "a62141b",
+        "at":  "2026-07-24T08:12:34",
+        "subject":  "feat: per-row deploy status pill"
+    },
+    {
+        "sha":  "bb239cb",
+        "at":  "2026-07-24T08:38:23",
+        "subject":  "fix: ignore modal backdrop click while a submit is pending"
+    },
+    {
+        "sha":  "7407712",
+        "at":  "2026-07-24T20:52:07",
+        "subject":  "fix: Excel numeric date cells and comma-in-tag round-trip"
+    },
+    {
+        "sha":  "6a95dd3",
+        "at":  "2026-07-24T20:54:35",
+        "subject":  "feat: exceljs workbook build/read"
+    },
+    {
+        "sha":  "55a5190",
+        "at":  "2026-07-24T20:56:52",
+        "subject":  "fix: type the Excel round-trip test event (tsc)"
+    },
+    {
+        "sha":  "fc9e635",
+        "at":  "2026-07-24T21:02:03",
+        "subject":  "refactor: extract persistValidatedEvent + client-aware event writes"
+    },
+    {
+        "sha":  "3120373",
+        "at":  "2026-07-24T21:06:10",
+        "subject":  "feat: Excel import/export server actions with transactional batch import"
+    },
+    {
+        "sha":  "07dabb0",
+        "at":  "2026-07-24T22:45:53",
+        "subject":  "feat: mark rolled-back deployments (struck row, rollback in stepper + history)"
+    },
+    {
+        "sha":  "e0594fb",
+        "at":  "2026-07-25T09:15:59",
+        "subject":  "fix: keep list date and time on one line"
+    },
+    {
+        "sha":  "7421c69",
+        "at":  "2026-07-25T09:21:58",
+        "subject":  "feat: Excel import/export buttons in the event toolbar"
+    },
+    {
+        "sha":  "f4f5c34",
+        "at":  "2026-07-25T09:53:10",
+        "subject":  "feat: auto-record initial null-\u003estatus transition on deployment creation"
+    },
+    {
+        "sha":  "5426047",
+        "at":  "2026-07-25T09:56:41",
+        "subject":  "feat: modal a11y — Escape to close + focus trap on modals and drawer"
+    },
+    {
+        "sha":  "f5982f2",
+        "at":  "2026-07-25T10:14:02",
+        "subject":  "feat: search filters (version/requester/tag/date) in DetailPane; remove dead FilterBar/EventViews"
+    },
+    {
+        "sha":  "20be178",
+        "at":  "2026-07-25T10:23:06",
+        "subject":  "feat: near-real-time list via polling (focus + 15s interval)"
+    },
+    {
+        "sha":  "21464e2",
+        "at":  "2026-07-25T12:31:59",
+        "subject":  "feat: Event.lot grouping column"
+    },
+    {
+        "sha":  "7a8e88e",
+        "at":  "2026-07-25T12:34:54",
+        "subject":  "feat: deployment lot defaults to version"
+    },
+    {
+        "sha":  "b8dc7f5",
+        "at":  "2026-07-25T12:38:57",
+        "subject":  "feat: expose lot in ClientEvent + TimelineEntry"
+    },
+    {
+        "sha":  "a9655c5",
+        "at":  "2026-07-25T12:41:29",
+        "subject":  "feat: lot grouping (siblings + getLotMembers)"
+    },
+    {
+        "sha":  "df12bf4",
+        "at":  "2026-07-25T12:45:47",
+        "subject":  "feat: updateEventLotAction (link/unlink a deployment lot)"
+    },
+    {
+        "sha":  "8608dde",
+        "at":  "2026-07-25T12:49:28",
+        "subject":  "feat: lot badge + tooltip on deployment rows"
+    },
+    {
+        "sha":  "2346e49",
+        "at":  "2026-07-25T12:53:01",
+        "subject":  "feat: drawer lot section with member list and editing"
+    },
+    {
+        "sha":  "12d7731",
+        "at":  "2026-07-25T12:55:53",
+        "subject":  "feat: Excel export/import carries the lot column"
+    },
+    {
+        "sha":  "6cb84b1",
+        "at":  "2026-07-25T13:14:49",
+        "subject":  "refactor: isolate Excel actions in their own use-server file"
+    },
+    {
+        "sha":  "da108de",
+        "at":  "2026-07-26T12:33:22",
+        "subject":  "feat: previousStatus helper"
+    },
+    {
+        "sha":  "2edada6",
+        "at":  "2026-07-26T12:38:51",
+        "subject":  "feat: undoDeployStatus (traced one-step-back revert)"
+    },
+    {
+        "sha":  "66d87af",
+        "at":  "2026-07-26T12:41:37",
+        "subject":  "refactor: rename DeployStatus INTEST -\u003e TESTING"
+    },
+    {
+        "sha":  "e3d96d2",
+        "at":  "2026-07-26T12:42:52",
+        "subject":  "feat: undoDeployStatusAction (name + comment required)"
+    },
+    {
+        "sha":  "67085d7",
+        "at":  "2026-07-26T12:43:52",
+        "subject":  "feat: undo transition modal"
+    },
+    {
+        "sha":  "d69a269",
+        "at":  "2026-07-26T12:45:16",
+        "subject":  "feat: undo button + backward-transition styling in the timeline"
+    },
+    {
+        "sha":  "42353cc",
+        "at":  "2026-07-26T13:34:16",
+        "subject":  "feat: show event end time below the start date in the list"
+    },
+    {
+        "sha":  "74d9948",
+        "at":  "2026-07-26T13:37:47",
+        "subject":  "feat: align end time under start; drop \u0027fin\u0027 label; omit day when same day"
+    },
+    {
+        "sha":  "a5a5a44",
+        "at":  "2026-07-26T13:49:12",
+        "subject":  "feat: Product.buildUrlTemplate column"
+    },
+    {
+        "sha":  "7955902",
+        "at":  "2026-07-26T13:49:54",
+        "subject":  "feat: buildUrl template substitution"
+    },
+    {
+        "sha":  "79d186d",
+        "at":  "2026-07-26T14:06:24",
+        "subject":  "feat: PUT product build URL template"
+    },
+    {
+        "sha":  "63145f8",
+        "at":  "2026-07-26T14:07:34",
+        "subject":  "feat: admin section to edit product build URL templates"
+    },
+    {
+        "sha":  "6d07d5b",
+        "at":  "2026-07-26T14:08:33",
+        "subject":  "feat: derived build link in the deployment drawer"
+    },
+    {
+        "sha":  "890ac84",
+        "at":  "2026-07-26T22:55:30",
+        "subject":  "feat: Hook + HookDelivery models"
+    },
+    {
+        "sha":  "3ebe020",
+        "at":  "2026-07-26T22:57:35",
+        "subject":  "feat: hook connector types + registry"
+    },
+    {
+        "sha":  "7b1a691",
+        "at":  "2026-07-26T23:00:30",
+        "subject":  "feat: webhook connector + built-in registration"
+    },
+    {
+        "sha":  "b242f54",
+        "at":  "2026-07-26T23:36:54",
+        "subject":  "feat: dispatchHooks with isolation + delivery logging"
+    },
+    {
+        "sha":  "d021f82",
+        "at":  "2026-07-26T23:40:21",
+        "subject":  "feat: emit hooks after mutations via after()"
+    },
+    {
+        "sha":  "54b2daa",
+        "at":  "2026-07-27T00:06:37",
+        "subject":  "feat: hooks config lib + REST CRUD"
+    },
+    {
+        "sha":  "d343516",
+        "at":  "2026-07-27T00:09:25",
+        "subject":  "feat: admin webhook management per product"
+    },
+    {
+        "sha":  "0b8c648",
+        "at":  "2026-07-27T07:41:32",
+        "subject":  "feat: Teams hook connector (MessageCard)"
+    },
+    {
+        "sha":  "c2c674c",
+        "at":  "2026-07-27T07:43:45",
+        "subject":  "feat: choose hook connector type (webhook/teams) in admin"
+    },
+    {
+        "sha":  "b077e72",
+        "at":  "2026-07-27T20:30:44",
+        "subject":  "feat: nodemailer mailer seam + SMTP env"
+    },
+    {
+        "sha":  "460ae76",
+        "at":  "2026-07-27T20:33:28",
+        "subject":  "feat: hook message template rendering"
+    },
+    {
+        "sha":  "d9841b5",
+        "at":  "2026-07-27T20:36:45",
+        "subject":  "feat: email hook connector (SMTP + templates)"
+    },
+    {
+        "sha":  "81fb55c",
+        "at":  "2026-07-27T20:57:15",
+        "subject":  "feat: hooks POST accepts a connector config object (email)"
+    },
+    {
+        "sha":  "f3509c5",
+        "at":  "2026-07-27T20:59:43",
+        "subject":  "feat: admin email hook fields (recipients + templates)"
+    },
+    {
+        "sha":  "32cd807",
+        "at":  "2026-07-27T23:40:52",
+        "subject":  "feat: HookDelivery.payload column"
+    },
+    {
+        "sha":  "9fada13",
+        "at":  "2026-07-27T23:44:22",
+        "subject":  "feat: store hook delivery payload + listDeliveries"
+    },
+    {
+        "sha":  "39036e3",
+        "at":  "2026-07-27T23:47:30",
+        "subject":  "feat: GET hook deliveries route"
+    },
+    {
+        "sha":  "63e2c4a",
+        "at":  "2026-07-27T23:49:33",
+        "subject":  "feat: admin hook deliveries table with payload"
+    },
+    {
+        "sha":  "24af94e",
+        "at":  "2026-07-28T00:06:07",
+        "subject":  "feat: representative seed (all cases) + Swagger link in sidebar"
+    },
+    {
+        "sha":  "d9f90c6",
+        "at":  "2026-07-28T07:10:18",
+        "subject":  "feat: IngestSource model"
+    },
+    {
+        "sha":  "4799b54",
+        "at":  "2026-07-28T07:13:23",
+        "subject":  "feat: ingest source lib (create/find/list/delete)"
+    },
+    {
+        "sha":  "25176fe",
+        "at":  "2026-07-28T07:15:39",
+        "subject":  "feat: ingestDeployment (generic payload -\u003e deployment)"
+    },
+    {
+        "sha":  "2227edb",
+        "at":  "2026-07-28T07:19:27",
+        "subject":  "feat: inbound ingest deployments endpoint"
+    },
+    {
+        "sha":  "44a1765",
+        "at":  "2026-07-28T21:04:33",
+        "subject":  "feat: ingest-sources config API"
+    },
+    {
+        "sha":  "50bd386",
+        "at":  "2026-07-28T21:06:29",
+        "subject":  "feat: admin ingest sources (per-service CI token + curl)"
+    },
+    {
+        "sha":  "3907723",
+        "at":  "2026-07-28T22:18:16",
+        "subject":  "feat: MEP labels (MEP / MEP HOTFIX / MEP ROLLBACK) + default deploy status PENDING"
+    },
+    {
+        "sha":  "95b4735",
+        "at":  "2026-07-29T07:47:32",
+        "subject":  "feat: Hook.transitions column for per-transition hook triggers"
+    },
+    {
+        "sha":  "cc86910",
+        "at":  "2026-07-29T07:49:00",
+        "subject":  "feat: pure transition filter helpers for hooks"
+    },
+    {
+        "sha":  "452dd48",
+        "at":  "2026-07-29T07:52:49",
+        "subject":  "feat: filter status_changed hooks by transition (from/to in payload)"
+    },
+    {
+        "sha":  "7d1d4c8",
+        "at":  "2026-07-29T07:55:07",
+        "subject":  "feat: accept and persist hook transitions via config API"
+    },
+    {
+        "sha":  "7ca180b",
+        "at":  "2026-07-29T07:57:38",
+        "subject":  "feat: admin hooks UI — event + transition trigger pickers"
+    },
+    {
+        "sha":  "81273d9",
+        "at":  "2026-07-29T20:27:31",
+        "subject":  "fix: seed wipe deletes ingestSource before service (FK constraint)"
+    },
+    {
+        "sha":  "8281849",
+        "at":  "2026-07-29T20:43:32",
+        "subject":  "feat: env enum RUN/SECURE, EnvSetting color table, Product.envWorkflow"
+    },
+    {
+        "sha":  "df2c45f",
+        "at":  "2026-07-29T20:44:53",
+        "subject":  "feat: env meta — canonical order and default colors"
+    },
+    {
+        "sha":  "8a1fcba",
+        "at":  "2026-07-29T20:46:51",
+        "subject":  "feat: EnvSetting store + GET/PUT env-settings API"
+    },
+    {
+        "sha":  "26bfd0b",
+        "at":  "2026-07-29T20:48:38",
+        "subject":  "feat: centralize env lists + admin env color editor"
+    },
+    {
+        "sha":  "cc50170",
+        "at":  "2026-07-29T20:51:05",
+        "subject":  "feat: TimelineEntry carries its environment"
+    },
+    {
+        "sha":  "a479cef",
+        "at":  "2026-07-29T20:53:10",
+        "subject":  "feat: colored env badge on list rows when env filter is off"
+    },
+    {
+        "sha":  "5835024",
+        "at":  "2026-07-29T20:54:57",
+        "subject":  "feat: product envWorkflow via product PUT route"
+    },
+    {
+        "sha":  "ab3a588",
+        "at":  "2026-07-29T20:56:32",
+        "subject":  "feat: admin per-product env workflow editor"
+    },
+    {
+        "sha":  "cc2dcb0",
+        "at":  "2026-07-29T20:57:47",
+        "subject":  "feat: pure env stepper state derivation"
+    },
+    {
+        "sha":  "fa49ece",
+        "at":  "2026-07-29T20:59:42",
+        "subject":  "feat: env workflow stepper on the release drawer"
+    },
+    {
+        "sha":  "2c94af5",
+        "at":  "2026-07-30T21:20:45",
+        "subject":  "fix: typed DELETE route ctx helpers in tests (clear pre-existing tsc errors)"
+    },
+    {
+        "sha":  "ddc24bb",
+        "at":  "2026-07-30T21:23:43",
+        "subject":  "feat: env badge between date and version, square shape"
+    },
+    {
+        "sha":  "047a03b",
+        "at":  "2026-07-31T07:31:48",
+        "subject":  "feat: server-side filters + pagination for hook deliveries API"
+    },
+    {
+        "sha":  "40472f7",
+        "at":  "2026-07-31T07:33:36",
+        "subject":  "feat: /admin/logs delivery logs view with server-side column filters"
+    },
+    {
+        "sha":  "7f1112b",
+        "at":  "2026-07-31T07:35:43",
+        "subject":  "feat: replace inline deliveries table with a link to /admin/logs"
+    },
+    {
+        "sha":  "a34a125",
+        "at":  "2026-07-31T08:20:38",
+        "subject":  "fix: hook form feedback (token guard, inline status) + readable hook list"
+    },
+    {
+        "sha":  "1465ea4",
+        "at":  "2026-07-31T21:27:59",
+        "subject":  "feat: redesign admin UI — sidebar nav + styled section panels"
+    },
+    {
+        "sha":  "d20b960",
+        "at":  "2026-07-31T21:54:33",
+        "subject":  "fix: sources panel uses a service dropdown (was free-text slug → 404)"
+    },
+    {
+        "sha":  "ffb8df0",
+        "at":  "2026-07-31T22:28:17",
+        "subject":  "feat: IngestSource scope (service/company/global) + nullable serviceId, companyId"
+    },
+    {
+        "sha":  "231bfd1",
+        "at":  "2026-07-31T22:36:01",
+        "subject":  "refactor: object-form createIngestSource + scope listings + company include"
+    },
+    {
+        "sha":  "cd88726",
+        "at":  "2026-07-31T22:39:02",
+        "subject":  "feat: resolve ingest target service by token scope (service/company/global)"
+    },
+    {
+        "sha":  "e17a8fc",
+        "at":  "2026-07-31T22:43:05",
+        "subject":  "feat: company + global ingest-source routes and generic delete"
+    },
+    {
+        "sha":  "23ce97c",
+        "at":  "2026-07-31T22:46:08",
+        "subject":  "feat: admin Sources panel — scope selector (service/company/global) + adaptive curl"
+    },
+    {
+        "sha":  "8b3a256",
+        "at":  "2026-07-31T23:28:57",
+        "subject":  "feat: ingest source \u0027ALL\u0027 environment (nullable defaultEnvironment)"
+    },
+    {
+        "sha":  "7108f2a",
+        "at":  "2026-08-01T00:43:16",
+        "subject":  "feat: pure DORA metrics computation + bands"
+    },
+    {
+        "sha":  "eb03a14",
+        "at":  "2026-08-01T00:44:20",
+        "subject":  "feat: compact duration formatter"
+    },
+    {
+        "sha":  "a74c211",
+        "at":  "2026-08-01T00:46:47",
+        "subject":  "feat: DORA query layer (hierarchy/env/window scoping)"
+    },
+    {
+        "sha":  "d4b8818",
+        "at":  "2026-08-01T00:49:14",
+        "subject":  "feat: GET /api/v1/metrics/dora"
+    },
+    {
+        "sha":  "63f302c",
+        "at":  "2026-08-01T00:51:43",
+        "subject":  "feat: /metrics DORA dashboard page"
+    },
+    {
+        "sha":  "3e8ad47",
+        "at":  "2026-08-01T01:03:16",
+        "subject":  "feat: sidebar link to /metrics (DORA dashboard)"
+    },
+    {
+        "sha":  "f38a2fe",
+        "at":  "2026-08-01T09:59:52",
+        "subject":  "fix: horizontal arrows for env workflow reordering (chips are in a row)"
+    },
+    {
+        "sha":  "373e81f",
+        "at":  "2026-08-01T12:15:57",
+        "subject":  "feat: EnvironmentConfig table + columns to text (enum retained for now)"
+    },
+    {
+        "sha":  "4dccda3",
+        "at":  "2026-08-01T12:18:34",
+        "subject":  "feat: table-backed environment lib (list/CRUD/colors/slugs)"
+    },
+    {
+        "sha":  "9ef93de",
+        "at":  "2026-08-01T12:24:16",
+        "subject":  "feat: /api/v1/environments CRUD API"
+    },
+    {
+        "sha":  "8954bdd",
+        "at":  "2026-08-01T12:37:22",
+        "subject":  "feat: validate environment against active envs (decoupled from enum)"
+    },
+    {
+        "sha":  "224a26e",
+        "at":  "2026-08-01T12:47:04",
+        "subject":  "feat: enforce active-env membership in persistValidatedEvent (REST deploy/incident/maintenance)"
+    },
+    {
+        "sha":  "f91726a",
+        "at":  "2026-08-01T12:52:22",
+        "subject":  "feat: non-admin clients + ingest-source guards use dynamic env list"
+    },
+    {
+        "sha":  "391067f",
+        "at":  "2026-08-01T12:56:22",
+        "subject":  "feat: admin dynamic environment CRUD + chips/selects from the env list"
+    },
+    {
+        "sha":  "6139f60",
+        "at":  "2026-08-01T13:46:44",
+        "subject":  "refactor: drop Environment enum + EnvSetting; remove envMeta/envSetting/env-settings"
+    },
+    {
+        "sha":  "d75f866",
+        "at":  "2026-08-01T20:54:14",
+        "subject":  "feat: color-based hook templates (red/orange/green) from config files"
+    },
+    {
+        "sha":  "5a93259",
+        "at":  "2026-08-01T23:17:15",
+        "subject":  "feat: auth session core (jose signed sessions + role helpers)"
+    },
+    {
+        "sha":  "5960198",
+        "at":  "2026-08-02T07:27:20",
+        "subject":  "feat: local auth provider (scrypt users from config)"
+    },
+    {
+        "sha":  "0851599",
+        "at":  "2026-08-02T07:31:45",
+        "subject":  "feat: auth login/logout/me routes"
+    },
+    {
+        "sha":  "dd5db3d",
+        "at":  "2026-08-02T07:37:15",
+        "subject":  "feat: login page + admin route guarded by the admin role"
+    },
+    {
+        "sha":  "f6dde2e",
+        "at":  "2026-08-02T07:42:08",
+        "subject":  "feat: sidebar login/logout state"
+    },
+    {
+        "sha":  "e31340e",
+        "at":  "2026-08-02T19:26:00",
+        "subject":  "feat: request-based admin/role guard + session test helper"
+    },
+    {
+        "sha":  "ee45f39",
+        "at":  "2026-08-02T19:33:20",
+        "subject":  "feat: companies/products/services config routes require admin session"
+    },
+    {
+        "sha":  "3df9eb5",
+        "at":  "2026-08-02T19:38:29",
+        "subject":  "feat: environments/hooks/ingest-sources config routes require admin session"
+    },
+    {
+        "sha":  "5e83cb9",
+        "at":  "2026-08-02T19:41:54",
+        "subject":  "feat: admin UI uses the session cookie (write-token field removed)"
+    },
+    {
+        "sha":  "5acaafd",
+        "at":  "2026-08-02T19:52:31",
+        "subject":  "feat: deploy transitions enforce session role + session actor"
+    },
+    {
+        "sha":  "26ebba8",
+        "at":  "2026-08-02T20:00:19",
+        "subject":  "feat: transition/rollback/undo modals use the session actor (name/email inputs removed)"
+    },
+    {
+        "sha":  "9dad03e",
+        "at":  "2026-08-02T22:38:28",
+        "subject":  "feat: LDAP config loader + pure group-\u003erole mapping"
+    },
+    {
+        "sha":  "1b6ec88",
+        "at":  "2026-08-02T22:41:22",
+        "subject":  "feat: LDAP search-then-bind auth provider"
+    },
+    {
+        "sha":  "ea4fdd8",
+        "at":  "2026-08-02T22:43:34",
+        "subject":  "feat: select the LDAP provider via AUTH_PROVIDER=ldap"
+    },
+    {
+        "sha":  "950e628",
+        "at":  "2026-08-06T21:49:28",
+        "subject":  "feat: SCHEDULED deploy status (enum, order, meta, stepper) + scheduledAt column"
+    },
+    {
+        "sha":  "6694244",
+        "at":  "2026-08-06T21:55:24",
+        "subject":  "feat: validate + persist scheduledAt for SCHEDULED deployments"
+    },
+    {
+        "sha":  "69471a2",
+        "at":  "2026-08-06T21:58:55",
+        "subject":  "feat: scheduled-lead config + promote-scheduled deployments logic"
+    },
+    {
+        "sha":  "d646301",
+        "at":  "2026-08-06T22:01:28",
+        "subject":  "feat: POST /deployments/promote-scheduled endpoint (cron-triggered)"
+    },
+    {
+        "sha":  "4c070ff",
+        "at":  "2026-08-06T22:04:31",
+        "subject":  "feat: event form supports scheduling a deployment (SCHEDULED + date)"
+    },
+    {
+        "sha":  "90197b5",
+        "at":  "2026-08-06T22:23:21",
+        "subject":  "feat: default \u0027Date planifiée\u0027 to now when SCHEDULED is selected"
+    },
+    {
+        "sha":  "ca13504",
+        "at":  "2026-08-06T22:58:01",
+        "subject":  "feat: createLotAction — one transactional deployment per product, shared lot"
+    },
+    {
+        "sha":  "20d40c6",
+        "at":  "2026-08-06T23:03:19",
+        "subject":  "feat: create-a-lot modal (common fields + per-product version/link)"
+    },
+    {
+        "sha":  "9f2d13f",
+        "at":  "2026-08-06T23:28:09",
+        "subject":  "fix: key lot rows by stable id (correct options after removing a row)"
+    },
+    {
+        "sha":  "f50c846",
+        "at":  "2026-08-07T07:34:42",
+        "subject":  "feat: form defaults (session requester, SCHEDULED status), rename CAB-\u003ePOSTMEP_SQL, deployment duration in list"
+    },
+    {
+        "sha":  "ad9f30c",
+        "at":  "2026-08-07T08:33:09",
+        "subject":  "feat: hook payload scheduledAt/window + subscribable /api/v1/calendar.ics feed"
+    },
+    {
+        "sha":  "2ccd7e8",
+        "at":  "2026-08-07T20:05:33",
+        "subject":  "feat: reusable notification targets — model, CRUD API, live dispatch resolution"
+    },
+    {
+        "sha":  "ddb2916",
+        "at":  "2026-08-07T20:08:56",
+        "subject":  "feat: hooks can reference a notification target (targetId)"
+    },
+    {
+        "sha":  "3c8703d",
+        "at":  "2026-08-07T20:14:26",
+        "subject":  "feat: admin notification-targets CRUD + reuse a target when creating a hook"
+    },
+    {
+        "sha":  "9975ac7",
+        "at":  "2026-08-07T20:45:14",
+        "subject":  "feat: signed one-click action token + {actionUrl} in hook templates"
+    },
+    {
+        "sha":  "e4e50b7",
+        "at":  "2026-08-07T20:49:17",
+        "subject":  "feat: /go/[token] one-click confirm page + action route"
+    },
+    {
+        "sha":  "0eb5177",
+        "at":  "2026-08-07T21:10:32",
+        "subject":  "feat: deployment duration ends at rollback time + covers deploys reaching TESTING/VALIDATE"
+    },
+    {
+        "sha":  "f7b5548",
+        "at":  "2026-08-07T22:18:27",
+        "subject":  "fix: show deployment duration for any DEPLOYED+/rolled-back deploy (incl. no-transition ones)"
+    },
+    {
+        "sha":  "9bb2bbf",
+        "at":  "2026-08-08T08:31:21",
+        "subject":  "feat: LDAP directory sync (DirectoryUser mirror + role mapping)"
+    },
+    {
+        "sha":  "4d351d8",
+        "at":  "2026-08-08T08:36:53",
+        "subject":  "feat: directory API (sync + list) and admin Annuaire view"
+    },
+    {
+        "sha":  "6dba377",
+        "at":  "2026-08-08T09:11:28",
+        "subject":  "feat: i18n infrastructure (fr/en catalogs, t() helper, locale switcher)"
+    },
+    {
+        "sha":  "1b5f884",
+        "at":  "2026-08-08T09:43:04",
+        "subject":  "feat: schema + config for auto-lot grouping (isMaster, autoLotNaming, autoLot, window)"
+    },
+    {
+        "sha":  "7098eb0",
+        "at":  "2026-08-08T09:47:06",
+        "subject":  "feat: auto-lot grouping core (window + master-anchored naming, eligibility)"
+    },
+    {
+        "sha":  "c28a282",
+        "at":  "2026-08-08T09:51:01",
+        "subject":  "feat: auto-lot T1 hooks (ingest/persist) + T2 sweep endpoint"
+    },
+    {
+        "sha":  "a304b15",
+        "at":  "2026-08-08T09:55:24",
+        "subject":  "feat: admin master-app flag + per-company auto-lot naming"
+    },
+    {
+        "sha":  "a65ba3f",
+        "at":  "2026-08-08T10:16:16",
+        "subject":  "feat: move a service to another product / a product to another company (with slug-collision 409)"
+    },
+    {
+        "sha":  "05fdcdf",
+        "at":  "2026-08-08T10:20:14",
+        "subject":  "feat: admin — list services per product + move service/product between parents"
+    },
+    {
+        "sha":  "7dcfc06",
+        "at":  "2026-08-08T21:24:27",
+        "subject":  "feat: rundeck/config seeders + wipe + master-app sidebar tree"
+    },
+    {
+        "sha":  "f59fa52",
+        "at":  "2026-08-08T23:00:49",
+        "subject":  "feat: move app-master flag and build-URL from product to service"
+    },
+    {
+        "sha":  "590c354",
+        "at":  "2026-08-09T09:25:50",
+        "subject":  "feat: excel-import seeder, env-scoped lots, editable deploy type"
+    },
+    {
+        "sha":  "92f8b11",
+        "at":  "2026-08-09T09:39:39",
+        "subject":  "feat: make deploy type the editable fiche title (MEP / MEP HOTFIX / POST-MEP SQL)"
+    },
+    {
+        "sha":  "6f2ca8b",
+        "at":  "2026-08-09T09:56:52",
+        "subject":  "feat: detect rollbacks by build number, tag \"rollback\" (live + import)"
+    },
+    {
+        "sha":  "3671b22",
+        "at":  "2026-08-09T10:04:29",
+        "subject":  "feat: default 3-month range, fix row alignment/buttons, editable comment"
+    },
+    {
+        "sha":  "ca52b59",
+        "at":  "2026-08-09T10:11:05",
+        "subject":  "feat: follow a release (service + build) across environments + workflow check"
+    },
+    {
+        "sha":  "eba5aa2",
+        "at":  "2026-08-10T06:59:44",
+        "subject":  "feat: environment groups (e.g. ALLPROD = run+secure+prod) in the event filter"
+    },
+    {
+        "sha":  "09aa71d",
+        "at":  "2026-08-10T07:55:28",
+        "subject":  "feat: per-service env workflow with product inheritance"
+    },
+    {
+        "sha":  "1156a1d",
+        "at":  "2026-08-10T08:33:15",
+        "subject":  "feat: add GO_CONFIRMED deploy status (SCHEDULED → GO_CONFIRMED → PENDING → …)"
+    },
+    {
+        "sha":  "3a6fb10",
+        "at":  "2026-08-10T20:39:11",
+        "subject":  "fix(docker): Node 22 + resilient npm ci for the image build"
+    },
+    {
+        "sha":  "a3d79df",
+        "at":  "2026-08-11T00:14:53",
+        "subject":  "feat(ui): redesign the deployment fiche (compact layout, status graph, build trace, comment thread)"
+    },
+    {
+        "sha":  "4abe325",
+        "at":  "2026-08-11T07:25:13",
+        "subject":  "feat(ui): drop \"MEP ROLLBACK\" category, rename \"MEP HOTFIX\" → \"HOTFIX\""
+    },
+    {
+        "sha":  "3be1d1a",
+        "at":  "2026-08-11T08:26:15",
+        "subject":  "feat: custom sort order for companies, products and services"
+    },
+    {
+        "sha":  "eabb653",
+        "at":  "2026-08-11T20:27:47",
+        "subject":  "feat(F5): show LDAP server (host:port) in admin, disable sync when not configured"
+    },
+    {
+        "sha":  "458be3a",
+        "at":  "2026-08-11T21:10:03",
+        "subject":  "feat(F2): add/edit event tags from the fiche"
+    },
+    {
+        "sha":  "40c20a3",
+        "at":  "2026-08-11T21:55:51",
+        "subject":  "feat(F3): create a lot from existing deployments"
+    },
+    {
+        "sha":  "5dcf75f",
+        "at":  "2026-08-11T22:41:58",
+        "subject":  "fix: tag input — \"Enregistrer\" now works while typing (no need to click \"+\")"
+    },
+    {
+        "sha":  "f67cc5c",
+        "at":  "2026-08-11T22:41:58",
+        "subject":  "feat: admin tag management with colors"
+    },
+    {
+        "sha":  "f09bcea",
+        "at":  "2026-08-11T23:09:00",
+        "subject":  "feat(F4): named ICS calendar feeds with tokenised URLs + type filter"
+    },
+    {
+        "sha":  "b60b032",
+        "at":  "2026-08-11T23:26:02",
+        "subject":  "fix: admin lists ALL tags (event-used ∪ configured), rename/colour/delete by name"
+    },
+    {
+        "sha":  "ad1343a",
+        "at":  "2026-08-12T08:01:53",
+        "subject":  "feat: PRE MEP / POST MEP deployments linked to a parent MEP/HOTFIX"
+    },
+    {
+        "sha":  "276bfb3",
+        "at":  "2026-08-12T09:48:54",
+        "subject":  "fix: robust tag rename in admin + show tags on the event list"
+    },
+    {
+        "sha":  "fdbe9ad",
+        "at":  "2026-08-12T10:29:45",
+        "subject":  "feat(F11): remove \"POST MEP SQL\" type from the selectors (+ batch-2 roadmap)"
+    },
+    {
+        "sha":  "9c671ec",
+        "at":  "2026-08-12T11:02:05",
+        "subject":  "feat(F13): multi-tag filter in the event list"
+    },
+    {
+        "sha":  "9034563",
+        "at":  "2026-08-12T11:15:51",
+        "subject":  "feat(F10): add tags when creating an event"
+    },
+    {
+        "sha":  "bdbcaa9",
+        "at":  "2026-08-12T12:36:54",
+        "subject":  "feat(F7): show PRE/POST MEP badge on the event list"
+    },
+    {
+        "sha":  "e1d8a5b",
+        "at":  "2026-08-12T12:54:22",
+        "subject":  "feat(F12): edit an event\u0027s date from the fiche"
+    },
+    {
+        "sha":  "ab1b565",
+        "at":  "2026-08-12T13:08:25",
+        "subject":  "feat(F9): HO/HNO field on deployments (create, display, filter)"
+    },
+    {
+        "sha":  "5549bba",
+        "at":  "2026-08-12T13:18:47",
+        "subject":  "feat(F6): PRE/POST MEP creation rules — inherit parent env, date order, comment required"
+    },
+    {
+        "sha":  "78a07a6",
+        "at":  "2026-08-12T14:20:39",
+        "subject":  "feat(F8): warn when a linked PRE MEP isn\u0027t VALIDATE and the MEP is still ≤ PENDING"
+    },
+    {
+        "sha":  "662679b",
+        "at":  "2026-08-12T14:51:08",
+        "subject":  "feat(F1): runtime build drift detection → BUILD_DRIFT incident"
+    },
+    {
+        "sha":  "6cb06ba",
+        "at":  "2026-08-12T22:22:36",
+        "subject":  "feat: tag autocomplete filter, PRE/POST MEP filters, editable HO/HNO, HNO night icon"
+    },
+    {
+        "sha":  "0c7cf6f",
+        "at":  "2026-08-12T23:19:46",
+        "subject":  "feat(public-mode): read-only anonymous view + visibility model + branding"
+    },
+    {
+        "sha":  "ecd74b4",
+        "at":  "2026-08-12T23:33:50",
+        "subject":  "feat(public-mode): admin config for public flags + event types + env filtering"
+    },
+    {
+        "sha":  "f8f04c1",
+        "at":  "2026-08-13T07:33:03",
+        "subject":  "feat(admin): dynamic company→product→service dropdowns for calendar feeds"
+    },
+    {
+        "sha":  "e503870",
+        "at":  "2026-08-13T07:51:57",
+        "subject":  "feat(brand): show app logo next to the title"
+    },
+    {
+        "sha":  "58bd0d2",
+        "at":  "2026-08-13T08:01:25",
+        "subject":  "feat(security): app-wide IP allowlist restriction"
+    },
+    {
+        "sha":  "d425b84",
+        "at":  "2026-08-13T08:17:46",
+        "subject":  "feat(lot): warn when a lot\u0027s main app is rolled back but others are not"
+    },
+    {
+        "sha":  "d39629c",
+        "at":  "2026-08-13T06:40:22",
+        "subject":  "Merge branch \u0027worktree-calendar-dynamic-menu\u0027 into \u0027main\u0027"
+    },
+    {
+        "sha":  "10bbd70",
+        "at":  "2026-08-13T22:54:35",
+        "subject":  "feat(timeline): danger severity icon on events in error/warning"
+    },
+    {
+        "sha":  "d1c84dc",
+        "at":  "2026-08-14T07:16:02",
+        "subject":  "feat(i18n): localize event type labels, action errors and alert templates"
+    },
+    {
+        "sha":  "d5bb990",
+        "at":  "2026-08-14T07:24:19",
+        "subject":  "Merge branch \u0027feat/i18n-events-alerts\u0027 into \u0027main\u0027"
+    },
+    {
+        "sha":  "5518d79",
+        "at":  "2026-08-14T08:01:43",
+        "subject":  "Merge branch \u0027feat/event-severity-icon\u0027 into \u0027main\u0027"
+    },
+    {
+        "sha":  "0a1564c",
+        "at":  "2026-08-14T18:55:01",
+        "subject":  "fix(docker): ship public/ in the runner image so the logo displays"
+    },
+    {
+        "sha":  "05fc4e2",
+        "at":  "2026-08-14T22:49:33",
+        "subject":  "feat(security): close the unauthenticated read and write paths"
+    },
+    {
+        "sha":  "a4e9854",
+        "at":  "2026-08-15T08:37:48",
+        "subject":  "feat(security): retire one-click links after use, block SSRF, add headers and an audit trail"
+    },
+    {
+        "sha":  "abec0ad",
+        "at":  "2026-08-15T09:23:54",
+        "subject":  "feat(security): apply public-mode visibility to the REST API"
+    }
+]

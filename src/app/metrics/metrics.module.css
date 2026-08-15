@@ -1,0 +1,15 @@
+.wrap { padding: 20px 24px; font-family: var(--font); color: var(--text); max-width: 1000px; }
+.title { font-size: 16px; font-weight: 700; margin: 0 0 14px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 18px; }
+.filters select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.card { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: var(--surface); }
+.cardLabel { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.value { font-size: 26px; font-weight: 700; margin: 6px 0 2px; }
+.sub { font-size: 12px; color: var(--muted); }
+.band { display: inline-block; margin-top: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; color: #fff; }
+.elite { background: #16a34a; }
+.high { background: #3b82f6; }
+.medium { background: #f59e0b; }
+.low { background: #ef4444; }
+.na { background: #9ca3af; }

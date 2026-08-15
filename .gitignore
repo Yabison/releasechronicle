@@ -1,0 +1,20 @@
+backups/*
+Todo.md
+docs/superpowers/*
+node_modules
+.next
+.env
+.env.test
+*.log
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+.superpowers/
+backups/
+# Real customer/production data: hierarchy names and rundeck exports. Never commit
+# these — the repo is meant to be publishable. See prisma/seed/private.ts.
+private/
+
+# Personal Claude Code overrides. .claude/settings.json is shared with the team;
+# this one is not.
+.claude/settings.local.json

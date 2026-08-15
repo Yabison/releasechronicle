@@ -1,0 +1,8 @@
+# Utilisateurs de l'auth locale (SP1). REMPLACER ces identifiants de dev.
+# Générer un hash: npx tsx -e "import {hashPassword} from './src/lib/auth/localProvider'; console.log(hashPassword('MOT_DE_PASSE'))"
+users:
+  - username: admin
+    name: Administrateur
+    email: admin@acme.example
+    roles: [admin, devops, qa]
+    passwordHash: "scrypt:c590e608c84005714714912cac4dd8dd:db0235f9bb34a70cfae852ee9aed782beeb1834031302ec24f9902542d04d7c3f2b2639bbe952644f1694f66313eb2e7f0e7759f3f32c5e1fb92584a90b6b3ae"

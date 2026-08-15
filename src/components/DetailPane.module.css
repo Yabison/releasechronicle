@@ -1,0 +1,72 @@
+.head { display: flex; align-items: center; justify-content: space-between; margin-bottom: calc(var(--space) * 2); }
+.crumb { font-size: 1rem; display: flex; align-items: center; gap: calc(var(--space) * 2); }
+.envSelect { font: inherit; padding: 2px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
+.crumbProduct { color: var(--cat-deploy); }
+.crumbService { color: var(--cat-deploy); }
+.newBtn { font: inherit; border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius); padding: 6px 14px; cursor: pointer; }
+.newBtn:hover { background: var(--cat-deploy-bg); }
+.headActions { display: flex; align-items: center; gap: calc(var(--space) * 2); flex-wrap: wrap; }
+
+.tabs { display: flex; gap: calc(var(--space) * 3); border-bottom: 1px solid var(--line); margin-bottom: calc(var(--space) * 2); }
+.tabs button { font: inherit; background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 0; cursor: pointer; color: var(--muted); }
+.tabs button[data-active="true"] { color: var(--text); border-bottom-color: var(--text); }
+
+.divider { border: none; border-top: 1px dashed var(--line); margin: calc(var(--space) * 3) 0; }
+
+.counters { display: flex; gap: calc(var(--space) * 4); margin: calc(var(--space) * 2) 0; }
+.counter { display: flex; flex-direction: column; align-items: center; }
+.counter .catBadge { font-size: 1.4rem; font-weight: 600; padding: 0; }
+.counterLabel { color: var(--muted); font-size: 0.75em; letter-spacing: 0.05em; }
+
+.legend { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 2); margin: var(--space) 0; }
+.legendItem { display: inline-flex; align-items: center; gap: 6px; }
+
+.filters { display: flex; align-items: center; gap: calc(var(--space) * 2); margin: var(--space) 0 calc(var(--space) * 3); }
+.filtersLabel { color: var(--muted); }
+.filters button { font: inherit; background: none; border: none; cursor: pointer; color: var(--muted); padding: 2px 6px; border-radius: var(--radius); }
+.filters button[data-active="true"] { color: var(--text); background: var(--cat-deploy-bg); }
+
+.month { margin-bottom: calc(var(--space) * 3); }
+.monthLabel { color: var(--muted); font-size: 0.8em; letter-spacing: 0.08em; margin: calc(var(--space) * 2) 0 var(--space); }
+
+.row { display: flex; align-items: center; gap: calc(var(--space) * 2); width: 100%; background: none; border: none; font: inherit; text-align: left; padding: 8px 4px; cursor: pointer; border-radius: var(--radius); }
+.row:hover { background: var(--cat-deploy-bg); }
+.stamp { color: var(--text); width: 104px; flex: none; white-space: nowrap; display: flex; flex-direction: column; }
+.stampLine { display: flex; gap: 8px; }
+.stampDay { width: 40px; flex: none; }
+.version { color: var(--muted); width: 64px; flex: none; }
+.hnoBadge {
+  flex: none; cursor: default; line-height: 1;
+  display: inline-grid; place-items: center;
+  width: 20px; height: 20px; font-size: 14px; font-weight: 700;
+  background: #4338ca; color: #fff;
+  border-radius: 6px; box-shadow: 0 0 0 1px rgba(67, 56, 202, 0.35);
+}
+.sevIcon {
+  flex: none; cursor: default; line-height: 1;
+  font-size: 14px; font-weight: 700;
+}
+.sevIcon[data-sev="red"] { color: #dc2626; }
+.sevIcon[data-sev="orange"] { color: #f59e0b; }
+/* Fixed width so the status column stays aligned whatever the env name length (SECURE vs RUN). */
+.envBadge { flex: none; box-sizing: border-box; width: 72px; text-align: center; color: #fff; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 3px; }
+.tags { display: inline-flex; gap: 4px; flex: none; }
+.tag { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
+.tagFilter { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.tagFilterChip { font: inherit; font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; cursor: pointer; }
+.tagFilterChip[data-active="true"] { color: var(--text); border-color: var(--muted); }
+.title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.endAt { color: var(--muted); font-size: 0.8em; flex: none; }
+/* Finished incidents & maintenances, and rolled-back deployments, are struck through. */
+.row[data-done="true"] .stamp,
+.row[data-done="true"] .title,
+.row[data-rolledback="true"] .stamp,
+.row[data-rolledback="true"] .version,
+.row[data-rolledback="true"] .title { text-decoration: line-through; color: var(--muted); }
+
+.empty { color: var(--muted); }
+
+.search { display: flex; align-items: center; gap: var(--space); flex-wrap: wrap; margin-bottom: calc(var(--space) * 2); }
+.search input, .search select { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
+.search input[type="date"] { color: var(--muted); }
+.search button { font: inherit; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: var(--radius); padding: 4px 10px; cursor: pointer; }

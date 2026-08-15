@@ -1,0 +1,15 @@
+# Orange template (English) — release in progress (deploying / in progress / testing).
+# Used when the notification target is configured with locale "en";
+# the locale-less orange.yml stays the French default.
+# Variables: {kind} {company} {product} {service} {environment} {actor}
+#            {version} {status} {comment} {fromStatus} {toStatus} {actionUrl}
+email:
+  subject: "🟠 [{product}/{service}] {kind}"
+  body: |
+    Release in progress on {product}/{service} ({environment})
+    Version {version} · {fromStatus} → {toStatus} · status {status} · by {actor}
+    {comment}
+    Action: {actionUrl}
+teams:
+  title: "🟠 {kind} — {product}/{service} ({environment})"
+  text: "Version {version} · {fromStatus} → {toStatus} · by {actor}. {comment} · {actionUrl}"

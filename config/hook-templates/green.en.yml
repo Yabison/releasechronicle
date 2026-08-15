@@ -1,0 +1,14 @@
+# Green template (English) — event finished (deployment validated / incident resolved).
+# Used when the notification target is configured with locale "en";
+# the locale-less green.yml stays the French default.
+# Variables: {kind} {company} {product} {service} {environment} {actor}
+#            {version} {status} {comment} {fromStatus} {toStatus}
+email:
+  subject: "🟢 [{product}/{service}] done — {version}"
+  body: |
+    Done on {product}/{service} ({environment})
+    Version {version} · status {status} · by {actor}
+    {comment}
+teams:
+  title: "🟢 {kind} — {product}/{service} ({environment})"
+  text: "Version {version} · status {status} · by {actor}. {comment}"

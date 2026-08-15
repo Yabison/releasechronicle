@@ -1,0 +1,14 @@
+# Red template (English) — incidents & rollbacks.
+# Used when the notification target is configured with locale "en";
+# the locale-less red.yml stays the French default.
+# Variables: {kind} {company} {product} {service} {environment} {actor}
+#            {version} {status} {comment} {fromStatus} {toStatus}
+email:
+  subject: "🔴 [{product}/{service}] {kind}"
+  body: |
+    Incident / rollback on {product}/{service} ({environment})
+    Version {version} · status {status} · by {actor}
+    {comment}
+teams:
+  title: "🔴 {kind} — {product}/{service} ({environment})"
+  text: "Version {version} · status {status} · by {actor}. {comment}"

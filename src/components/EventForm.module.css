@@ -1,0 +1,72 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  padding: calc(var(--space) * 2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin: calc(var(--space) * 2) 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space);
+}
+
+.row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.row .wide {
+  flex: 1 1 100%;
+}
+
+.row select,
+.row input {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+}
+
+.actions button {
+  font: inherit;
+  padding: 6px 16px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent, #3b5bdb);
+  color: #fff;
+  cursor: pointer;
+}
+
+.actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ok {
+  color: var(--accent);
+}
+
+.error {
+  color: #c0392b;
+}
+
+.tagRow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tagRow input { flex: 1; min-width: 120px; }
+.tagChip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85em; background: var(--cat-deploy-bg); color: var(--text); border-radius: 999px; padding: 1px 4px 1px 9px; }
+.tagChip button { border: none; background: none; cursor: pointer; color: var(--muted); font: inherit; line-height: 1; padding: 0 2px; }

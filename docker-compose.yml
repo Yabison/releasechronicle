@@ -1,0 +1,133 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: rc
+      POSTGRES_PASSWORD: rc
+      POSTGRES_DB: releasechronicle
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rc -d releasechronicle"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  db_test:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: rc
+      POSTGRES_PASSWORD: rc
+      POSTGRES_DB: releasechronicle_test
+    ports:
+      - "5433:5432"
+  ldap:
+    image: osixia/openldap:1.5.0
+    environment:
+      LDAP_ORGANISATION: "Example Org"
+      LDAP_DOMAIN: example.org
+      LDAP_ADMIN_PASSWORD: adminpassword
+      LDAP_REMOVE_CONFIG_AFTER_SETUP: "false"
+    volumes:
+      - ./test/ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom
+    ports:
+      - "1389:389"
+  # Catches all outgoing email; web UI on http://localhost:8025, SMTP on 1025.
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    environment:
+      MP_MAX_MESSAGES: "500"
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "postgresql://rc:rc@db:5432/releasechronicle"
+      # No usable default on purpose: the image runs with NODE_ENV=production, where
+      # the app refuses to start on a public secret. Set both in .env
+      # (`openssl rand -base64 32`). Empty rather than `:?` so that `npm run dev:up`,
+      # which only brings up db/ldap/mailpit, still interpolates this file.
+      RC_WRITE_TOKEN: "${RC_WRITE_TOKEN:-}"
+      AUTH_PROVIDER: "ldap"
+      AUTH_SECRET: "${AUTH_SECRET:-}"
+      LDAP_URL: "ldap://ldap:389"
+      LDAP_BASE_DN: "dc=example,dc=org"
+      LDAP_BIND_DN: "cn=admin,dc=example,dc=org"
+      LDAP_BIND_PASSWORD: "adminpassword"
+      SMTP_HOST: "mailpit"
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      SMTP_FROM: "releasechronicle@example.org"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+      ldap:
+        condition: service_started
+
+  # --- Public demo stack (profile "demo"): own database, own accounts, own data.
+  # `docker compose --profile demo up -d`
+  db_demo:
+    image: postgres:16
+    profiles: [demo]
+    environment:
+      POSTGRES_USER: rc
+      POSTGRES_PASSWORD: rc
+      # The name must contain "demo": the seeding jobs refuse anything else.
+      POSTGRES_DB: releasechronicle_demo
+    volumes:
+      - db_demo_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rc -d releasechronicle_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app_demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles: [demo]
+    environment:
+      DATABASE_URL: "postgresql://rc:rc@db_demo:5432/releasechronicle_demo"
+      # Published credentials, so this instance must never hold real data.
+      AUTH_USERS_FILE: "/app/config/auth-users.demo.yml"
+      AUTH_SECRET: "${DEMO_AUTH_SECRET:-}"
+      RC_WRITE_TOKEN: "${DEMO_WRITE_TOKEN:-}"
+      APP_BASE_URL: "${DEMO_BASE_URL:-http://localhost:3001}"
+      # No outbound notifications from a public instance.
+      RC_WEBHOOK_BLOCK_PRIVATE: "true"
+    ports:
+      - "3001:3000"
+    depends_on:
+      db_demo:
+        condition: service_healthy
+
+  demo_driver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: demo-tools
+    profiles: [demo]
+    environment:
+      DATABASE_URL: "postgresql://rc:rc@db_demo:5432/releasechronicle_demo"
+      RC_DEMO_MODE: "true"
+      RC_DEMO_TICK_SECONDS: "${DEMO_TICK_SECONDS:-180}"
+    depends_on:
+      db_demo:
+        condition: service_healthy
+      app_demo:
+        condition: service_started
+
+volumes:
+  db_data:
+  db_demo_data:

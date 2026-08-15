@@ -1,0 +1,75 @@
+.nav { display: flex; flex-direction: column; gap: calc(var(--space) * 2); }
+
+/* Brand header (top-left) + version. */
+.brand { display: flex; align-items: center; gap: 8px; }
+.brandLogo { width: 24px; height: 24px; border-radius: 6px; flex: none; object-fit: cover; }
+.brandName { font-weight: 700; font-size: 1.02em; letter-spacing: -0.01em; color: var(--text); }
+.brandVersion { color: var(--muted); font-size: 0.72em; }
+
+/* Identity row: user name + icon, or a login button when anonymous. */
+.identity { display: flex; }
+.identityUser { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85em; color: var(--text); }
+.userIcon { font-size: 0.95em; }
+.userName { font-weight: 600; }
+.logoutBtn { font: inherit; font-size: 0.9em; background: none; border: 0; padding: 0; margin-left: 4px; color: var(--muted); cursor: pointer; text-decoration: underline; }
+.loginBtn {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 0.85em;
+  padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); text-decoration: none;
+}
+.loginBtn:hover { background: var(--cat-deploy-bg); }
+
+.heading { color: var(--muted); font-size: 0.8em; letter-spacing: 0.1em; }
+.company { display: flex; flex-direction: column; gap: 4px; }
+.companyName { color: var(--muted); font-size: 0.85em; margin: var(--space) 0 4px; }
+.product { display: flex; flex-direction: column; gap: 2px; }
+.productRow {
+  display: flex; align-items: center; gap: var(--space); width: 100%;
+  background: none; border: none; cursor: pointer; font: inherit; color: var(--text);
+  padding: 4px; border-radius: var(--radius);
+}
+.productRow:hover { background: var(--cat-deploy-bg); }
+.caret { width: 1em; color: var(--muted); font-size: 0.75em; }
+.badge {
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 6px; background: var(--cat-deploy-bg); color: var(--cat-deploy); font-size: 0.8em;
+}
+.name { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.count { color: var(--muted); font-size: 0.85em; }
+
+/* Master (main) service: bold + a "principal" pill; siblings read as dependencies. */
+.master .name { font-weight: 700; }
+.masterTag {
+  font-size: 0.62em; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--cat-deploy); background: var(--cat-deploy-bg);
+  border-radius: 999px; padding: 1px 6px; white-space: nowrap;
+}
+
+/* Services drawn as a subset (tree) hanging off their product. */
+.children {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-left: 14px; padding-left: 8px; border-left: 1.5px solid #b9bec7;
+}
+.upcoming {
+  display: inline-flex; align-items: center; gap: 2px;
+  color: var(--cat-maint); background: var(--cat-maint-bg); border-radius: 999px; padding: 0 6px; font-size: 0.75em;
+}
+.openIncident {
+  display: inline-flex; align-items: center; gap: 2px;
+  color: var(--cat-incident); background: var(--cat-incident-bg); border-radius: 999px; padding: 0 6px; font-size: 0.75em;
+}
+.service {
+  position: relative;
+  display: flex; align-items: center; gap: var(--space);
+  padding: 4px 4px 4px 14px; border-radius: var(--radius);
+}
+/* Horizontal tick onto the vertical guide → ├─ / └─ tree look. */
+.service::before {
+  content: ""; position: absolute; left: -8px; top: 50%;
+  width: 8px; height: 1.5px; background: #b9bec7;
+}
+.service:hover { background: var(--cat-deploy-bg); }
+.service[data-active="true"] { background: var(--cat-deploy-bg); font-weight: 600; }
+
+.footer { margin-top: calc(var(--space) * 4); padding-top: var(--space); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.footer a { color: var(--muted); font-size: 0.85em; text-decoration: none; }
+.footer a:hover { color: var(--text); }

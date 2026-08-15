@@ -1,0 +1,12 @@
+# Template rouge — incidents & rollbacks.
+# Variables: {kind} {company} {product} {service} {environment} {actor}
+#            {version} {status} {comment} {fromStatus} {toStatus}
+email:
+  subject: "🔴 [{product}/{service}] {kind}"
+  body: |
+    Incident / rollback sur {product}/{service} ({environment})
+    Version {version} · statut {status} · par {actor}
+    {comment}
+teams:
+  title: "🔴 {kind} — {product}/{service} ({environment})"
+  text: "Version {version} · statut {status} · par {actor}. {comment}"
