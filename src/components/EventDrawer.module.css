@@ -1,4 +1,6 @@
-.overlay { position: fixed; inset: 0; background: rgba(20, 22, 28, 0.18); display: flex; justify-content: flex-end; }
+/* Same z-index as the centered modal overlay: without it the drawer renders under
+   any element that happens to create a stacking context. */
+.overlay { position: fixed; inset: 0; background: rgba(20, 22, 28, 0.18); display: flex; justify-content: flex-end; z-index: 50; }
 .panel { width: min(420px, 92vw); height: 100%; background: var(--surface); border-left: 1px solid var(--line); padding: calc(var(--space) * 3); overflow-y: auto; }
 .close { float: right; border: none; background: none; font-size: 1.25rem; color: var(--muted); cursor: pointer; }
 .row { display: flex; justify-content: space-between; padding: var(--space) 0; border-bottom: 1px solid var(--line); }

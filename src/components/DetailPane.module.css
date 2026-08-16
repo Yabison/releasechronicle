@@ -70,3 +70,11 @@
 .search input, .search select { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
 .search input[type="date"] { color: var(--muted); }
 .search button { font: inherit; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: var(--radius); padding: 4px 10px; cursor: pointer; }
+
+/* Narrow screens: rows and filter bars wrap instead of overflowing the viewport. */
+@media (max-width: 640px) {
+  .filters { flex-wrap: wrap; row-gap: 4px; }
+  .row { flex-wrap: wrap; row-gap: 2px; }
+  .stamp { width: auto; flex-direction: row; gap: 6px; }
+  .title { flex-basis: 100%; order: 10; white-space: normal; }
+}

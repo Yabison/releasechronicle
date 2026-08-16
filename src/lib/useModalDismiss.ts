@@ -7,8 +7,10 @@ const FOCUSABLE =
 
 /**
  * Modal accessibility: on mount focus the first focusable element inside `ref`,
- * close on Escape (unless disabled, e.g. while a submit is pending), and trap Tab
- * focus within the container. Cleans up its listener on unmount.
+ * close on Escape (unless disabled, e.g. while a submit is pending), trap Tab
+ * focus within the container, and give focus back to whatever opened the modal
+ * when it closes — without the restore, a keyboard user lands back at the top of
+ * the page after every dialog.
  */
 export function useModalDismiss(
   ref: RefObject<HTMLElement | null>,
@@ -19,6 +21,7 @@ export function useModalDismiss(
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const first = el.querySelectorAll<HTMLElement>(FOCUSABLE)[0];
     (first ?? el).focus();
 
@@ -45,6 +48,13 @@ export function useModalDismiss(
     }
 
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      // Restore focus only if it is still inside the (now unmounting) modal;
+      // if the user already clicked elsewhere, respect that.
+      if (opener && (document.activeElement === document.body || el.contains(document.activeElement))) {
+        opener.focus();
+      }
+    };
   }, [ref, onClose, enabled]);
 }

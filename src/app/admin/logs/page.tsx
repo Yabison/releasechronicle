@@ -69,6 +69,8 @@ export default function LogsPage() {
         </select>
       </div>
 
+      {/* Wide table: scroll inside its own container, never the whole page. */}
+      <div style={{ overflowX: "auto" }}>
       <table>
         <thead>
           <tr><th>{t("common.date")}</th><th>Kind</th><th>Type</th><th>OK</th><th>Code</th><th>{t("logs.colError")}</th><th>Payload</th></tr>
@@ -96,6 +98,7 @@ export default function LogsPage() {
           ))}
         </tbody>
       </table>
+      </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
         <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>{t("logs.prev")}</button>

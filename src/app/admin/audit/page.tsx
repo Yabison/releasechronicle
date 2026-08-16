@@ -71,6 +71,8 @@ export default function AuditPage() {
       <h1>{t("audit.title")}</h1>
       {error && <p role="alert">{t("audit.loadFailed")} ({error})</p>}
 
+      {/* Wide table: scroll inside its own container, never the whole page. */}
+      <div style={{ overflowX: "auto" }}>
       <table>
         <thead>
           <tr>
@@ -127,6 +129,7 @@ export default function AuditPage() {
           ))}
         </tbody>
       </table>
+      </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
         <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>{t("logs.prev")}</button>
