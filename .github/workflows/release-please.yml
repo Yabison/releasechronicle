@@ -49,7 +49,12 @@ jobs:
     with:
       # Build the tagged commit, not whatever main points at by then.
       ref: ${{ needs.release-please.outputs.tag_name }}
+      # Same number the rc images carried as rc-<version>, and the one the app
+      # displays — release-please has just written it into package.json.
+      build-version: ${{ needs.release-please.outputs.version }}
       tag-rules: |
+        type=raw,value=release-${{ needs.release-please.outputs.version }}
         type=raw,value=${{ needs.release-please.outputs.version }}
         type=raw,value=${{ needs.release-please.outputs.major }}.${{ needs.release-please.outputs.minor }}
         type=raw,value=latest
+        type=sha,format=long

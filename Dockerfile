@@ -21,6 +21,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
+# Version the UI displays. Left empty outside the CI, where src/lib/appMeta.ts
+# falls back to package.json. Next inlines NEXT_PUBLIC_* at build time, so this
+# has to be set before `npm run build`, not at runtime.
+ARG RC_VERSION=""
+ENV NEXT_PUBLIC_RC_VERSION=$RC_VERSION
 RUN npm run build
 
 # --- demo-tools: seeders + ticker for the public demo instance ---

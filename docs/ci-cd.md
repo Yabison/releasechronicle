@@ -7,26 +7,30 @@ fix/xxx  feat/xxx
    |         |
    +----+----+
         v  PR (CI: tests, typecheck, build, scan)
-       rc  ------> image ghcr .../releasechronicle:rc
+       rc  ------> images :rc-0.2.0 et :rc
         |            |
         |            v  timer systemd, toutes les 5 min
-        |          serveur de démo
+        |          serveur de démo          affiche v0.2.0-rc
         v  PR
       main ------> image :main (intégration, déployée par personne)
         |
         v  release-please ouvre "chore(main): release 0.2.0"
         v  merge de cette PR
-     tag v0.2.0 --> images :0.2.0, :0.2, :latest + GitHub Release
+     tag v0.2.0 --> images :release-0.2.0, :0.2.0, :0.2, :latest
+                    + GitHub Release        affiche v0.2.0
 ```
 
-| Branche / ref | Tests | Image publiée | Déployé |
-|---|---|---|---|
-| `fix/*`, `feat/*` (PR) | oui | non | — |
-| `rc` | oui | `:rc`, `:sha-<sha>` | démo, automatiquement |
-| `main` | oui | `:main`, `:sha-<sha>` | rien |
-| tag `v*` (release-please) | déjà passés | `:0.2.0`, `:0.2`, `:latest` | à la main pour l'instant |
+| Branche / ref | Tests | Image publiée | Version affichée | Déployé |
+|---|---|---|---|---|
+| `fix/*`, `feat/*` (PR) | oui | non | — | — |
+| `rc` | oui | `:rc-0.2.0`, `:rc`, `:sha-<sha>` | `0.2.0-rc` | démo, automatiquement |
+| `main` | oui | `:main`, `:sha-<sha>` | `package.json` | rien |
+| tag `v*` (release-please) | déjà passés | `:release-0.2.0`, `:0.2.0`, `:0.2`, `:latest`, `:sha-<sha>` | `0.2.0` | à la main pour l'instant |
 
 Chaque image a son pendant `-demo-tools` (seeders + ticker), même tag suffixé.
+
+Le numéro dans le tag et celui affiché dans l'interface sont **le même**, et
+`rc-0.2.0` désigne le candidat de la release qui sortira en `release-0.2.0`.
 
 ## Ce que fait la CI
 
@@ -95,6 +99,29 @@ au plus 5 min de timer.
 
 Le numéro de version n'est jamais écrit à la main. `release-please` lit les messages
 de commit arrivés sur `main` depuis la dernière release et en déduit le bump.
+
+### D'où vient le numéro des images rc
+
+`package.json` ne bouge qu'au merge de la PR de release, donc sur `rc` il porte
+encore la version **précédente** — taguer `rc-0.1.0` désignerait une image qui
+contient déjà du travail post-0.1.0.
+
+`scripts/next-version.ts` calcule donc la version à venir : commits depuis le
+dernier tag `v*`, mêmes règles que release-please, lues dans
+`release-please-config.json` pour qu'elles ne puissent pas diverger
+(`src/lib/version.ts`, couvert par `tests/lib/version.test.ts`). Le CI l'exécute
+dans le job `test` et passe le résultat en `build-args: RC_VERSION`, que le
+Dockerfile transforme en `NEXT_PUBLIC_RC_VERSION` **avant** `npm run build` —
+Next inline les `NEXT_PUBLIC_*` à la compilation, pas au démarrage.
+
+Conséquence : le tag et l'écran de connexion affichent le même numéro, et
+`rc-0.2.0` devient `release-0.2.0` sans changer de chiffre.
+
+Hors CI (`npm run dev`, build local), la variable est vide et
+`src/lib/appMeta.ts` retombe sur `package.json`.
+
+Le checkout du job `test` utilise `fetch-depth: 0` : sans les tags, le script ne
+saurait pas où commence la série de commits à lire.
 
 **Les messages de commit deviennent contractuels** — format
 [Conventional Commits](https://www.conventionalcommits.org/) :
