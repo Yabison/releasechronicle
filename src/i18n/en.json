@@ -217,6 +217,7 @@
   "login.demoHint": "Click an account to fill the form.",
   "login.demoPassword": "Shared password:",
   "common.loadFailed": "Could not load — check the connection and reload the page.",
+  "detail.showOlder": "Show the {n} older events",
   "home.title": "Overview",
   "home.services": "services",
   "home.deploys30d": "deployments in 30 days",

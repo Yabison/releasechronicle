@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { EventDrawer } from "./EventDrawer";
 import { EventModal } from "./EventModal";
 import { LotModal } from "./LotModal";
@@ -45,6 +45,8 @@ export function DetailPane({
   envColors,
   envWorkflow,
   canWrite = true,
+  defaultFrom,
+  olderCount,
 }: {
   company: string;
   product: string;
@@ -61,6 +63,10 @@ export function DetailPane({
   envColors: Record<string, string>;
   envWorkflow: string[];
   canWrite?: boolean;
+  /** Server-side window start (the 3-month default), "" meaning "everything". */
+  defaultFrom: string;
+  /** Events that exist before the loaded window — powers "show older". */
+  olderCount: number;
 }) {
   const { t, locale } = useI18n();
   const { mode: timeMode } = useTimeFormat();
@@ -106,21 +112,27 @@ export function DetailPane({
   const [modal, setModal] = useState(false);
   const [lotModal, setLotModal] = useState(false);
   // Free-form search: version/requester substrings, exact tag, occurredAt date range.
-  // Default the range to the last 3 months (clear "Du" to see older events).
-  const threeMonthsAgo = useMemo(() => {
-    const d = new Date(now);
-    d.setMonth(d.getMonth() - 3);
-    return d.toISOString().slice(0, 10);
-  }, [now]);
+  // The range doubles as the SERVER window (the page only queries [from, to]), so
+  // changing it navigates instead of just filtering the already-loaded rows.
   const [q, setQ] = useState<{ version: string; requester: string; tags: string[]; hourType: string; from: string; to: string }>(() => ({
     version: sp("v") ?? "",
     requester: sp("req") ?? "",
     tags: sp("tags")?.split(",").filter(Boolean) ?? [],
     hourType: sp("ht") ?? "",
-    // Absent = the 3-month default; an explicit empty `from=` means "cleared".
-    from: sp("from") ?? threeMonthsAgo,
+    // Absent = the server's 3-month default; an explicit empty `from=` means "everything".
+    from: sp("from") ?? defaultFrom,
     to: sp("to") ?? "",
   }));
+  const router = useRouter();
+  function setDateWindow(patch: { from?: string; to?: string }) {
+    const next = { ...q, ...patch };
+    setQ(next);
+    const p = new URLSearchParams(window.location.search);
+    if (next.from === defaultFrom) p.delete("from"); else p.set("from", next.from);
+    if (next.to) p.set("to", next.to); else p.delete("to");
+    // A navigation, not replaceState: the server must re-query the new window.
+    router.replace(`${window.location.pathname}?${p.toString()}`, { scroll: false });
+  }
 
   // Mirror the filters into the URL. history.replaceState keeps this free: no
   // server round-trip (the page is force-dynamic) and no history-stack spam;
@@ -135,15 +147,14 @@ export function DetailPane({
     put("req", q.requester || null);
     put("tags", q.tags.length ? q.tags.join(",") : null);
     put("ht", q.hourType || null);
-    put("from", q.from === threeMonthsAgo ? null : q.from);
-    put("to", q.to || null);
+    // from/to are navigation-owned (setDateWindow): they change the server window.
     put("event", selected);
     const qs = p.toString();
     const next = window.location.pathname + (qs ? `?${qs}` : "");
     if (next !== window.location.pathname + window.location.search) {
       window.history.replaceState(null, "", next);
     }
-  }, [env, active, q, selected, threeMonthsAgo]);
+  }, [env, active, q, selected]);
   // Tag filter: free-text input with autocomplete suggestions; picked tags become chips.
   const [tagInput, setTagInput] = useState("");
   function addTag(v: string) {
@@ -319,10 +330,18 @@ export function DetailPane({
           <option value="HO">{t("form.hoLong")}</option>
           <option value="HNO">{t("form.hnoLong")}</option>
         </select>
-        <input type="date" value={q.from} onChange={(e) => setQ({ ...q, from: e.target.value })} aria-label={t("filter.from")} />
-        <input type="date" value={q.to} onChange={(e) => setQ({ ...q, to: e.target.value })} aria-label={t("filter.to")} />
-        {(q.version || q.requester || q.tags.length > 0 || q.hourType || q.from || q.to) && (
-          <button type="button" onClick={() => { setQ({ version: "", requester: "", tags: [], hourType: "", from: "", to: "" }); setTagInput(""); }}>{t("detail.reset")}</button>
+        <input type="date" value={q.from} onChange={(e) => setDateWindow({ from: e.target.value })} aria-label={t("filter.from")} />
+        <input type="date" value={q.to} onChange={(e) => setDateWindow({ to: e.target.value })} aria-label={t("filter.to")} />
+        {(q.version || q.requester || q.tags.length > 0 || q.hourType || q.from !== defaultFrom || q.to) && (
+          <button
+            type="button"
+            onClick={() => {
+              setTagInput("");
+              setQ((s) => ({ ...s, version: "", requester: "", tags: [], hourType: "" }));
+              // Dates go through the navigation path: they re-window the server query.
+              setDateWindow({ from: defaultFrom, to: "" });
+            }}
+          >{t("detail.reset")}</button>
         )}
       </div>
 
@@ -363,6 +382,15 @@ export function DetailPane({
               ))}
             </div>
           ))}
+          {olderCount > 0 && (
+            <button
+              type="button"
+              className={styles.showOlder}
+              onClick={() => setDateWindow({ from: "" })}
+            >
+              {t("detail.showOlder", { n: olderCount })}
+            </button>
+          )}
         </>
       )}
 

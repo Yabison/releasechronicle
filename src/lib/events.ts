@@ -60,7 +60,7 @@ export async function upsertEventByExternalId(externalId: string, data: EventDat
   });
 }
 
-type ListFilter = { environment?: string; type?: EventType };
+type ListFilter = { environment?: string; type?: EventType; from?: Date; to?: Date };
 
 function deriveFor(
   e: { type: EventType; windowStart: Date | null; windowEnd: Date | null; startedAt: Date | null; resolvedAt: Date | null },
@@ -82,11 +82,19 @@ export async function listServiceEvents(serviceId: string, filter: ListFilter, n
       deletedAt: null,
       ...(filter.environment ? { environment: filter.environment } : {}),
       ...(filter.type ? { type: filter.type } : {}),
+      ...(filter.from || filter.to
+        ? { occurredAt: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } }
+        : {}),
     },
     orderBy: { occurredAt: "desc" },
     include: { rollbacks: true, qaValidations: true, observations: true, statusTransitions: { orderBy: { createdAt: "asc" } }, comments: { orderBy: { createdAt: "asc" } } },
   });
   return events.map((e) => ({ ...e, derived: deriveFor(e, now) }));
+}
+
+/** How many events fall before `date` — powers the "show older" affordance without loading them. */
+export function countServiceEventsBefore(serviceId: string, date: Date): Promise<number> {
+  return prisma.event.count({ where: { serviceId, deletedAt: null, occurredAt: { lt: date } } });
 }
 
 export async function listProductEvents(

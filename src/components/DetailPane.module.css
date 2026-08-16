@@ -78,3 +78,10 @@
   .stamp { width: auto; flex-direction: row; gap: 6px; }
   .title { flex-basis: 100%; order: 10; white-space: normal; }
 }
+
+.showOlder {
+  display: block; margin: calc(var(--space) * 2) auto; font: inherit; font-size: 0.9em;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  color: var(--muted); padding: 6px 14px; cursor: pointer;
+}
+.showOlder:hover { color: var(--text); background: var(--cat-deploy-bg); }

@@ -217,6 +217,7 @@
   "login.demoHint": "Cliquez un compte pour remplir le formulaire.",
   "login.demoPassword": "Mot de passe commun :",
   "common.loadFailed": "Chargement impossible — vérifiez la connexion puis rechargez la page.",
+  "detail.showOlder": "Afficher les {n} événements plus anciens",
   "home.title": "Vue d'ensemble",
   "home.services": "services",
   "home.deploys30d": "MEP sur 30 jours",
