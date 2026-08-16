@@ -72,7 +72,11 @@ export async function listAuditLog(filter: AuditFilter): Promise<{ rows: AuditRo
   const take = Math.min(Math.max(filter.limit ?? 50, 1), 200);
   const skip = Math.max(filter.offset ?? 0, 0);
   const [rows, total] = await Promise.all([
-    prisma.auditLog.findMany({ where, orderBy: { at: "desc" }, take, skip }),
+    // `at` alone leaves rows written in the same millisecond in an undefined
+    // order, which makes pagination lose or repeat them between two pages. The
+    // cuid tiebreaker settles it: it carries the creation timestamp and a counter,
+    // so it keeps the newest first among ties instead of picking at random.
+    prisma.auditLog.findMany({ where, orderBy: [{ at: "desc" }, { id: "desc" }], take, skip }),
     prisma.auditLog.count({ where }),
   ]);
   return { rows, total };
