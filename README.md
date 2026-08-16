@@ -115,7 +115,9 @@ docker compose logs -f demo_driver     # voir les déploiements avancer
 Comptes : `demo` (devops), `demo-qa` (qa), `demo-admin` (admin) — mot de passe `demo`
 pour les trois, définis dans `config/auth-users.demo.yml`. Deux rôles distincts pour
 que le workflow de validation soit réellement essayable : un QA valide
-TESTING → VALIDATE, un devops fait le reste. Les visiteurs anonymes ont la vue
+TESTING → VALIDATE, un devops fait le reste. La page de connexion les affiche, avec
+le mot de passe, et un clic remplit le formulaire — uniquement là où
+`RC_DEMO_MODE=true`, jamais sur une instance ordinaire. Les visiteurs anonymes ont la vue
 publique en lecture seule.
 
 Le ticker et le reset **refusent de s'exécuter** si `RC_DEMO_MODE` n'est pas à `true`

@@ -91,6 +91,10 @@ jamais vide. Ensuite, un tick toutes les `DEMO_TICK_SECONDS` (180 par défaut) e
 reconstruction complète au premier changement de date UTC.
 
 Comptes : `demo` (devops), `demo-qa` (qa), `demo-admin` (admin), mot de passe `demo`.
+La page de connexion les liste elle-même, un clic remplit le formulaire. C'est
+`RC_DEMO_MODE=true` sur `app_demo` qui le déclenche ; sans ce drapeau la page reste
+un formulaire nu, et un test vérifie que les identifiants affichés authentifient
+réellement (`tests/lib/auth/demoAccounts.test.ts`).
 Les visiteurs anonymes ont la vue publique en lecture seule.
 
 ## 4. Mise à jour automatique

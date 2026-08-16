@@ -40,6 +40,9 @@ services:
       # Published credentials (config/auth-users.demo.yml, in the repo), so this
       # instance must never hold real data.
       AUTH_USERS_FILE: /app/config/auth-users.demo.yml
+      # Prints the demo accounts on the login page. Only ever set it where the
+      # credentials are already public — see src/lib/auth/demoAccounts.ts.
+      RC_DEMO_MODE: "true"
       AUTH_SECRET: ${DEMO_AUTH_SECRET:?generate one with `openssl rand -base64 32`}
       RC_WRITE_TOKEN: ${DEMO_WRITE_TOKEN:?generate one with `openssl rand -base64 32`}
       # Must be the public https URL: it is what action links in emails point to.

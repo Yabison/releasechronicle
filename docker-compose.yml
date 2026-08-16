@@ -101,6 +101,9 @@ services:
       DATABASE_URL: "postgresql://rc:rc@db_demo:5432/releasechronicle_demo"
       # Published credentials, so this instance must never hold real data.
       AUTH_USERS_FILE: "/app/config/auth-users.demo.yml"
+      # Prints the demo accounts on the login page. Only ever set it where the
+      # credentials are already public — see src/lib/auth/demoAccounts.ts.
+      RC_DEMO_MODE: "true"
       AUTH_SECRET: "${DEMO_AUTH_SECRET:-}"
       RC_WRITE_TOKEN: "${DEMO_WRITE_TOKEN:-}"
       APP_BASE_URL: "${DEMO_BASE_URL:-http://localhost:3001}"
