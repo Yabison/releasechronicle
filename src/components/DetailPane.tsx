@@ -64,12 +64,16 @@ export function DetailPane({
 }) {
   const { t, locale } = useI18n();
   const { mode: timeMode } = useTimeFormat();
+  // Every filter initializes from the URL and is mirrored back to it below, so a
+  // filtered view is a link someone can bookmark or send to a colleague.
+  const searchParams = useSearchParams();
+  const sp = (k: string) => searchParams.get(k);
   // Environment is a global filter at the title level, scoping every event below.
   const environments = useMemo(
     () => [...new Set(events.map((e) => e.environment))].sort(),
     [events],
   );
-  const [env, setEnv] = useState<string>(ALL_ENV);
+  const [env, setEnv] = useState<string>(() => sp("env") ?? ALL_ENV);
   // Environment groups (e.g. ALLPROD = run+secure+prod) shown as extra filter options.
   const [envGroups, setEnvGroups] = useState<{ slug: string; name: string; members: string[] }[]>([]);
   const [loadWarn, setLoadWarn] = useState(false);
@@ -87,13 +91,17 @@ export function DetailPane({
   }, [env, envGroups]);
   const showEnvBadge = env === ALL_ENV || groupMembers !== null;
   // Filters are visibility toggles, all enabled by default.
-  const [active, setActive] = useState<Set<FilterKey>>(new Set(FILTER_KEYS));
+  const [active, setActive] = useState<Set<FilterKey>>(() => {
+    const c = sp("cat");
+    const keys = c ? c.split(",").filter((k): k is FilterKey => (FILTER_KEYS as string[]).includes(k)) : [];
+    return keys.length ? new Set(keys) : new Set(FILTER_KEYS);
+  });
   const [selected, setSelected] = useState<string | null>(null);
   // Open a specific MEP when linked with ?event=<id> (e.g. from the build trace in another tab).
-  const searchParams = useSearchParams();
   useEffect(() => {
     const eid = searchParams.get("event");
     if (eid && events.some((e) => e.id === eid)) setSelected(eid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, events]);
   const [modal, setModal] = useState(false);
   const [lotModal, setLotModal] = useState(false);
@@ -104,7 +112,38 @@ export function DetailPane({
     d.setMonth(d.getMonth() - 3);
     return d.toISOString().slice(0, 10);
   }, [now]);
-  const [q, setQ] = useState<{ version: string; requester: string; tags: string[]; hourType: string; from: string; to: string }>({ version: "", requester: "", tags: [], hourType: "", from: threeMonthsAgo, to: "" });
+  const [q, setQ] = useState<{ version: string; requester: string; tags: string[]; hourType: string; from: string; to: string }>(() => ({
+    version: sp("v") ?? "",
+    requester: sp("req") ?? "",
+    tags: sp("tags")?.split(",").filter(Boolean) ?? [],
+    hourType: sp("ht") ?? "",
+    // Absent = the 3-month default; an explicit empty `from=` means "cleared".
+    from: sp("from") ?? threeMonthsAgo,
+    to: sp("to") ?? "",
+  }));
+
+  // Mirror the filters into the URL. history.replaceState keeps this free: no
+  // server round-trip (the page is force-dynamic) and no history-stack spam;
+  // Next keeps useSearchParams in sync with it. Defaults are omitted so an
+  // unfiltered view keeps a clean URL.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const put = (k: string, v: string | null) => (v === null ? p.delete(k) : p.set(k, v));
+    put("env", env === ALL_ENV ? null : env);
+    put("cat", active.size === FILTER_KEYS.length ? null : [...active].join(","));
+    put("v", q.version || null);
+    put("req", q.requester || null);
+    put("tags", q.tags.length ? q.tags.join(",") : null);
+    put("ht", q.hourType || null);
+    put("from", q.from === threeMonthsAgo ? null : q.from);
+    put("to", q.to || null);
+    put("event", selected);
+    const qs = p.toString();
+    const next = window.location.pathname + (qs ? `?${qs}` : "");
+    if (next !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [env, active, q, selected, threeMonthsAgo]);
   // Tag filter: free-text input with autocomplete suggestions; picked tags become chips.
   const [tagInput, setTagInput] = useState("");
   function addTag(v: string) {
