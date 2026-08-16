@@ -15,6 +15,13 @@ on:
         description: docker/metadata-action `tags` input, one rule per line.
         type: string
         required: true
+      build-version:
+        description: >-
+          Version the built app displays. Empty falls back to package.json.
+          Keep it equal to the version inside the image tags.
+        type: string
+        required: false
+        default: ""
 
 jobs:
   publish:
@@ -48,6 +55,8 @@ jobs:
           context: .
           target: runner
           push: true
+          build-args: |
+            RC_VERSION=${{ inputs.build-version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -70,6 +79,8 @@ jobs:
           context: .
           target: demo-tools
           push: true
+          build-args: |
+            RC_VERSION=${{ inputs.build-version }}
           tags: ${{ steps.meta_demo.outputs.tags }}
           labels: ${{ steps.meta_demo.outputs.labels }}
           cache-from: type=gha

@@ -23,8 +23,14 @@ jobs:
   test:
     name: Typecheck, test, build
     runs-on: ubuntu-latest
+    outputs:
+      next: ${{ steps.version.outputs.next }}
+      rc: ${{ steps.version.outputs.rc }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          # scripts/next-version.ts walks back to the last v* tag.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v5
         with:
@@ -67,6 +73,13 @@ jobs:
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      # Before the build: the version it stamps into the bundle comes from here.
+      - name: Compute the next version
+        id: version
+        run: |
+          echo "next=$(npx tsx scripts/next-version.ts)" >> "$GITHUB_OUTPUT"
+          echo "rc=$(npx tsx scripts/next-version.ts --rc)" >> "$GITHUB_OUTPUT"
 
       - name: Test
         run: npm test
@@ -147,8 +160,8 @@ jobs:
   publish:
     name: Publish images
     needs: [test]
-    # rc   -> tag `rc`, the moving tag the demo server pulls
-    # main -> tag `main`, integration only, deployed by nobody
+    # rc   -> `rc-<next version>` + the moving `rc` the demo server's timer pulls
+    # main -> `main`, integration only, deployed by nobody
     # The release images (semver + latest) are pushed by release-please.yml, not
     # here: a tag created with GITHUB_TOKEN does not trigger another workflow.
     if: github.event_name == 'push' && (github.ref == 'refs/heads/rc' || github.ref == 'refs/heads/main')
@@ -157,6 +170,12 @@ jobs:
       packages: write
     uses: ./.github/workflows/publish-images.yml
     with:
+      # rc-<version> is the candidate for the release that version will become;
+      # `rc` stays as the moving tag the demo server's timer follows.
+      # Only the rc branch carries a candidate version; a main build shows what
+      # package.json says, which is the last release.
+      build-version: ${{ github.ref == 'refs/heads/rc' && needs.test.outputs.rc || '' }}
       tag-rules: |
+        type=raw,value=rc-${{ needs.test.outputs.next }},enable=${{ github.ref == 'refs/heads/rc' }}
         type=ref,event=branch
         type=sha,format=long
