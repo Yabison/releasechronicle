@@ -55,8 +55,16 @@ mv .env.demo.example .env.demo && chmod 600 .env.demo
 Renseigne `.env.demo` :
 
 ```bash
-openssl rand -base64 32   # une fois par secret : DB_PASSWORD, AUTH_SECRET, WRITE_TOKEN
+openssl rand -hex 32      # DEMO_DB_PASSWORD  — hex obligatoire, voir ci-dessous
+openssl rand -base64 32   # DEMO_AUTH_SECRET
+openssl rand -base64 32   # DEMO_WRITE_TOKEN
 ```
+
+> `DEMO_DB_PASSWORD` en **hex**, pas en base64 : il part tel quel dans
+> `DATABASE_URL`, et un `/` — que base64 produit — coupe l'autorité de l'URL en
+> deux. Prisma s'arrête alors sur
+> `P1013 ... invalid port number in database URL`, parce qu'il lit le fragment de
+> mot de passe qui suit le `:` comme un numéro de port.
 
 `TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT` et `TRAEFIK_CERTRESOLVER` doivent coller au
 proxy qui tourne. Pour les retrouver :
