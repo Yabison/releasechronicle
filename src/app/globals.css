@@ -56,6 +56,16 @@
   --red: var(--cat-incident);
   --orange: var(--cat-rollback);
   --blue: var(--cat-maint);
+
+  /* Lead icon of a timeline row (RowLeadIcon). Release and hotfix share the
+     green here on purpose — the glyph carries the difference — and only here:
+     --cat-hotfix stays violet everywhere else in the app. Icons are graphics,
+     so the bar is WCAG 1.4.11 non-text contrast at 3:1, not the 4.5:1 of text;
+     the lightest pair below is 3.45:1. */
+  --lead-release-bg: #e6f5e6;   --lead-release-fg: #008300;
+  --lead-incident-bg: #fceceb;  --lead-incident-fg: #e34948;
+  --lead-maint-bg: #e9f0fb;     --lead-maint-fg: #2a78d6;
+  --lead-danger-bg: #fbe4e4;    --lead-danger-fg: #d03b3b;
 }
 
 /* Dark values, defined once and applied twice: on an explicit choice, and on
@@ -99,6 +109,12 @@
   --cat-incident: #ff8787;   --cat-incident-bg: #2e1616;
   --cat-maint: #74c0fc;      --cat-maint-bg: #10202e;
 
+  --lead-release-bg: #12281a;   --lead-release-fg: #51cf66;
+  --lead-incident-bg: #2e1616;  --lead-incident-fg: #ff8787;
+  --lead-maint-bg: #10202e;     --lead-maint-fg: #74c0fc;
+  /* Distinct from incident: the two glyphs must not merge in the dark either. */
+  --lead-danger-bg: #3a1a1a;    --lead-danger-fg: #ff9d9d;
+
   color-scheme: dark;
 }
 
@@ -132,6 +148,12 @@
     --cat-rollback: #ffc078;   --cat-rollback-bg: #2e2110;
     --cat-incident: #ff8787;   --cat-incident-bg: #2e1616;
     --cat-maint: #74c0fc;      --cat-maint-bg: #10202e;
+
+    --lead-release-bg: #12281a;   --lead-release-fg: #51cf66;
+    --lead-incident-bg: #2e1616;  --lead-incident-fg: #ff8787;
+    --lead-maint-bg: #10202e;     --lead-maint-fg: #74c0fc;
+    /* Distinct from incident: the two glyphs must not merge in the dark either. */
+    --lead-danger-bg: #3a1a1a;    --lead-danger-fg: #ff9d9d;
 
     color-scheme: dark;
   }

@@ -30,6 +30,11 @@
 
 .row { display: flex; align-items: center; gap: calc(var(--space) * 2); width: 100%; background: none; border: none; font: inherit; text-align: left; padding: 8px 4px; cursor: pointer; border-radius: var(--radius); }
 .row:hover { background: var(--cat-deploy-bg); }
+
+/* Lead icon track. Fixed width and flex:none so the icons line up vertically
+   down a long list whatever the row beside them contains — the row is a flex
+   line, so without this the column would breathe with its neighbours. */
+.lead { width: 30px; flex: none; display: flex; align-items: center; justify-content: center; }
 .stamp { color: var(--text); width: 104px; flex: none; white-space: nowrap; display: flex; flex-direction: column; }
 .stampLine { display: flex; gap: 8px; }
 .stampDay { width: 40px; flex: none; }

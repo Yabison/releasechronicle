@@ -1,4 +1,6 @@
 import { entrySeverity, type TimelineEntry } from "@/lib/eventTimeline";
+import { rowLeadIcon } from "@/lib/rowLeadIcon";
+import { RowLeadIcon } from "./RowLeadIcon";
 import { categoryLabel, changeTypeLabel, phaseLabel } from "@/i18n/labels";
 import { STATUS_META, ROLLBACK_COLOR } from "@/lib/deployStatusMeta";
 import type { DeployStatus } from "@prisma/client";
@@ -27,8 +29,23 @@ export function TimelineRow({
   const { t } = useI18n();
   const { stampDay, stampTime, dayKey } = useTimeFormat();
   const sev = entrySeverity(entry);
+  const lotIncomplete = lotWarning.length > 0;
+  const leadIcon = rowLeadIcon({
+    category: entry.category,
+    hasRollback: Boolean(entry.rolledBack),
+    lotIncomplete,
+  });
+  // Named so the tooltip says what is wrong, not merely that something is.
+  const dangerReason = entry.rolledBack
+    ? t("leadIcon.reasonRollback")
+    : lotIncomplete
+      ? t("leadIcon.reasonLotIncomplete")
+      : undefined;
   return (
     <button className={styles.row} onClick={onClick} data-done={entry.done} data-rolledback={entry.rolledBack}>
+      <span className={styles.lead}>
+        <RowLeadIcon icon={leadIcon} dangerReason={dangerReason} />
+      </span>
       <span className="catDot" data-cat={entry.category} />
       {sev && (
         <span
