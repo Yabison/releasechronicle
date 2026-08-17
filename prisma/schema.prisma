@@ -220,6 +220,13 @@ model Event {
   @@unique([source, externalId])
   @@index([serviceId, environment, occurredAt])
   @@index([lot])
+  // PRE/POST phases and causal links resolve through these FKs.
+  @@index([parentId])
+  @@index([causedById])
+  // Cross-service scans: DORA windows, the calendar feeds, the dashboards.
+  @@index([type, occurredAt])
+  // promoteScheduledDeployments filters on exactly this pair.
+  @@index([deployStatus, scheduledAt])
 }
 
 model EventComment {
@@ -246,6 +253,10 @@ model Rollback {
   actorName String?
   link      String?
   createdAt DateTime @default(now())
+
+  // Postgres does not index FKs by itself; the DORA queries _count rollbacks
+  // per event and every fiche loads its annotations by eventId.
+  @@index([eventId])
 }
 
 model QaValidation {
@@ -255,6 +266,8 @@ model QaValidation {
   validatedBy String
   comment     String?
   validatedAt DateTime @default(now())
+
+  @@index([eventId])
 }
 
 model Observation {
@@ -265,6 +278,8 @@ model Observation {
   durationMinutes Int
   comment         String?
   createdAt       DateTime @default(now())
+
+  @@index([eventId])
 }
 
 model StatusTransition {
@@ -296,6 +311,8 @@ model Hook {
   targetId   String?
   target     NotificationTarget? @relation(fields: [targetId], references: [id], onDelete: Restrict)
   @@index([productId])
+  // deleteTarget checks for referencing hooks before allowing the delete.
+  @@index([targetId])
 }
 
 model NotificationTarget {

@@ -36,6 +36,14 @@ function toCreateData(data: EventData): Prisma.EventUncheckedCreateInput {
 }
 
 export async function createEvent(data: EventData, db: Db = prisma) {
+  // The event and its initial StatusTransition must land together: "the history
+  // is never empty" is an invariant, not a best effort. Callers already inside a
+  // transaction pass their tx; bare calls get one here.
+  if (db === prisma) return prisma.$transaction((tx) => createEventIn(tx, data));
+  return createEventIn(db, data);
+}
+
+async function createEventIn(db: Db, data: EventData) {
   const ev = await db.event.create({ data: toCreateData(data) });
   if (ev.type === "DEPLOYMENT" && ev.deployStatus) {
     // No requester → no known actor; the UI labels a null actor as the creation itself.

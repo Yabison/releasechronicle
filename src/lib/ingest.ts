@@ -58,8 +58,11 @@ export async function persistValidatedEvent<F extends Record<string, unknown>>(
       await attachToAutoLot(ev.id);
       const { detectRollbackOnIngest } = await import("@/lib/rollbackDetect");
       await detectRollbackOnIngest(ev.id);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      // Enrichment only (lot grouping, rollback detection): the event itself is
+      // saved, so don't fail the ingest — but a silent swallow made real bugs
+      // here undiagnosable. Log with enough context to find the event again.
+      console.error(`ingest enrichment failed for event ${ev.id}:`, e);
     }
   }
 
