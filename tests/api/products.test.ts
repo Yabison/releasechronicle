@@ -172,4 +172,27 @@ describe("PUT /api/v1/products/[slug]", () => {
     );
     expect(res.status).toBe(409);
   });
+
+  it("ignores a non-string companyId and still applies other fields", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+
+    const res = await PUT(
+      put("checkout", "acme", { companyId: 123, sortOrder: 5 }, AUTH),
+      ctx("checkout"),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).sortOrder).toBe(5);
+  });
+
+  it("ignores a non-string companyId given alone", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+
+    const res = await PUT(
+      put("checkout", "acme", { companyId: 123 }, AUTH),
+      ctx("checkout"),
+    );
+    expect(res.status).toBe(200);
+  });
 });

@@ -6,7 +6,7 @@ import { optionalStr, ignoredIfInvalid } from "@/lib/schemas/common";
 import { parseBody } from "@/lib/schemas/parse";
 
 const putSchema = z.object({
-  companyId: optionalStr(),
+  companyId: ignoredIfInvalid(optionalStr()),
   sortOrder: ignoredIfInvalid(z.number().int()),
   public: ignoredIfInvalid(z.boolean()),
   envWorkflow: z.array(z.string()).optional(),

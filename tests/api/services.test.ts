@@ -173,6 +173,18 @@ describe("PUT /api/v1/services/[slug] (move to another product)", () => {
     );
     expect(res.status).toBe(404);
   });
+
+  it("ignores a non-string productId and still applies other fields", async () => {
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+
+    const res = await PUT(
+      put("payment-api", "acme", "checkout", { productId: 123, sortOrder: 5 }, AUTH),
+      ctx("payment-api"),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).sortOrder).toBe(5);
+  });
 });
 
 describe("PUT /api/v1/services/[slug] (build URL + master flag)", () => {
@@ -253,5 +265,18 @@ describe("PUT /api/v1/services/[slug] (build URL + master flag)", () => {
       ctx("payment-api"),
     );
     expect(res.status).toBe(400);
+  });
+
+  it("ignores a non-string buildUrlTemplate and still applies other fields", async () => {
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    const res = await PUT(
+      put("payment-api", "acme", "checkout", { buildUrlTemplate: 42, isMaster: true }, AUTH),
+      ctx("payment-api"),
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.isMaster).toBe(true);
+    expect(json.buildUrlTemplate).toBeNull();
   });
 });

@@ -5,8 +5,8 @@ import { optionalStr, ignoredIfInvalid } from "@/lib/schemas/common";
 import { parseBody } from "@/lib/schemas/parse";
 
 const putSchema = z.object({
-  productId: optionalStr(),
-  buildUrlTemplate: z.string().optional(),
+  productId: ignoredIfInvalid(optionalStr()),
+  buildUrlTemplate: ignoredIfInvalid(z.string()),
   isMaster: ignoredIfInvalid(z.boolean()),
   public: ignoredIfInvalid(z.boolean()),
   sortOrder: ignoredIfInvalid(z.number().int()),
