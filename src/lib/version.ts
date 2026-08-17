@@ -69,7 +69,18 @@ export function nextVersion(current: string, messages: string[]): string {
   }
 }
 
-/** The release-candidate form of a version: a prerelease, so it sorts below it. */
-export function rcVersion(version: string): string {
-  return `${version}-rc`;
+/**
+ * The release-candidate form of a version, numbered.
+ *
+ * `candidate` distinguishes two builds aimed at the same release: without it every
+ * commit on rc would produce the same `rc-0.2.0` tag and quietly overwrite the
+ * previous image. `-rc.N` is a semver prerelease, so 0.2.0-rc.7 still ranks below
+ * 0.2.0, and N is a numeric identifier — semver compares those numerically, which
+ * is what puts rc.10 above rc.9.
+ */
+export function rcVersion(version: string, candidate: number): string {
+  if (!Number.isInteger(candidate) || candidate < 0) {
+    throw new Error(`Candidate number must be a non-negative integer, got ${candidate}`);
+  }
+  return `${version}-rc.${candidate}`;
 }

@@ -29,7 +29,7 @@ La démo suit la branche `rc` : tout merge dessus republie le tag mouvant `:rc`
 (et `:rc-demo-tools`), à côté du `:rc-<version>` figé.
 
 ```bash
-git push origin rc          # -> images :rc et :rc-0.2.0
+git push origin rc          # -> images :rc et :rc-0.2.0-rc.15
 ```
 
 Les images versionnées (`:release-0.2.0`, `:0.2.0`, `:0.2`, `:latest`) sortent du

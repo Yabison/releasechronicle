@@ -9,10 +9,10 @@ fix/xxx  feat/xxx
    |         |
    +----+----+
         v  PR (CI: tests, typecheck, build, scan)
-       rc  ------> images :rc-0.2.0 et :rc
+       rc  ------> images :rc-0.2.0-rc.15 et :rc
         |            |
         |            v  timer systemd, toutes les 5 min
-        |          serveur de démo          affiche v0.2.0-rc
+        |          serveur de démo          affiche v0.2.0-rc.15
         v  PR
       main ------> image :main (intégration, déployée par personne)
         |
@@ -25,14 +25,22 @@ fix/xxx  feat/xxx
 | Branche / ref | Tests | Image publiée | Version affichée | Déployé |
 |---|---|---|---|---|
 | `fix/*`, `feat/*` (PR) | oui | non | — | — |
-| `rc` | oui | `:rc-0.2.0`, `:rc`, `:sha-<sha>` | `0.2.0-rc` | démo, automatiquement |
+| `rc` | oui | `:rc-0.2.0-rc.15`, `:rc`, `:sha-<sha>` | `0.2.0-rc.15` | démo, automatiquement |
 | `main` | oui | `:main`, `:sha-<sha>` | `package.json` | rien |
 | tag `v*` (release-please) | déjà passés | `:release-0.2.0`, `:0.2.0`, `:0.2`, `:latest`, `:sha-<sha>` | `0.2.0` | à la main pour l'instant |
 
 Chaque image a son pendant `-demo-tools` (seeders + ticker), même tag suffixé.
 
 Le numéro dans le tag et celui affiché dans l'interface sont **le même**, et
-`rc-0.2.0` désigne le candidat de la release qui sortira en `release-0.2.0`.
+`rc-0.2.0-rc.15` désigne le quinzième candidat de la release qui sortira en
+`release-0.2.0`.
+
+Le compteur `-rc.<n>` est le nombre de commits arrivés depuis la dernière release —
+un par PR, puisque les merges sont squashés. Il existe pour que deux candidats de la
+même release ne se marchent pas dessus : sans lui, chaque commit sur `rc` republierait
+le même tag `rc-0.2.0` et écraserait l'image précédente en silence. Il vient de
+l'historique git et non d'un numéro de run CI, donc un même commit donne toujours la
+même version, quel que soit celui qui construit.
 
 ## Ce que fait la CI
 
@@ -117,7 +125,11 @@ Dockerfile transforme en `NEXT_PUBLIC_RC_VERSION` **avant** `npm run build` —
 Next inline les `NEXT_PUBLIC_*` à la compilation, pas au démarrage.
 
 Conséquence : le tag et l'écran de connexion affichent le même numéro, et
-`rc-0.2.0` devient `release-0.2.0` sans changer de chiffre.
+`rc-0.2.0-rc.15` devient `release-0.2.0` sans changer de chiffre.
+
+Attention : la version ne bouge qu'à une **release**, pas à un commit. Elle répond à
+« quelle serait la prochaine release après 0.1.0 », donc dix `feat:` donnent toujours
+une seule 0.2.0. C'est le compteur `-rc.<n>` qui distingue deux candidats.
 
 Hors CI (`npm run dev`, build local), la variable est vide et
 `src/lib/appMeta.ts` retombe sur `package.json`.

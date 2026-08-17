@@ -60,13 +60,31 @@ describe("nextVersion", () => {
 });
 
 describe("rcVersion", () => {
-  it("marks the version as a candidate", () => {
-    expect(rcVersion("0.2.0")).toBe("0.2.0-rc");
+  it("numbers the candidate", () => {
+    expect(rcVersion("0.2.0", 7)).toBe("0.2.0-rc.7");
+    expect(rcVersion("0.2.0", 1)).toBe("0.2.0-rc.1");
   });
 
-  // `-rc` is a semver prerelease identifier, so the string stays a valid version
-  // and 0.2.0-rc ranks below 0.2.0 for anything that actually parses semver.
+  // `-rc.N` is a semver prerelease identifier, so the string stays a valid version
+  // and 0.2.0-rc.7 ranks below 0.2.0 for anything that parses semver.
   it("produces a parseable prerelease", () => {
-    expect(rcVersion("1.4.2")).toMatch(/^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/);
+    expect(rcVersion("1.4.2", 12)).toMatch(/^\d+\.\d+\.\d+-rc\.\d+$/);
+  });
+
+  // The whole point of the counter: two candidates for the same release must not
+  // collide, so the image tags stay immutable instead of being overwritten.
+  it("distinguishes two candidates for the same release", () => {
+    expect(rcVersion("0.2.0", 7)).not.toBe(rcVersion("0.2.0", 8));
+  });
+
+  // Numeric identifiers compare numerically in semver, so rc.10 is above rc.9 —
+  // which plain string ordering would get wrong.
+  it("keeps a numeric identifier, not a padded string", () => {
+    expect(rcVersion("0.2.0", 10)).toBe("0.2.0-rc.10");
+  });
+
+  it("refuses a counter that is not a whole number", () => {
+    expect(() => rcVersion("0.2.0", -1)).toThrow();
+    expect(() => rcVersion("0.2.0", 1.5)).toThrow();
   });
 });
