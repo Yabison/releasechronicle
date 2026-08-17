@@ -1,49 +1,52 @@
-# Publier l'instance de démo sur un serveur Linux
+# Publishing the demo instance on a Linux server
 
-Une pile autonome — Postgres dédié, app, et une boucle qui fait avancer le monde
-toutes les quelques minutes et le reconstruit à 00:00 UTC — derrière Traefik.
+*English — [Version française](demo-deploy.fr.md)*
 
-Rien n'est compilé sur le serveur : les deux images sont tirées de GHCR, publiées par
-`.github/workflows/ci.yml` sur un tag `v*` (et sur `main`).
+A self-contained stack — its own Postgres, the app, and a loop that moves the world
+forward every few minutes and rebuilds it at 00:00 UTC — behind Traefik.
 
-| Image | Contenu | Rôle |
-|-------|---------|------|
-| `ghcr.io/yabison/releasechronicle:<tag>` | runtime Next standalone | l'app |
-| `ghcr.io/yabison/releasechronicle:<tag>-demo-tools` | + tsx, seeders, sources | le ticker |
+Nothing is compiled on the server: both images are pulled from GHCR. `ci.yml`
+publishes them on a push to `rc` or `main`; the versioned ones come from
+`release-please.yml` when the release PR is merged. See [ci-cd.md](ci-cd.md).
 
-> L'instance de démo charge `config/auth-users.demo.yml`, dont les mots de passe sont
-> publiés dans ce dépôt. **Elle ne doit jamais contenir de données réelles.**
+| Image | Contents | Role |
+|-------|----------|------|
+| `ghcr.io/yabison/releasechronicle:<tag>` | the standalone Next runtime | the app |
+| `ghcr.io/yabison/releasechronicle:<tag>-demo-tools` | + tsx, seeders, sources | the ticker |
 
-## Prérequis
+> The demo instance loads `config/auth-users.demo.yml`, whose passwords are published
+> in this repository. **It must never hold real data.**
 
-- Docker Engine + plugin compose v2
-- un Traefik déjà en place, avec un certresolver ACME configuré
-- un DNS `demo.example.org` → IP du serveur
+## Requirements
 
-## 1. Publier les images
+- Docker Engine + the compose v2 plugin
+- a Traefik already in place, with an ACME certresolver configured
+- DNS for `demo.example.org` → the server's IP
 
-La démo suit la branche `rc` : tout merge dessus republie le tag mouvant `:rc`
-(et `:rc-demo-tools`). Voir [docs/ci-cd.md](ci-cd.md) pour le flux complet.
+## 1. Publish the images
+
+The demo follows the `rc` branch: every merge into it republishes the moving `:rc`
+tag (and `:rc-demo-tools`), alongside the pinned `:rc-<version>`.
 
 ```bash
-git push origin rc          # -> images :rc
+git push origin rc          # -> images :rc and :rc-0.2.0
 ```
 
-Les images versionnées (`:0.2.0`, `:0.2`, `:latest`) sortent du merge de la PR de
-release ouverte par `release-please` sur `main` — pas d'un `git tag` manuel.
+The released images (`:release-0.2.0`, `:0.2.0`, `:0.2`, `:latest`) come from merging
+the release PR that `release-please` opens on `main` — not from a manual `git tag`.
 
-Le paquet GHCR est **public** (vérifié : `GET /v2/yabison/releasechronicle/manifests/rc`
-répond 200 sans identifiants), donc le serveur tire sans authentification. S'il
-repassait en privé — Package settings → Change visibility — il faudrait s'y
-connecter avec un PAT `read:packages` :
+The GHCR package is **public** (checked: `GET /v2/yabison/releasechronicle/manifests/rc`
+answers 200 without credentials), so the server pulls unauthenticated. Were it to go
+private again — Package settings → Change visibility — you would have to log in with a
+`read:packages` PAT:
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <user> --password-stdin
 ```
 
-## 2. Poser la pile sur le serveur
+## 2. Put the stack on the server
 
-Seuls deux fichiers sont nécessaires — pas de clone complet :
+Only two files are needed — no full clone:
 
 ```bash
 mkdir -p /srv/rc-demo && cd /srv/rc-demo
@@ -52,29 +55,28 @@ curl -O https://raw.githubusercontent.com/Yabison/releasechronicle/main/.env.dem
 mv .env.demo.example .env.demo && chmod 600 .env.demo
 ```
 
-Renseigne `.env.demo` :
+Fill in `.env.demo`:
 
 ```bash
-openssl rand -hex 32      # DEMO_DB_PASSWORD  — hex obligatoire, voir ci-dessous
+openssl rand -hex 32      # DEMO_DB_PASSWORD  — hex is mandatory, see below
 openssl rand -base64 32   # DEMO_AUTH_SECRET
 openssl rand -base64 32   # DEMO_WRITE_TOKEN
 ```
 
-> `DEMO_DB_PASSWORD` en **hex**, pas en base64 : il part tel quel dans
-> `DATABASE_URL`, et un `/` — que base64 produit — coupe l'autorité de l'URL en
-> deux. Prisma s'arrête alors sur
-> `P1013 ... invalid port number in database URL`, parce qu'il lit le fragment de
-> mot de passe qui suit le `:` comme un numéro de port.
+> `DEMO_DB_PASSWORD` in **hex**, not base64: it goes into `DATABASE_URL` verbatim, and
+> a `/` — which base64 produces — cuts the URL's authority in two. Prisma then stops
+> on `P1013 ... invalid port number in database URL`, because it reads the fragment of
+> password following the `:` as a port number.
 
-`TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT` et `TRAEFIK_CERTRESOLVER` doivent coller au
-proxy qui tourne. Pour les retrouver :
+`TRAEFIK_NETWORK`, `TRAEFIK_ENTRYPOINT` and `TRAEFIK_CERTRESOLVER` must match the
+proxy that is running. To find them:
 
 ```bash
 docker network ls | grep -i traefik
-docker inspect <conteneur-traefik> --format '{{json .Config.Cmd}}' | tr ',' '\n' | grep -i 'entrypoint\|certresolver'
+docker inspect <traefik-container> --format '{{json .Config.Cmd}}' | tr ',' '\n' | grep -i 'entrypoint\|certresolver'
 ```
 
-## 3. Démarrer
+## 3. Start it
 
 ```bash
 docker compose -f docker-compose.demo.yml --env-file .env.demo pull
@@ -82,25 +84,25 @@ docker compose -f docker-compose.demo.yml --env-file .env.demo up -d
 docker compose -f docker-compose.demo.yml --env-file .env.demo logs -f demo_driver
 ```
 
-Les migrations s'appliquent toutes seules : `docker-entrypoint.sh` lance
-`prisma migrate deploy` au démarrage de l'app, et `scripts/demo-loop.sh` le refait
-avant de construire le monde — idempotent, pas de course entre les deux.
+Migrations apply on their own: `docker-entrypoint.sh` runs `prisma migrate deploy`
+when the app starts, and `scripts/demo-loop.sh` does it again before building the
+world — idempotent, so there is no race between the two.
 
-Le premier `demo-reset` remplit la base immédiatement : un conteneur neuf n'est
-jamais vide. Ensuite, un tick toutes les `DEMO_TICK_SECONDS` (180 par défaut) et une
-reconstruction complète au premier changement de date UTC.
+The first `demo-reset` fills the database straight away: a fresh container is never
+empty. After that, a tick every `DEMO_TICK_SECONDS` (180 by default) and a full
+rebuild at the first change of UTC date.
 
-Comptes : `demo` (devops), `demo-qa` (qa), `demo-admin` (admin), mot de passe `demo`.
-La page de connexion les liste elle-même, un clic remplit le formulaire. C'est
-`RC_DEMO_MODE=true` sur `app_demo` qui le déclenche ; sans ce drapeau la page reste
-un formulaire nu, et un test vérifie que les identifiants affichés authentifient
-réellement (`tests/lib/auth/demoAccounts.test.ts`).
-Les visiteurs anonymes ont la vue publique en lecture seule.
+Accounts: `demo` (devops), `demo-qa` (qa), `demo-admin` (admin), password `demo`. The
+login page lists them itself, and a click fills the form. `RC_DEMO_MODE=true` on
+`app_demo` is what turns that on; without the flag the page stays a bare form, and a
+test checks that the credentials shown actually authenticate
+(`tests/lib/auth/demoAccounts.test.ts`). Anonymous visitors get the read-only public
+view.
 
-## 4. Mise à jour automatique
+## 4. Automatic updates
 
-Un timer systemd va chercher l'image lui-même toutes les 5 minutes — rien à ouvrir
-en entrée, aucune clé SSH dans les secrets GitHub. Depuis `deploy/` du dépôt :
+A systemd timer fetches the image itself every 5 minutes — nothing to open inbound,
+no SSH key in the GitHub secrets. From the repository's `deploy/`:
 
 ```bash
 sudo install -m 755 rc-demo-update.sh /usr/local/bin/rc-demo-update.sh
@@ -111,53 +113,52 @@ sudo systemctl enable --now releasechronicle-demo-update.timer
 ```
 
 ```bash
-systemctl list-timers releasechronicle-demo-update.timer   # prochaine exécution
-journalctl -u releasechronicle-demo-update.service -n 50   # ce qu'il a fait
-sudo systemctl start releasechronicle-demo-update.service  # forcer maintenant
+systemctl list-timers releasechronicle-demo-update.timer   # next run
+journalctl -u releasechronicle-demo-update.service -n 50   # what it did
+sudo systemctl start releasechronicle-demo-update.service  # force one now
 ```
 
-Le service ne recrée les conteneurs que si le digest a bougé. Avec
-`RC_IMAGE_TAG=rc`, la démo suit la branche RC ; avec `RC_IMAGE_TAG=0.1.0`, elle
-reste figée et le timer ne fait plus rien.
+The service only recreates the containers when the digest has moved. With
+`RC_IMAGE_TAG=rc` the demo follows the rc branch; with `RC_IMAGE_TAG=0.2.0` it stays
+put and the timer has nothing left to do.
 
-À la main, sans le timer :
+By hand, without the timer:
 
 ```bash
 docker compose -f docker-compose.demo.yml --env-file .env.demo pull
 docker compose -f docker-compose.demo.yml --env-file .env.demo up -d
 ```
 
-## Exploitation
+## Operating it
 
 ```bash
-# état
+# state
 docker compose -f docker-compose.demo.yml --env-file .env.demo ps
 
-# reconstruire le monde tout de suite, sans attendre 00:00
+# rebuild the world right now, without waiting for 00:00
 docker compose -f docker-compose.demo.yml --env-file .env.demo exec demo_driver npx tsx prisma/demo-reset.ts
 
-# repartir de zéro, base comprise
+# start over, database included
 docker compose -f docker-compose.demo.yml --env-file .env.demo down -v
 ```
 
-Pas de sauvegarde à prévoir : la base est reconstruite chaque nuit à partir du
-seeder, il n'y a rien à perdre.
+No backup to plan for: the database is rebuilt nightly from the seeder, so there is
+nothing to lose.
 
-## Garde-fous
+## Guard rails
 
-- `prisma/demo-guard.ts` : le ticker et le reset refusent de tourner si
-  `RC_DEMO_MODE` n'est pas `true` **et** si le nom de la base ne contient pas
-  `demo`. Un `DATABASE_URL` mal saisi ne peut pas effacer autre chose.
-- `RC_WEBHOOK_BLOCK_PRIVATE=true` : aucune notification sortante vers une adresse
-  privée depuis une instance publique.
-- Le port Postgres n'est pas publié — seuls les deux conteneurs app y accèdent.
-- TLS obligatoire : en production l'app envoie `Strict-Transport-Security` et
-  `upgrade-insecure-requests` (`src/lib/securityHeaders.ts`). Servie en HTTP simple,
-  le navigateur force https et la démo devient inatteignable.
-- `APP_BASE_URL` doit être l'URL publique https : c'est elle que portent les liens
-  d'action envoyés par mail (`src/lib/actionToken.ts`).
+- `prisma/demo-guard.ts`: the ticker and the reset refuse to run unless `RC_DEMO_MODE`
+  is `true` **and** the database name contains `demo`. A mistyped `DATABASE_URL`
+  cannot wipe anything else.
+- `RC_WEBHOOK_BLOCK_PRIVATE=true`: no outbound notification to a private address from
+  a public instance.
+- The Postgres port is not published — only the two app containers reach it.
+- TLS is mandatory: in production the app sends `Strict-Transport-Security` and
+  `upgrade-insecure-requests` (`src/lib/securityHeaders.ts`). Served over plain HTTP,
+  the browser forces https and the demo becomes unreachable.
+- `APP_BASE_URL` must be the public https URL: it is what the action links sent by
+  email carry (`src/lib/actionToken.ts`).
 
-Restriction d'accès optionnelle, le temps d'une préversion : ajouter
-`RC_IP_ALLOWLIST` (CIDR séparés par des virgules) à `app_demo`. Le filtre lit
-`x-forwarded-for`, donc il suppose un reverse proxy de confiance devant — ce que
-Traefik est ici.
+Optional access restriction, while it is a preview: add `RC_IP_ALLOWLIST`
+(comma-separated CIDRs) to `app_demo`. The filter reads `x-forwarded-for`, so it
+assumes a trusted reverse proxy in front — which Traefik is here.
