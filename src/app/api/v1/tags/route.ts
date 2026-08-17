@@ -47,7 +47,9 @@ export async function PUT(req: Request) {
   return Response.json({ ok: true, name: current }, { status: 200 });
 }
 
-const deleteSchema = z.object({ name: optionalStr() }).catch({ name: undefined });
+// Distinguish "body has a string name (even blank)" from "absent/non-string" — the former
+// must win outright over the query fallback, as today, even when it later 400s as blank.
+const deleteSchema = z.object({ name: z.string().optional() }).catch({ name: undefined });
 
 /** Delete a tag everywhere; name in body or ?name=. */
 export async function DELETE(req: Request) {
