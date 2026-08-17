@@ -57,7 +57,7 @@
 /* ── Environnements ─────────────────────────────────────────────── */
 .envGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
 .envRow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
-.envTag { color: #fff; padding: 2px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; min-width: 78px; text-align: center; }
+.envTag { composes: envChip from global; padding: 2px 10px; font-size: 12px; min-width: 78px; text-align: center; }
 
 /* ── Produits / workflow ────────────────────────────────────────── */
 .wfChips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
