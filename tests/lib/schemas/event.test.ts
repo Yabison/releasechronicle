@@ -20,6 +20,28 @@ describe("deploymentBodySchema", () => {
   it("requires the envelope slugs and environment", () => {
     expect(deploymentBodySchema.safeParse({ ...deploy(), company: " " }).success).toBe(false);
     expect(deploymentBodySchema.safeParse({ ...deploy(), environment: undefined }).success).toBe(false);
+    expect(deploymentBodySchema.safeParse({ ...deploy(), product: " " }).success).toBe(false);
+    expect(deploymentBodySchema.safeParse({ ...deploy(), service: " " }).success).toBe(false);
+    expect(deploymentBodySchema.safeParse(deploy({ requester: undefined })).success).toBe(false);
+  });
+  it("passes metadata through only when present", () => {
+    const noMeta = deploymentBodySchema.parse(deploy());
+    expect(noMeta.metadata).toBeUndefined();
+    const withMeta = deploymentBodySchema.parse(deploy({ metadata: { build: 42 } }));
+    expect(withMeta.metadata).toEqual({ build: 42 });
+  });
+  it("trims externalId and drops a blank one", () => {
+    expect(deploymentBodySchema.parse(deploy({ externalId: "  ext-1  " })).externalId).toBe("ext-1");
+    expect(deploymentBodySchema.parse(deploy({ externalId: "   " })).externalId).toBeUndefined();
+  });
+  it("passes a well-formed tags array through end to end", () => {
+    expect(deploymentBodySchema.parse(deploy({ tags: ["release", "hotfix"] })).tags).toEqual([
+      "release", "hotfix",
+    ]);
+  });
+  it("honors a supplied valid occurredAt verbatim", () => {
+    const v = deploymentBodySchema.parse(deploy({ occurredAt: "2026-01-02T03:04:05Z" }));
+    expect(v.occurredAt).toEqual(new Date("2026-01-02T03:04:05Z"));
   });
   it("requires version except for PRE/POST_MEP phases", () => {
     expect(deploymentBodySchema.safeParse(deploy({ version: undefined })).success).toBe(false);
