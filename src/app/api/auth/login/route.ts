@@ -1,7 +1,17 @@
+import { z } from "zod";
 import { getProvider } from "@/lib/auth/provider";
 import { signSession, sessionSetCookie } from "@/lib/auth/session";
 import { createRateLimiter } from "@/lib/rateLimit";
 import { recordAudit, clientIpOf } from "@/lib/audit";
+import { nonEmpty } from "@/lib/schemas/common";
+import { parseBody } from "@/lib/schemas/parse";
+
+// Passwords are never trimmed: a leading/trailing space is a legitimate character in a
+// password, and the old code never trimmed it either.
+const postSchema = z.object({
+  username: nonEmpty(200),
+  password: z.string().min(1).max(200),
+});
 
 /**
  * Password guessing is throttled per (client IP, username): 5 failures buy a
@@ -19,10 +29,9 @@ function clientIp(req: Request): string {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
-  const username = body && typeof body.username === "string" ? body.username : "";
-  const password = body && typeof body.password === "string" ? body.password : "";
-  if (!username || !password) return Response.json({ error: "username and password are required" }, { status: 400 });
+  const parsed = await parseBody(req, postSchema);
+  if (!parsed.ok) return parsed.res;
+  const { username, password } = parsed.value;
 
   const ip = clientIp(req);
   const auditIp = clientIpOf(req);
