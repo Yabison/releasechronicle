@@ -2,6 +2,9 @@
 
 *English — [Version française](README.fr.md)*
 
+> **The version under development will be complete and tested within 15 days — by 1 September 2026.**
+> **Live demo: https://releasechronicle.yabison.com**
+
 Track releases, deployments, incidents and maintenance windows — with a status
 workflow, dynamic environments, DORA metrics, notification hooks (webhook / Teams /
 email), LDAP/AD authentication, and a subscribable iCalendar feed.
@@ -110,8 +113,10 @@ Both paths can be overridden with `RC_PRIVATE_HIERARCHY` and `RC_PRIVATE_IMPORT`
 
 ## Live demo instance
 
-A self-contained stack, with its own database and port, driven by a loop that moves
-the world forward every few minutes and rebuilds it at **00:00 UTC**:
+Running at **https://releasechronicle.yabison.com** — no sign-in needed for the public
+view. To run the same stack locally: a self-contained stack, with its own database and
+port, driven by a loop that moves the world forward every few minutes and rebuilds it
+at **00:00 UTC**:
 
 ```bash
 docker compose --profile demo up -d    # app on http://localhost:3001

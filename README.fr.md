@@ -2,6 +2,9 @@
 
 *Français — [English version](README.md)*
 
+> **La version en cours de développement sera terminée et testée sous 15 jours — au 1er septembre 2026.**
+> **Démo en ligne : https://releasechronicle.yabison.com**
+
 Suivi des mises en production (MEP), déploiements, incidents et fenêtres de
 maintenance — avec workflow de statut, environnements dynamiques, métriques DORA,
 hooks de notification (webhook / Teams / email), authentification LDAP/AD, et un flux
@@ -107,8 +110,10 @@ l'app). Chemins surchargeables par `RC_PRIVATE_HIERARCHY` et `RC_PRIVATE_IMPORT`
 
 ## Instance de démo vivante
 
-Une pile autonome, base et port dédiés, pilotée par une boucle qui fait avancer le
-monde toutes les quelques minutes et le reconstruit à **00:00 UTC** :
+En ligne sur **https://releasechronicle.yabison.com** — la vue publique ne demande
+aucune connexion. Pour faire tourner la même pile en local : une pile autonome, base
+et port dédiés, pilotée par une boucle qui fait avancer le monde toutes les quelques
+minutes et le reconstruit à **00:00 UTC** :
 
 ```bash
 docker compose --profile demo up -d    # app sur http://localhost:3001
