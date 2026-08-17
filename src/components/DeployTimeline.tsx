@@ -12,11 +12,7 @@ import { UndoModal } from "./UndoModal";
 import styles from "./DeployTimeline.module.css";
 import { useI18n } from "@/i18n/useI18n";
 import { rollbackText } from "@/i18n/labels";
-
-function stamp(iso: string): string {
-  const d = new Date(iso);
-  return d.toUTCString();
-}
+import { useTimeFormat } from "@/lib/useTimeFormat";
 
 /** Human-friendly status labels for the stepper (STATUS_META keeps the raw enum names). */
 const STATUS_LABEL: Record<DeployStatus, string> = {
@@ -39,6 +35,7 @@ export function DeployTimeline({ event, path, canWrite = true }: { event: Client
   const [undoing, setUndoing] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const { t } = useI18n();
+  const { stampFull } = useTimeFormat();
   const steps = stepStates((event.deployStatus as DeployStatus | null) ?? null);
   const current = (event.deployStatus as DeployStatus | null) ?? null;
   const hasPrevious = current != null && previousStatus(current) != null;
@@ -64,7 +61,7 @@ export function DeployTimeline({ event, path, canWrite = true }: { event: Client
   const statusTitle = (status: DeployStatus): string => {
     const tx = txByStatus.get(status);
     if (!tx) return `${STATUS_LABEL[status]} — ${t("deploy.notReached")}`;
-    return `${STATUS_LABEL[status]} — ${stamp(tx.createdAt)}${tx.comment ? ` · ${tx.comment}` : ""}`;
+    return `${STATUS_LABEL[status]} — ${stampFull(tx.createdAt)}${tx.comment ? ` · ${tx.comment}` : ""}`;
   };
 
   // Status transitions and rollbacks share one chronological history.
@@ -155,7 +152,7 @@ export function DeployTimeline({ event, path, canWrite = true }: { event: Client
           <h4 className={styles.historyTitle}>{t("deploy.history")}</h4>
           {history.map((h) => (
             <div key={h.id} className={styles.histRow}>
-              <span className={styles.histWhen}>{stamp(h.at)}</span>
+              <span className={styles.histWhen}>{stampFull(h.at)}</span>
               {h.kind === "transition" ? (
                 <>
                   {(() => {

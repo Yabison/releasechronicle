@@ -1,4 +1,5 @@
 import type { ClientEvent } from "@/lib/timeline";
+import { monthKey, monthLabel, type TimeOpts } from "@/lib/dateDisplay";
 
 export type EntryCategory = "DEPLOY" | "HOTFIX" | "INCIDENT" | "MAINTENANCE";
 
@@ -138,17 +139,18 @@ export function buildServiceTimeline(events: ClientEvent[], now: Date = new Date
 
 export type MonthGroup = { key: string; label: string; entries: TimelineEntry[] };
 
-// UTC to stay consistent with the UTC month key + the UTC datetime stamps in the rows.
-const MONTH_FMT = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" });
-
-export function groupByMonth(entries: TimelineEntry[]): MonthGroup[] {
+/**
+ * Group rows under month headers. The timezone must be the one the row stamps use,
+ * or an event near midnight on the 1st sits under a different month than its own
+ * displayed date.
+ */
+export function groupByMonth(entries: TimelineEntry[], opts: TimeOpts): MonthGroup[] {
   const groups = new Map<string, MonthGroup>();
   for (const e of entries) {
-    const d = new Date(e.at);
-    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const key = monthKey(e.at, opts);
     let g = groups.get(key);
     if (!g) {
-      g = { key, label: MONTH_FMT.format(d).toUpperCase(), entries: [] };
+      g = { key, label: monthLabel(e.at, opts).toUpperCase(), entries: [] };
       groups.set(key, g);
     }
     g.entries.push(e);

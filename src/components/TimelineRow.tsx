@@ -7,19 +7,7 @@ import type { LotMember } from "@/lib/deployLot";
 import { formatDuration } from "@/lib/duration";
 import styles from "./DetailPane.module.css";
 import { useI18n } from "@/i18n/useI18n";
-
-function stampParts(iso: string): { day: string; time: string } {
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return {
-    day: `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}`,
-    time: `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`,
-  };
-}
-
-function sameDay(a: string, b: string): boolean {
-  return new Date(a).toISOString().slice(0, 10) === new Date(b).toISOString().slice(0, 10);
-}
+import { useTimeFormat } from "@/lib/useTimeFormat";
 
 export function TimelineRow({
   entry,
@@ -37,6 +25,7 @@ export function TimelineRow({
   tagColors?: Record<string, string>;
 }) {
   const { t } = useI18n();
+  const { stampDay, stampTime, dayKey } = useTimeFormat();
   const sev = entrySeverity(entry);
   return (
     <button className={styles.row} onClick={onClick} data-done={entry.done} data-rolledback={entry.rolledBack}>
@@ -54,13 +43,13 @@ export function TimelineRow({
       )}
       <span className={styles.stamp}>
         <span className={styles.stampLine}>
-          <span className={styles.stampDay}>{stampParts(entry.at).day}</span>
-          <span>{stampParts(entry.at).time}</span>
+          <span className={styles.stampDay}>{stampDay(entry.at)}</span>
+          <span>{stampTime(entry.at)}</span>
         </span>
         {entry.done && entry.endAt && (
           <span className={`${styles.stampLine} ${styles.endAt}`}>
-            <span className={styles.stampDay}>{sameDay(entry.at, entry.endAt) ? "" : stampParts(entry.endAt).day}</span>
-            <span>{stampParts(entry.endAt).time}</span>
+            <span className={styles.stampDay}>{dayKey(entry.at) === dayKey(entry.endAt) ? "" : stampDay(entry.endAt)}</span>
+            <span>{stampTime(entry.endAt)}</span>
           </span>
         )}
         {entry.durationMs != null && (

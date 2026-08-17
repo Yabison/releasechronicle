@@ -106,6 +106,25 @@ describe("listServiceEvents", () => {
     expect(prod[0].environment).toBe("PROD");
   });
 
+  it("windows by occurredAt: only events inside [from, to] load", async () => {
+    const s = await seedService();
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-01-10T10:00:00Z"), fields: { version: "old", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } }));
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-05-10T10:00:00Z"), fields: { version: "mid", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } }));
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-08-10T10:00:00Z"), fields: { version: "new", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } }));
+    const windowed = await listServiceEvents(s.id, { from: new Date("2026-04-01"), to: new Date("2026-06-01") });
+    expect(windowed.map((e) => e.version)).toEqual(["mid"]);
+    const open = await listServiceEvents(s.id, { from: new Date("2026-04-01") });
+    expect(open.map((e) => e.version)).toEqual(["new", "mid"]);
+  });
+
+  it("counts events older than a date without loading them", async () => {
+    const s = await seedService();
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-01-10T10:00:00Z") }));
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-08-10T10:00:00Z") }));
+    const { countServiceEventsBefore } = await import("@/lib/events");
+    expect(await countServiceEventsBefore(s.id, new Date("2026-04-01"))).toBe(1);
+  });
+
   it("embeds maintenance status in the feed", async () => {
     const s = await seedService();
     const m = await createEvent({

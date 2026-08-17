@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { LotForm } from "./LotForm";
+import { Modal } from "./Modal";
 import { createLotFromExistingAction } from "@/app/actions/events";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 import { actionMessage } from "@/i18n/labels";
 import styles from "./EventModal.module.css";
 
@@ -22,21 +24,17 @@ export function LotModal({
   const [mode, setMode] = useState<"new" | "existing">("new");
   const { t } = useI18n();
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
-        <button className={styles.close} onClick={onClose} aria-label={t("common.close")}>×</button>
-        <h2>{t("lot.modalTitle")}</h2>
-        <div className={styles.lotTabs}>
-          <button type="button" data-active={mode === "new"} onClick={() => setMode("new")}>{t("lot.tabNew")}</button>
-          <button type="button" data-active={mode === "existing"} onClick={() => setMode("existing")}>{t("lot.tabExisting")}</button>
-        </div>
-        {mode === "new" ? (
-          <LotForm path={path} onSuccess={onClose} />
-        ) : (
-          <ExistingLot path={path} company={company} onSuccess={onClose} />
-        )}
+    <Modal title={t("lot.modalTitle")} onClose={onClose}>
+      <div className={styles.lotTabs}>
+        <button type="button" data-active={mode === "new"} onClick={() => setMode("new")}>{t("lot.tabNew")}</button>
+        <button type="button" data-active={mode === "existing"} onClick={() => setMode("existing")}>{t("lot.tabExisting")}</button>
       </div>
-    </div>
+      {mode === "new" ? (
+        <LotForm path={path} onSuccess={onClose} />
+      ) : (
+        <ExistingLot path={path} company={company} onSuccess={onClose} />
+      )}
+    </Modal>
   );
 }
 
@@ -50,13 +48,24 @@ function ExistingLot({ path, company, onSuccess }: { path: string; company: stri
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { t } = useI18n();
+  const { stampFull } = useTimeFormat();
 
   useEffect(() => {
-    fetch("/api/v1/environments").then((r) => r.json()).then((rows: { slug: string }[]) => setEnvs(rows.map((e) => e.slug))).catch(() => {});
+    fetch("/api/v1/environments")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((rows: { slug: string }[]) => setEnvs(rows.map((e) => e.slug)))
+      .catch(() => setErr(t("common.loadFailed")));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     setCands([]); setSel(new Set());
-    if (env) fetch(`/api/v1/lots/candidates?company=${company}&environment=${env}`).then((r) => r.json()).then(setCands).catch(() => {});
+    if (env) {
+      fetch(`/api/v1/lots/candidates?company=${company}&environment=${env}`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+        .then(setCands)
+        .catch(() => setErr(t("common.loadFailed")));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [env, company]);
 
   const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -87,7 +96,7 @@ function ExistingLot({ path, company, onSuccess }: { path: string; company: stri
           <label key={c.eventId} className={styles.candRow}>
             <input type="checkbox" checked={sel.has(c.eventId)} onChange={() => toggle(c.eventId)} />
             <span className={styles.candMain}>{c.product} / {c.service}{c.version ? ` · v${c.version}` : ""}</span>
-            <span className={styles.candMeta}>{new Date(c.occurredAt).toLocaleString()}{c.lot ? ` · lot ${c.lot}` : ""}</span>
+            <span className={styles.candMeta}>{stampFull(c.occurredAt)}{c.lot ? ` · lot ${c.lot}` : ""}</span>
           </label>
         ))}
       </div>

@@ -7,6 +7,7 @@ import type { TreeCompany } from "@/lib/tree";
 import { useI18n } from "@/i18n/useI18n";
 import { APP_NAME, APP_VERSION } from "@/lib/appMeta";
 import { LocaleSwitcher } from "./LocaleSwitcher";
+import { TimeModeSwitcher } from "./TimeModeSwitcher";
 import styles from "./Sidebar.module.css";
 
 export type Me = { name: string; roles: string[]; canWrite: boolean } | null;
@@ -64,6 +65,7 @@ export function Sidebar({ tree, me }: { tree: TreeCompany[]; me: Me }) {
         </a>
         {me?.canWrite && <Link href="/admin">{t("nav.admin")}</Link>}
         <LocaleSwitcher />
+        <TimeModeSwitcher />
       </div>
     </nav>
   );

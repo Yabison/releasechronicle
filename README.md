@@ -374,6 +374,14 @@ Base : `/api/v1`. **Écritures de config** = session admin ; **ingestion** =
 `Bearer RC_WRITE_TOKEN`. Spécification OpenAPI : `/api/v1/openapi.json`
 (Swagger UI : `/api/docs`).
 
+**Dates** — tous les champs date (`occurredAt`, `scheduledAt`, `startedAt`,
+`resolvedAt`, `windowStart`, `windowEnd`) acceptent l'ISO 8601 avec **n'importe quel
+décalage**, pas seulement UTC : `2026-06-25T12:00:00+02:00` et
+`2026-06-25T10:00:00Z` désignent le même instant et sont stockés à l'identique.
+Éviter les dates *sans* fuseau (`2026-06-25T12:00`) : elles sont interprétées dans
+le fuseau du serveur. L'UI affiche ensuite chaque instant dans le fuseau du
+visiteur, ou en UTC via le sélecteur `local / UTC` de la barre latérale.
+
 **Lectures** — une session voit tout. Sans session, l'API applique exactement les
 mêmes règles que le mode public de l'UI : compagnie, produit *et* service doivent
 être marqués publics, le type d'événement doit figurer dans les types publics, et

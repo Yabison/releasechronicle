@@ -40,7 +40,8 @@ export function UndoModal({
   }
 
   return (
-    <div className={styles.overlay} onClick={pending ? undefined : onClose}>
+    // No overlay-click close: a stray click must not discard the typed comment.
+    <div className={styles.overlay}>
       <div ref={modalRef} className={styles.modal} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <h3>{t("modal.undoTitle")}</h3>
         <label className={styles.field}>
