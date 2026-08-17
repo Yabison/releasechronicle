@@ -16,7 +16,13 @@
 export function securityHeaders({ nonce, production }: { nonce: string; production: boolean }): Record<string, string> {
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    // 'unsafe-eval' in development only: Next's Fast Refresh runtime
+    // (@next/react-refresh-utils) evaluates strings, and the policy without it
+    // throws an EvalError while main-app.js is still initialising — which kills
+    // hydration for the whole page, leaving every client component inert. A
+    // production build ships no react-refresh, so the escape hatch never reaches
+    // a deployed instance.
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${production ? "" : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
