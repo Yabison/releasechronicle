@@ -3,11 +3,16 @@ import { resetDb, prisma } from "../../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
 import { register } from "@/lib/hooks/registry";
-import { dispatchHooks } from "@/lib/hooks/dispatch";
+import { emitHooks } from "@/lib/hooks/dispatch";
 import { listDeliveries } from "@/lib/hooks/config";
-import type { Connector } from "@/lib/hooks/types";
+import type { Connector, HookEventKind } from "@/lib/hooks/types";
 
 register({ type: "d-ok", async send() { return { ok: true, statusCode: 200 }; } } as Connector);
+
+async function dispatchNow(eventId: string, kind: HookEventKind, actor?: string | null) {
+  const { delivered } = await emitHooks(eventId, kind, actor);
+  await delivered;
+}
 
 async function seed(name: string) {
   const c = await createCompany({ name });
@@ -25,7 +30,7 @@ afterAll(async () => { await prisma.$disconnect(); });
 describe("delivery payload + listDeliveries", () => {
   it("stores the sent event as the delivery payload", async () => {
     const { productId, eventId } = await seed("Acme");
-    await dispatchHooks(eventId, "deploy.created", "al");
+    await dispatchNow(eventId, "deploy.created", "al");
     const del = await prisma.hookDelivery.findFirst();
     expect((del?.payload as { kind?: string })?.kind).toBe("deploy.created");
     expect((del?.payload as { product?: string })?.product).toBe("acme-prod");
@@ -34,18 +39,18 @@ describe("delivery payload + listDeliveries", () => {
   it("lists a product's deliveries newest-first with the hook type, excluding others", async () => {
     const a = await seed("Acme");
     const b = await seed("Beta");
-    await dispatchHooks(a.eventId, "deploy.created");
-    await dispatchHooks(b.eventId, "deploy.created");
+    await dispatchNow(a.eventId, "deploy.created");
+    await dispatchNow(b.eventId, "deploy.created");
     const { rows } = await listDeliveries(a.productId);
     expect(rows).toHaveLength(1);
     expect(rows[0].hookType).toBe("d-ok");
-    expect(rows[0].ok).toBe(true);
+    expect(rows[0].status).toBe("OK");
     expect(rows[0].kind).toBe("deploy.created");
   });
   it("respects the limit", async () => {
     const { eventId, productId } = await seed("Acme");
-    await dispatchHooks(eventId, "deploy.created");
-    await dispatchHooks(eventId, "deploy.status_changed");
+    await dispatchNow(eventId, "deploy.created");
+    await dispatchNow(eventId, "deploy.status_changed");
     const { rows } = await listDeliveries(productId, { limit: 1 });
     expect(rows).toHaveLength(1);
   });

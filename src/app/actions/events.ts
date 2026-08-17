@@ -132,7 +132,7 @@ export async function createRollbackAction(input: {
     }
     throw e;
   }
-  emitHooks(input.eventId, "deploy.rolled_back", actorName);
+  await emitHooks(input.eventId, "deploy.rolled_back", actorName);
   revalidatePath(input.path);
   return { ok: true };
 }
@@ -226,7 +226,7 @@ export async function transitionDeployStatusAction(input: {
     }
     throw e;
   }
-  emitHooks(input.eventId, "deploy.status_changed", actorName);
+  await emitHooks(input.eventId, "deploy.status_changed", actorName);
   revalidatePath(input.path);
   return { ok: true };
 }
@@ -260,7 +260,7 @@ export async function undoDeployStatusAction(input: {
     if (e instanceof DeployTransitionError) return fail("err.noTransitionToUndo");
     throw e;
   }
-  emitHooks(input.eventId, "deploy.status_undone", actorName);
+  await emitHooks(input.eventId, "deploy.status_undone", actorName);
   revalidatePath(input.path);
   return { ok: true };
 }
@@ -482,7 +482,7 @@ export async function createLotAction(input: CreateLotInput): Promise<{ ok: true
     return out;
   });
 
-  for (const id of ids) emitHooks(id, "deploy.created");
+  for (const id of ids) await emitHooks(id, "deploy.created");
   revalidatePath(path);
   return { ok: true, created: ids.length };
 }

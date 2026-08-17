@@ -171,6 +171,7 @@ development and test databases. Full walkthrough: [docs/dev-environment.md](docs
 | `DEPLOY_CONFIG_FILE` | Scheduled-promotion lead time | `config/deploy.yml` |
 | `APP_BASE_URL` | Origin of the one-click links in messages | `http://localhost:3000` |
 | `RC_WEBHOOK_BLOCK_PRIVATE` | Also refuse webhooks to private/loopback addresses | `false` |
+| `RC_HOOK_DELIVERY_RETENTION_DAYS` | How long terminal hook-delivery rows are kept before the sweeper purges them | `90` |
 | `RC_DEMO_MODE` | Public demo instance: shows the demo accounts on the login page | `false` |
 | `RC_IP_ALLOWLIST` | Comma-separated CIDRs; anything else gets a 403 | *(unset — no restriction)* |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Sending email (the `email` connector) | — |
@@ -334,10 +335,16 @@ Per product (**Admin → Hooks**):
   orange: release in progress; green: done), in French and English
   (`{colour}.en.yml`). The language is chosen per target under **Admin → Targets**.
 - **Delivery log**: **Admin → Logs** (`/admin/logs`), filterable (kind, type,
-  ok/failure, code, error, date) with pagination.
+  status — `PENDING`/`OK`/`FAILED`/`DEAD` —, code, error, date) with pagination.
 - **No-code integration**: a `webhook` hook can point at a **Power Automate / Logic
   Apps** flow (*HTTP request* trigger → *Create an Outlook event*). The payload
   includes `scheduledAt`, `windowStart`, `windowEnd`.
+- **Delivery queue & retries**: deliveries are queued and retried with exponential
+  backoff (1 min → 6 h, 6 attempts max). Exhausted deliveries stay visible in the log
+  with status `DEAD` rather than disappearing. An in-process 60 s sweeper is the
+  primary trigger; `POST /api/v1/hooks/deliveries/sweep` is the fallback trigger for
+  cron-driven or scale-to-zero deployments. Terminal rows (`OK`/`DEAD`) are purged
+  after `RC_HOOK_DELIVERY_RETENTION_DAYS` (see the environment variables table).
 
 ---
 
@@ -416,6 +423,7 @@ Main routes:
 | POST/PUT | `/deployments`, `/incidents`, `/maintenances` (+ `/[externalId]`) | write token |
 | POST | `/ingest/deployments` | source token |
 | POST | `/deployments/promote-scheduled` | write token (cron) |
+| POST | `/hooks/deliveries/sweep` | write token (cron) |
 | GET | `/metrics/dora` | public |
 | GET | `/calendar.ics` | public |
 | GET/POST | `/auth/login`, `/auth/logout`, `/auth/me` | — |

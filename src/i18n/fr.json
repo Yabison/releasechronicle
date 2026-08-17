@@ -255,6 +255,7 @@
   "audit.view": "voir",
   "audit.loadFailed": "Chargement impossible",
   "logs.title": "Logs de livraisons hooks",
+  "logs.colStatus": "Statut",
   "logs.colError": "Erreur",
   "logs.containsPh": "contient…",
   "logs.next": "Suivant →",

@@ -133,14 +133,14 @@ describe("GET hook deliveries", () => {
     await seed();
     const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
     const hook = await prisma.hook.create({ data: { productId: product.id, type: "webhook", events: ["*"], config: { url: "x" }, enabled: true } });
-    await prisma.hookDelivery.create({ data: { hookId: hook.id, kind: "deploy.created", ok: true, statusCode: 200, payload: { kind: "deploy.created" } } });
+    await prisma.hookDelivery.create({ data: { hookId: hook.id, kind: "deploy.created", status: "OK", statusCode: 200, payload: { kind: "deploy.created" } } });
     const res = await deliveriesGET(new Request("http://x/api/v1/products/checkout/hooks/deliveries?company=acme", { headers: AUTH }), ctx("checkout"));
     expect(res.status).toBe(200);
     const { rows, total } = await res.json();
     expect(rows).toHaveLength(1);
     expect(total).toBe(1);
     expect(rows[0].hookType).toBe("webhook");
-    expect(rows[0].ok).toBe(true);
+    expect(rows[0].status).toBe("OK");
   });
   it("404 for an unknown product", async () => {
     await seed();
@@ -155,16 +155,16 @@ describe("GET hook deliveries — filters", () => {
     const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
     const webhook = await prisma.hook.create({ data: { productId: product.id, type: "webhook", events: ["*"], config: { url: "x" }, enabled: true } });
     const email = await prisma.hook.create({ data: { productId: product.id, type: "email", events: ["*"], config: {}, enabled: true } });
-    await prisma.hookDelivery.create({ data: { hookId: webhook.id, kind: "deploy.created", ok: true, statusCode: 200, createdAt: new Date("2026-01-01T00:00:00Z") } });
-    await prisma.hookDelivery.create({ data: { hookId: webhook.id, kind: "deploy.status_changed", ok: false, statusCode: 500, error: "Boom Timeout", createdAt: new Date("2026-02-01T00:00:00Z") } });
-    await prisma.hookDelivery.create({ data: { hookId: email.id, kind: "incident.created", ok: true, statusCode: 202, createdAt: new Date("2026-03-01T00:00:00Z") } });
+    await prisma.hookDelivery.create({ data: { hookId: webhook.id, kind: "deploy.created", status: "OK", statusCode: 200, createdAt: new Date("2026-01-01T00:00:00Z") } });
+    await prisma.hookDelivery.create({ data: { hookId: webhook.id, kind: "deploy.status_changed", status: "DEAD", statusCode: 500, error: "Boom Timeout", createdAt: new Date("2026-02-01T00:00:00Z") } });
+    await prisma.hookDelivery.create({ data: { hookId: email.id, kind: "incident.created", status: "OK", statusCode: 202, createdAt: new Date("2026-03-01T00:00:00Z") } });
   }
   const q = (params: Record<string, string>) =>
     deliveriesGET(new Request(`http://x/api/v1/products/checkout/hooks/deliveries?company=acme&${new URLSearchParams(params)}`, { headers: AUTH }), ctx("checkout"));
 
-  it("filters by ok=false", async () => {
+  it("filters by status=DEAD", async () => {
     await seedDeliveries();
-    const { rows, total } = await (await q({ ok: "false" })).json();
+    const { rows, total } = await (await q({ status: "DEAD" })).json();
     expect(total).toBe(1);
     expect(rows[0].kind).toBe("deploy.status_changed");
   });

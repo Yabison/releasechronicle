@@ -467,5 +467,25 @@ export const openapiDocument = {
         },
       },
     },
+    "/api/v1/hooks/deliveries/sweep": {
+      post: {
+        summary: "Retry due hook deliveries and purge old ones",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          "200": {
+            description: "Sweep counters",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { retried: { type: "integer" }, purged: { type: "integer" } },
+                },
+              },
+            },
+          },
+          "401": { description: "Missing or invalid token" },
+        },
+      },
+    },
   },
 } as const;

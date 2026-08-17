@@ -1,20 +1,35 @@
 import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+// Side-effect import: registers every built-in connector. This is the only
+// module that calls getConnector, so importing it here (rather than relying
+// on callers to import "@/lib/hooks" first) guarantees the registry is
+// populated on every path that reaches dispatch — including the sweep route
+// and instrumentation.ts, which otherwise never trigger that side effect and
+// would dead-letter every row with "unknown connector".
+import "@/lib/hooks";
 import { getConnector } from "./registry";
 import { transitionMatches } from "./transitions";
 import type { HookEvent, HookEventKind } from "./types";
 import { nextStatus } from "@/lib/deployWorkflow";
 import { signActionToken, actionUrl } from "@/lib/actionToken";
+import { nextAttemptDelayMs } from "./backoff";
 
-/** Run every matching enabled hook of the event's product through its connector,
- *  isolated, logging each attempt to HookDelivery. Never throws. */
-export async function dispatchHooks(eventId: string, kind: HookEventKind, actor?: string | null): Promise<void> {
+/** While a row is being sent, its nextAttemptAt is pushed this far out so no
+ *  concurrent worker re-claims it; a crash mid-send makes it due again after
+ *  the lease instead of losing it. Invariant: every connector's worst-case
+ *  send duration must stay well under this lease, or a slow send can be
+ *  double-delivered once the lease expires and a second worker re-claims it. */
+export const CLAIM_LEASE_MS = 600_000;
+
+/** Write one PENDING HookDelivery per matching enabled hook — the queue entry —
+ *  and return their ids. The payload is snapshotted here; retries reuse it. */
+export async function enqueueHooks(eventId: string, kind: HookEventKind, actor?: string | null): Promise<string[]> {
   const ev = await prisma.event.findUnique({
     where: { id: eventId },
-    include: { service: { include: { product: { include: { company: true, hooks: { include: { target: true } } } } } } },
+    include: { service: { include: { product: { include: { company: true, hooks: true } } } } },
   });
-  if (!ev) return;
+  if (!ev) return [];
   const product = ev.service.product;
 
   let fromStatus: string | null = null;
@@ -57,6 +72,7 @@ export async function dispatchHooks(eventId: string, kind: HookEventKind, actor?
       actionUrl: actionUrlStr,
     },
   };
+  const payload = event as unknown as Prisma.InputJsonValue;
 
   const hooks = product.hooks.filter(
     (h) =>
@@ -64,42 +80,92 @@ export async function dispatchHooks(eventId: string, kind: HookEventKind, actor?
       (h.events.includes("*") || h.events.includes(kind)) &&
       (kind !== "deploy.status_changed" || transitionMatches(h.transitions, fromStatus, toStatus)),
   );
+
+  const now = new Date();
+  const ids: string[] = [];
   for (const h of hooks) {
-    const connector = getConnector(h.type);
-    if (!connector) {
+    if (!getConnector(h.type)) {
+      // No connector will ever send this: dead on arrival, visible in the admin.
       await prisma.hookDelivery.create({
-        data: { hookId: h.id, kind, ok: false, error: `unknown connector: ${h.type}`, payload: event as unknown as Prisma.InputJsonValue },
+        data: { hookId: h.id, kind, status: "DEAD", attempts: 0, nextAttemptAt: null, error: `unknown connector: ${h.type}`, payload },
       });
       continue;
     }
-    let result;
-    try {
-      const cfg = (h.target ? h.target.config : h.config) as Record<string, unknown>;
-      result = await connector.send(event, cfg ?? {});
-    } catch (e) {
-      result = { ok: false, error: e instanceof Error ? e.message : "connector threw" };
-    }
-    await prisma.hookDelivery.create({
-      data: {
-        hookId: h.id,
-        kind,
-        ok: result.ok,
-        statusCode: result.statusCode ?? null,
-        error: result.error ?? null,
-        payload: event as unknown as Prisma.InputJsonValue,
-      },
+    const row = await prisma.hookDelivery.create({
+      data: { hookId: h.id, kind, status: "PENDING", attempts: 0, nextAttemptAt: now, payload },
     });
+    ids.push(row.id);
   }
+  return ids;
 }
 
-/** Fire-and-forget hook dispatch after the response. Returns the dispatch promise
- *  so tests can await it; in a request scope, after() also keeps it alive. */
-export function emitHooks(eventId: string, kind: HookEventKind, actor?: string | null): Promise<void> {
-  const p = dispatchHooks(eventId, kind, actor);
-  try {
-    after(() => p);
-  } catch {
-    // outside a request scope (e.g. tests): the promise already runs.
+/** Claim + send each delivery, all in parallel: one slow or throwing connector
+ *  never delays the others. Safe to call concurrently (claim is exclusive). */
+export async function deliverDeliveries(ids: string[], now: Date = new Date()): Promise<void> {
+  await Promise.allSettled(ids.map((id) => attemptDelivery(id, now)));
+}
+
+async function attemptDelivery(id: string, now: Date): Promise<void> {
+  // Exclusive claim: only one worker moves a due row, and the lease keeps the
+  // row invisible to other workers while the send is in flight.
+  const claimed = await prisma.hookDelivery.updateMany({
+    where: { id, status: { in: ["PENDING", "FAILED"] }, nextAttemptAt: { lte: now } },
+    data: { attempts: { increment: 1 }, nextAttemptAt: new Date(now.getTime() + CLAIM_LEASE_MS) },
+  });
+  if (claimed.count === 0) return;
+
+  const row = await prisma.hookDelivery.findUnique({
+    where: { id },
+    include: { hook: { include: { target: true } } },
+  });
+  if (!row) return;
+
+  const connector = getConnector(row.hook.type);
+  if (!connector) {
+    await prisma.hookDelivery.update({
+      where: { id },
+      data: { status: "DEAD", nextAttemptAt: null, error: `unknown connector: ${row.hook.type}` },
+    });
+    return;
   }
-  return p;
+
+  let result;
+  try {
+    // Config is read live (not snapshotted) so a target URL fixed between
+    // retries takes effect immediately.
+    const cfg = (row.hook.target ? row.hook.target.config : row.hook.config) as Record<string, unknown>;
+    result = await connector.send(row.payload as unknown as HookEvent, cfg ?? {});
+  } catch (e) {
+    result = { ok: false as const, error: e instanceof Error ? e.message : "connector threw" };
+  }
+
+  if (result.ok) {
+    await prisma.hookDelivery.update({
+      where: { id },
+      data: { status: "OK", nextAttemptAt: null, statusCode: result.statusCode ?? null, error: null },
+    });
+    return;
+  }
+  const delay = nextAttemptDelayMs(row.attempts); // attempts already incremented by the claim
+  await prisma.hookDelivery.update({
+    where: { id },
+    data:
+      delay === null
+        ? { status: "DEAD", nextAttemptAt: null, statusCode: result.statusCode ?? null, error: result.error ?? null }
+        : { status: "FAILED", nextAttemptAt: new Date(now.getTime() + delay), statusCode: result.statusCode ?? null, error: result.error ?? null },
+  });
+}
+
+/** Enqueue now (awaited by the caller: the queue rows exist before the HTTP
+ *  response), deliver after the response. `delivered` resolves when the
+ *  immediate attempts finish — tests await it. */
+export async function emitHooks(eventId: string, kind: HookEventKind, actor?: string | null): Promise<{ delivered: Promise<void> }> {
+  const ids = await enqueueHooks(eventId, kind, actor);
+  const delivered = ids.length ? deliverDeliveries(ids) : Promise.resolve();
+  try {
+    after(() => delivered);
+  } catch {
+    // outside a request scope (tests, scheduler): the promise already runs.
+  }
+  return { delivered };
 }

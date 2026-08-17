@@ -324,17 +324,28 @@ model NotificationTarget {
   hooks     Hook[]
 }
 
+enum DeliveryStatus {
+  PENDING
+  OK
+  FAILED
+  DEAD
+}
+
 model HookDelivery {
-  id         String   @id @default(cuid())
-  hookId     String
-  hook       Hook     @relation(fields: [hookId], references: [id])
-  kind       String
-  ok         Boolean
-  statusCode Int?
-  error      String?
-  payload    Json?
-  createdAt  DateTime @default(now())
+  id            String         @id @default(cuid())
+  hookId        String
+  hook          Hook           @relation(fields: [hookId], references: [id])
+  kind          String
+  status        DeliveryStatus @default(PENDING)
+  attempts      Int            @default(0)
+  nextAttemptAt DateTime?
+  statusCode    Int?
+  error         String?
+  payload       Json?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
   @@index([hookId, createdAt])
+  @@index([status, nextAttemptAt])
 }
 
 model IngestSource {

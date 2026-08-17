@@ -16,7 +16,7 @@ export async function promoteScheduledDeployments(now: Date = new Date()): Promi
   for (const { id } of due) {
     try {
       await transitionDeployStatus(id, { to: DeployStatus.PENDING, actorName: "scheduler", actorEmail: null, comment: null });
-      emitHooks(id, "deploy.status_changed", "scheduler");
+      await emitHooks(id, "deploy.status_changed", "scheduler");
       ids.push(id);
     } catch {
       // skip a row that raced/changed underneath us

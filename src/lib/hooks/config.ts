@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type DeliveryStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 export function listHooks(productId: string) {
@@ -23,7 +23,9 @@ export function deleteHook(id: string) {
 export type DeliveryRow = {
   id: string;
   kind: string;
-  ok: boolean;
+  status: string;
+  attempts: number;
+  nextAttemptAt: Date | null;
   statusCode: number | null;
   error: string | null;
   createdAt: Date;
@@ -34,7 +36,7 @@ export type DeliveryRow = {
 export type DeliveryFilter = {
   kind?: string;
   type?: string;
-  ok?: boolean;
+  status?: DeliveryStatus;
   statusCode?: number;
   error?: string;
   from?: Date;
@@ -51,7 +53,7 @@ export async function listDeliveries(
     hook: { productId, ...(filter.type ? { type: filter.type } : {}) },
   };
   if (filter.kind) where.kind = filter.kind;
-  if (filter.ok !== undefined) where.ok = filter.ok;
+  if (filter.status) where.status = filter.status;
   if (filter.statusCode !== undefined) where.statusCode = filter.statusCode;
   if (filter.error) where.error = { contains: filter.error, mode: "insensitive" };
   if (filter.from || filter.to) {
@@ -73,7 +75,8 @@ export async function listDeliveries(
     prisma.hookDelivery.count({ where }),
   ]);
   const rows: DeliveryRow[] = records.map((r) => ({
-    id: r.id, kind: r.kind, ok: r.ok, statusCode: r.statusCode, error: r.error,
+    id: r.id, kind: r.kind, status: r.status, attempts: r.attempts, nextAttemptAt: r.nextAttemptAt,
+    statusCode: r.statusCode, error: r.error,
     createdAt: r.createdAt, payload: r.payload, hookType: r.hook.type,
   }));
   return { rows, total };
