@@ -1,10 +1,17 @@
+import { z } from "zod";
 import { ServiceType } from "@prisma/client";
 import { requireAdmin } from "@/lib/auth/guard";
 import { createService, listServices, getProductBySlug } from "@/lib/hierarchy";
 import { isUniqueViolation, isForeignKeyViolation } from "@/lib/http";
 import { requestScope } from "@/lib/apiVisibility";
+import { nonEmpty } from "@/lib/schemas/common";
+import { parseBody } from "@/lib/schemas/parse";
 
-const VALID_TYPES = Object.values(ServiceType) as string[];
+const postSchema = z.object({
+  productId: nonEmpty(),
+  name: nonEmpty(),
+  type: z.nativeEnum(ServiceType),
+});
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -26,25 +33,13 @@ export async function POST(req: Request) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
 
-  const body = await req.json().catch(() => null);
-  if (
-    !body ||
-    typeof body.productId !== "string" ||
-    typeof body.name !== "string" ||
-    body.name.trim() === "" ||
-    typeof body.type !== "string" ||
-    !VALID_TYPES.includes(body.type)
-  ) {
-    return Response.json(
-      { error: "productId, name, and a valid type (APP|COMPONENT|API) are required" },
-      { status: 400 },
-    );
-  }
+  const parsed = await parseBody(req, postSchema);
+  if (!parsed.ok) return parsed.res;
   try {
     const service = await createService({
-      productId: body.productId,
-      name: body.name.trim(),
-      type: body.type as ServiceType,
+      productId: parsed.value.productId,
+      name: parsed.value.name,
+      type: parsed.value.type,
     });
     return Response.json(service, { status: 201 });
   } catch (e) {
