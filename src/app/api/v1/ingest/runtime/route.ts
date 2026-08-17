@@ -8,6 +8,9 @@ import { nonEmpty } from "@/lib/schemas/common";
 import { parseBody } from "@/lib/schemas/parse";
 import "@/lib/hooks";
 
+// company/product/service are trimmed lookup keys, not stored values: a CI payload
+// with incidental whitespace (copy-pasted slug, trailing newline) now resolves instead
+// of 404ing.
 const postSchema = z.object({
   company: nonEmpty(),
   product: nonEmpty(),

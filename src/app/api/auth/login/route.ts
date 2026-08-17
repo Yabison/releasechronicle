@@ -6,6 +6,10 @@ import { recordAudit, clientIpOf } from "@/lib/audit";
 import { nonEmpty } from "@/lib/schemas/common";
 import { parseBody } from "@/lib/schemas/parse";
 
+// Username is trimmed: it's an auth lookup key, not a secret, and trimming is
+// conventional for those. It also makes the rate-limit bucket below — keyed on
+// (ip, username) — canonical, so padding variants ("alice", " alice", "alice ")
+// can't be used to multiply an attacker's attempt budget past the real limit.
 // Passwords are never trimmed: a leading/trailing space is a legitimate character in a
 // password, and the old code never trimmed it either.
 const postSchema = z.object({
