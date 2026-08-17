@@ -335,10 +335,16 @@ Per product (**Admin → Hooks**):
   orange: release in progress; green: done), in French and English
   (`{colour}.en.yml`). The language is chosen per target under **Admin → Targets**.
 - **Delivery log**: **Admin → Logs** (`/admin/logs`), filterable (kind, type,
-  ok/failure, code, error, date) with pagination.
+  status — `PENDING`/`OK`/`FAILED`/`DEAD` —, code, error, date) with pagination.
 - **No-code integration**: a `webhook` hook can point at a **Power Automate / Logic
   Apps** flow (*HTTP request* trigger → *Create an Outlook event*). The payload
   includes `scheduledAt`, `windowStart`, `windowEnd`.
+- **Delivery queue & retries**: deliveries are queued and retried with exponential
+  backoff (1 min → 6 h, 6 attempts max). Exhausted deliveries stay visible in the log
+  with status `DEAD` rather than disappearing. An in-process 60 s sweeper is the
+  primary trigger; `POST /api/v1/hooks/deliveries/sweep` is the fallback trigger for
+  cron-driven or scale-to-zero deployments. Terminal rows (`OK`/`DEAD`) are purged
+  after `RC_HOOK_DELIVERY_RETENTION_DAYS` (see the environment variables table).
 
 ---
 
@@ -417,6 +423,7 @@ Main routes:
 | POST/PUT | `/deployments`, `/incidents`, `/maintenances` (+ `/[externalId]`) | write token |
 | POST | `/ingest/deployments` | source token |
 | POST | `/deployments/promote-scheduled` | write token (cron) |
+| POST | `/hooks/deliveries/sweep` | write token (cron) |
 | GET | `/metrics/dora` | public |
 | GET | `/calendar.ics` | public |
 | GET/POST | `/auth/login`, `/auth/logout`, `/auth/me` | — |

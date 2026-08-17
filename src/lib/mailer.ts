@@ -13,6 +13,13 @@ function getTransport(): Transporter {
       port: Number(process.env.SMTP_PORT ?? 587),
       secure: process.env.SMTP_SECURE === "true",
       auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+      // Bound the worst-case send well under CLAIM_LEASE_MS (dispatch.ts): a
+      // hung SMTP connection must fail fast instead of holding the claim
+      // lease past its expiry, which would let the sweeper re-claim and
+      // double-send.
+      connectionTimeout: 5_000,
+      greetingTimeout: 5_000,
+      socketTimeout: 20_000,
     });
   }
   return transport;

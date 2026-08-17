@@ -73,7 +73,7 @@ export default function LogsPage() {
       <div style={{ overflowX: "auto" }}>
       <table>
         <thead>
-          <tr><th>{t("common.date")}</th><th>Kind</th><th>Type</th><th>OK</th><th>Code</th><th>{t("logs.colError")}</th><th>Payload</th></tr>
+          <tr><th>{t("common.date")}</th><th>Kind</th><th>Type</th><th>{t("logs.colStatus")}</th><th>Code</th><th>{t("logs.colError")}</th><th>Payload</th></tr>
           <tr>
             <td><input type="date" value={f.from} onChange={(e) => setFilter({ from: e.target.value })} /> <input type="date" value={f.to} onChange={(e) => setFilter({ to: e.target.value })} /></td>
             <td><select value={f.kind} onChange={(e) => setFilter({ kind: e.target.value })}><option value="">tous</option>{KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</select></td>

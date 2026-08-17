@@ -255,6 +255,7 @@
   "audit.view": "view",
   "audit.loadFailed": "Could not load",
   "logs.title": "Hook delivery logs",
+  "logs.colStatus": "Status",
   "logs.colError": "Error",
   "logs.containsPh": "contains…",
   "logs.next": "Next →",

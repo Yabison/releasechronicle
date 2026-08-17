@@ -46,7 +46,7 @@ async function setup(
 beforeEach(async () => { await resetDb(); sent.length = 0; capturedConfigs.length = 0; });
 afterAll(async () => { await prisma.$disconnect(); });
 
-describe("dispatchHooks", () => {
+describe("hook dispatch", () => {
   it("fires an enabled hook matching the kind and logs a delivery", async () => {
     const ev = await setup([{ type: "t-ok", events: ["deploy.created"] }]);
     await dispatchNow(ev.id, "deploy.created", "alice");

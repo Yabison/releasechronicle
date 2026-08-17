@@ -331,10 +331,18 @@ Par produit (**Admin → Hooks**) :
   orange : MEP en cours ; vert : terminé), en français et en anglais
   (`{couleur}.en.yml`). La langue se choisit par cible dans **Admin → Cibles**.
 - **Journal des livraisons** : **Admin → Logs** (`/admin/logs`), filtrable
-  (kind, type, ok/échec, code, erreur, date) + pagination.
+  (kind, type, statut — `PENDING`/`OK`/`FAILED`/`DEAD` —, code, erreur, date) + pagination.
 - **Intégration sans code** : un hook `webhook` peut pointer vers un flux
   **Power Automate / Logic Apps** (déclencheur *HTTP request* → *Créer un événement
   Outlook*). Le payload inclut `scheduledAt`, `windowStart`, `windowEnd`.
+- **File d'attente et réessais** : les livraisons sont mises en file et réessayées
+  avec un backoff exponentiel (1 min → 6 h, 6 tentatives max). Les livraisons épuisées
+  restent visibles dans le journal avec le statut `DEAD` plutôt que de disparaître. Un
+  sweeper en cours de processus, toutes les 60 s, est le déclencheur principal ;
+  `POST /api/v1/hooks/deliveries/sweep` est le déclencheur de secours pour les
+  déploiements pilotés par cron ou en scale-to-zero. Les lignes à l'état terminal
+  (`OK`/`DEAD`) sont purgées après `RC_HOOK_DELIVERY_RETENTION_DAYS` (voir le tableau
+  des variables d'environnement).
 
 ---
 
@@ -415,6 +423,7 @@ Principales routes :
 | POST/PUT | `/deployments`, `/incidents`, `/maintenances` (+ `/[externalId]`) | write-token |
 | POST | `/ingest/deployments` | jeton de source |
 | POST | `/deployments/promote-scheduled` | write-token (cron) |
+| POST | `/hooks/deliveries/sweep` | write-token (cron) |
 | GET | `/metrics/dora` | public |
 | GET | `/calendar.ics` | public |
 | GET/POST | `/auth/login`, `/auth/logout`, `/auth/me` | — |

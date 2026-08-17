@@ -1,6 +1,13 @@
 import { after } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+// Side-effect import: registers every built-in connector. This is the only
+// module that calls getConnector, so importing it here (rather than relying
+// on callers to import "@/lib/hooks" first) guarantees the registry is
+// populated on every path that reaches dispatch — including the sweep route
+// and instrumentation.ts, which otherwise never trigger that side effect and
+// would dead-letter every row with "unknown connector".
+import "@/lib/hooks";
 import { getConnector } from "./registry";
 import { transitionMatches } from "./transitions";
 import type { HookEvent, HookEventKind } from "./types";
@@ -10,7 +17,9 @@ import { nextAttemptDelayMs } from "./backoff";
 
 /** While a row is being sent, its nextAttemptAt is pushed this far out so no
  *  concurrent worker re-claims it; a crash mid-send makes it due again after
- *  the lease instead of losing it. */
+ *  the lease instead of losing it. Invariant: every connector's worst-case
+ *  send duration must stay well under this lease, or a slow send can be
+ *  double-delivered once the lease expires and a second worker re-claims it. */
 export const CLAIM_LEASE_MS = 600_000;
 
 /** Write one PENDING HookDelivery per matching enabled hook — the queue entry —
