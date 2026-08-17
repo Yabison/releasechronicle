@@ -1,4 +1,3 @@
-import { after } from "next/server";
 import { findIngestSourceByToken } from "@/lib/ingestSource";
 import { ingestDeployment } from "@/lib/ingestDeployment";
 import { emitHooks } from "@/lib/hooks/dispatch";
@@ -20,6 +19,6 @@ export async function POST(req: Request) {
   const r = await ingestDeployment(source, body);
   if (!r.ok) return Response.json({ error: r.error }, { status: r.status });
 
-  try { after(() => emitHooks(r.event.id, "deploy.created")); } catch { void emitHooks(r.event.id, "deploy.created"); }
+  await emitHooks(r.event.id, "deploy.created");
   return Response.json(r.event, { status: 201 });
 }

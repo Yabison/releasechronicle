@@ -1,4 +1,3 @@
-import { after } from "next/server";
 import { requireWriteToken } from "@/lib/auth";
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { getActiveEnvSlugs } from "@/lib/environment";
@@ -29,7 +28,7 @@ export async function POST(req: Request) {
   const result = await reportRuntimeBuild({ serviceId: svc.id, environment, build });
   if (result.drift && result.incidentId) {
     const id = result.incidentId;
-    try { after(() => emitHooks(id, "incident.created")); } catch { void emitHooks(id, "incident.created"); }
+    await emitHooks(id, "incident.created");
   }
   return Response.json(result, { status: 200 });
 }

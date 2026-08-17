@@ -78,7 +78,7 @@ export async function persistValidated<F extends Record<string, unknown>>(
   try {
     const ev = await persistValidatedEvent(type, v, externalIdFromPath);
     const kind = type === "DEPLOYMENT" ? "deploy.created" : type === "INCIDENT" ? "incident.created" : "maintenance.created";
-    emitHooks(ev.id, kind);
+    await emitHooks(ev.id, kind);
     return Response.json(ev, { status: externalIdFromPath ? 200 : 201 });
   } catch (e) {
     if (e instanceof ServiceNotFoundError) {
