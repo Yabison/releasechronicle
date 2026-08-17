@@ -99,6 +99,9 @@ jobs:
       - name: Typecheck (app + tests)
         run: npx tsc --noEmit
 
+      - name: Lint
+        run: npm run lint
+
       - name: Container logs on failure
         if: failure()
         run: docker compose logs db_test ldap

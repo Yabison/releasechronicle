@@ -107,7 +107,6 @@ export function DetailPane({
   useEffect(() => {
     const eid = searchParams.get("event");
     if (eid && events.some((e) => e.id === eid)) setSelected(eid);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, events]);
   const [modal, setModal] = useState(false);
   const [lotModal, setLotModal] = useState(false);

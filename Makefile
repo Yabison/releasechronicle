@@ -22,6 +22,9 @@ dev: ## Run the app on the host
 test: ## Run the test suite
 	npm test
 
+lint: ## ESLint over the whole repo (zero-warning budget)
+	npm run lint
+
 migrate: ## Create/apply a dev migration
 	npm run db:migrate
 
