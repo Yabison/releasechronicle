@@ -3,6 +3,7 @@ import { DeployStatus as DeployStatusEnum } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { incidentDuration, maintenanceStatus, currentByEnvironment } from "@/lib/derive";
 import { canTransition, previousStatus } from "@/lib/deployWorkflow";
+import { encodeEventCursor, type EventCursor } from "@/lib/eventCursor";
 
 /** Normalized event data produced by the validation layer + service resolution. */
 export type EventData = {
@@ -68,7 +69,14 @@ export async function upsertEventByExternalId(externalId: string, data: EventDat
   });
 }
 
-type ListFilter = { environment?: string; type?: EventType; from?: Date; to?: Date };
+type ListFilter = {
+  environment?: string;
+  type?: EventType;
+  from?: Date;
+  to?: Date;
+  /** Extra where fragment merged into the query (e.g. public-mode visibility). */
+  scope?: Prisma.EventWhereInput;
+};
 
 function deriveFor(
   e: { type: EventType; windowStart: Date | null; windowEnd: Date | null; startedAt: Date | null; resolvedAt: Date | null },
@@ -83,44 +91,75 @@ function deriveFor(
   return {};
 }
 
+function serviceEventsWhere(serviceId: string, filter: ListFilter): Prisma.EventWhereInput {
+  return {
+    serviceId,
+    deletedAt: null,
+    ...(filter.environment ? { environment: filter.environment } : {}),
+    ...(filter.type ? { type: filter.type } : {}),
+    ...(filter.from || filter.to
+      ? { occurredAt: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } }
+      : {}),
+    ...(filter.scope ?? {}),
+  };
+}
+
+// `id DESC` tie-break keeps same-instant events in one deterministic order, so a
+// cursor can cut between them without skipping or repeating rows.
+const FEED_ORDER = [{ occurredAt: "desc" }, { id: "desc" }] satisfies Prisma.EventOrderByWithRelationInput[];
+
+const FEED_INCLUDE = {
+  rollbacks: true,
+  qaValidations: true,
+  observations: true,
+  statusTransitions: { orderBy: { createdAt: "asc" } },
+  comments: { orderBy: { createdAt: "asc" } },
+} satisfies Prisma.EventInclude;
+
 export async function listServiceEvents(serviceId: string, filter: ListFilter, now: Date = new Date()) {
   const events = await prisma.event.findMany({
-    where: {
-      serviceId,
-      deletedAt: null,
-      ...(filter.environment ? { environment: filter.environment } : {}),
-      ...(filter.type ? { type: filter.type } : {}),
-      ...(filter.from || filter.to
-        ? { occurredAt: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } }
-        : {}),
-    },
-    orderBy: { occurredAt: "desc" },
-    include: { rollbacks: true, qaValidations: true, observations: true, statusTransitions: { orderBy: { createdAt: "asc" } }, comments: { orderBy: { createdAt: "asc" } } },
+    where: serviceEventsWhere(serviceId, filter),
+    orderBy: FEED_ORDER,
+    include: FEED_INCLUDE,
   });
   return events.map((e) => ({ ...e, derived: deriveFor(e, now) }));
+}
+
+/**
+ * One page of a service's feed. The cursor is the (occurredAt, id) of the last row
+ * of the previous page; the seek predicate resumes strictly after it in FEED_ORDER.
+ */
+export async function listServiceEventsPage(
+  serviceId: string,
+  filter: ListFilter,
+  page: { limit: number; cursor?: EventCursor },
+  now: Date = new Date(),
+) {
+  const afterCursor: Prisma.EventWhereInput = page.cursor
+    ? {
+        OR: [
+          { occurredAt: { lt: page.cursor.occurredAt } },
+          { occurredAt: page.cursor.occurredAt, id: { lt: page.cursor.id } },
+        ],
+      }
+    : {};
+  const rows = await prisma.event.findMany({
+    where: { AND: [serviceEventsWhere(serviceId, filter), afterCursor] },
+    orderBy: FEED_ORDER,
+    include: FEED_INCLUDE,
+    take: page.limit + 1, // one extra row = "there is a next page", never returned
+  });
+  const items = rows.slice(0, page.limit);
+  const last = items[items.length - 1];
+  return {
+    items: items.map((e) => ({ ...e, derived: deriveFor(e, now) })),
+    nextCursor: rows.length > page.limit && last ? encodeEventCursor(last.occurredAt, last.id) : null,
+  };
 }
 
 /** How many events fall before `date` — powers the "show older" affordance without loading them. */
 export function countServiceEventsBefore(serviceId: string, date: Date): Promise<number> {
   return prisma.event.count({ where: { serviceId, deletedAt: null, occurredAt: { lt: date } } });
-}
-
-export async function listProductEvents(
-  productId: string,
-  filter: ListFilter,
-  now: Date = new Date(),
-) {
-  const events = await prisma.event.findMany({
-    where: {
-      service: { productId },
-      deletedAt: null,
-      ...(filter.environment ? { environment: filter.environment } : {}),
-      ...(filter.type ? { type: filter.type } : {}),
-    },
-    orderBy: { occurredAt: "desc" },
-    include: { rollbacks: true, qaValidations: true, observations: true, statusTransitions: { orderBy: { createdAt: "asc" } }, comments: { orderBy: { createdAt: "asc" } } },
-  });
-  return events.map((e) => ({ ...e, derived: deriveFor(e, now) }));
 }
 
 export async function currentVersions(serviceId: string) {

@@ -90,16 +90,30 @@ describe("service events", () => {
   });
   it("returns only public types and environments on a public service", async () => {
     await seed();
-    const rows = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout"), ctx("api"))).json();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ environment: "PROD", type: "DEPLOYMENT", version: "1.0.0" });
+    const body = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout"), ctx("api"))).json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({ environment: "PROD", type: "DEPLOYMENT", version: "1.0.0" });
   });
   it("returns everything to a session", async () => {
     await seed();
-    const rows = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout", AUTH), ctx("api"))).json();
-    expect(rows).toHaveLength(3);
+    const body = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout", AUTH), ctx("api"))).json();
+    expect(body.items).toHaveLength(3);
     const secret = await (await eventsGET(req("/api/v1/services/core/events?company=secret&product=internal", AUTH), ctx("core"))).json();
-    expect(secret).toHaveLength(1);
+    expect(secret.items).toHaveLength(1);
+  });
+  it("fills anonymous pages: private rows are filtered in the query, not after the page is cut", async () => {
+    const { shopSvc } = await seed();
+    // A second public deployment, older than the seed's PROD one. The seed's STAGING
+    // deployment and INCIDENT sit between them; post-filtering a limit=2 page would
+    // return a 1-item first page.
+    await createEvent({
+      serviceId: shopSvc.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date("2020-01-01T00:00:00Z"), tags: [],
+      fields: { version: "0.9.0", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "0.9.0" },
+    } as never);
+    const body = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout&limit=2"), ctx("api"))).json();
+    expect(body.items).toHaveLength(2);
+    expect(body.items.map((e: { version: string }) => e.version)).toEqual(["1.0.0", "0.9.0"]);
+    expect(body.nextCursor).toBeNull();
   });
   it("hides private-environment versions from /current", async () => {
     await seed();

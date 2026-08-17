@@ -435,13 +435,36 @@ export const openapiDocument = {
     },
     "/api/v1/services/{slug}/events": {
       get: {
-        summary: "List events for a service",
+        summary: "List events for a service (cursor-paginated, newest first)",
         parameters: [
           { name: "slug", in: "path", required: true, schema: { type: "string" } },
           { name: "company", in: "query", required: true, schema: { type: "string" } },
           { name: "product", in: "query", required: true, schema: { type: "string" } },
+          { name: "environment", in: "query", required: false, schema: { type: "string" } },
+          { name: "type", in: "query", required: false, schema: { type: "string", enum: ["DEPLOYMENT", "INCIDENT", "MAINTENANCE"] } },
+          { name: "from", in: "query", required: false, schema: { type: "string", format: "date-time" }, description: "Only events at or after this instant" },
+          { name: "to", in: "query", required: false, schema: { type: "string", format: "date-time" }, description: "Only events at or before this instant" },
+          { name: "limit", in: "query", required: false, schema: { type: "integer", minimum: 1, maximum: 500, default: 100 } },
+          { name: "cursor", in: "query", required: false, schema: { type: "string" }, description: "Opaque cursor from the previous page's nextCursor" },
         ],
-        responses: { "200": { description: "Events", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Event" } } } } } },
+        responses: {
+          "200": {
+            description: "One page of events",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["items", "nextCursor"],
+                  properties: {
+                    items: { type: "array", items: { $ref: "#/components/schemas/Event" } },
+                    nextCursor: { type: "string", nullable: true, description: "Pass as ?cursor= to fetch the next page; null on the last page" },
+                  },
+                },
+              },
+            },
+          },
+          "400": { description: "Invalid filter, limit or cursor", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        },
       },
     },
   },

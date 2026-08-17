@@ -5,7 +5,6 @@ import {
   createEvent,
   upsertEventByExternalId,
   listServiceEvents,
-  listProductEvents,
   currentVersions,
   addRollback,
   addQaValidation,
@@ -176,46 +175,5 @@ describe("addObservation", () => {
     const obs = await addObservation(dep.id, { who: "sre", durationMinutes: 15, comment: null });
     expect(obs).not.toBeNull();
     expect(await prisma.observation.count()).toBe(1);
-  });
-});
-
-describe("listProductEvents", () => {
-  it("aggregates events across the product's services, newest-first, soft-delete excluded", async () => {
-    const c = await createCompany({ name: "Acme" });
-    const p = await createProduct({ companyId: c.id, name: "Checkout" });
-    const s1 = await createService({ productId: p.id, name: "API", type: "API" });
-    const s2 = await createService({ productId: p.id, name: "Web", type: "APP" });
-
-    const e1 = await createEvent({
-      serviceId: s1.id, environment: "PROD", type: "DEPLOYMENT",
-      occurredAt: new Date("2026-06-25T08:00:00Z"),
-      fields: { version: "1", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" },
-    });
-    const e2 = await createEvent({
-      serviceId: s2.id, environment: "PROD", type: "DEPLOYMENT",
-      occurredAt: new Date("2026-06-25T10:00:00Z"),
-      fields: { version: "2", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" },
-    });
-    const deleted = await createEvent({
-      serviceId: s1.id, environment: "PROD", type: "DEPLOYMENT",
-      occurredAt: new Date("2026-06-25T11:00:00Z"),
-      fields: { version: "3", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" },
-    });
-    await prisma.event.update({ where: { id: deleted.id }, data: { deletedAt: new Date() } });
-
-    const list = await listProductEvents(p.id, {});
-    expect(list.map((e) => e.id)).toEqual([e2.id, e1.id]); // newest first, deleted excluded
-    expect(list[0].derived).toBeDefined();
-  });
-
-  it("filters by environment", async () => {
-    const c = await createCompany({ name: "Acme" });
-    const p = await createProduct({ companyId: c.id, name: "Checkout" });
-    const s = await createService({ productId: p.id, name: "API", type: "API" });
-    await createEvent({ serviceId: s.id, environment: "QA", type: "DEPLOYMENT", occurredAt: new Date(), fields: { version: "1", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } });
-    await createEvent({ serviceId: s.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), fields: { version: "2", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } });
-    const prod = await listProductEvents(p.id, { environment: "PROD" });
-    expect(prod).toHaveLength(1);
-    expect(prod[0].environment).toBe("PROD");
   });
 });
