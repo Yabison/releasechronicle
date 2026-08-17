@@ -168,6 +168,7 @@ bases de dev et de test.
 | `DEPLOY_CONFIG_FILE` | Config du délai de promotion planifiée | `config/deploy.yml` |
 | `APP_BASE_URL` | Origine des liens one-click dans les messages | `http://localhost:3000` |
 | `RC_WEBHOOK_BLOCK_PRIVATE` | Refuse aussi les webhooks vers des adresses privées/loopback | `false` |
+| `RC_HOOK_DELIVERY_RETENTION_DAYS` | Durée de conservation des lignes de livraison de hooks à l'état terminal avant purge par le sweeper | `90` |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Envoi des emails (connecteur `email`) | — |
 
 > En production, définir impérativement `AUTH_SECRET`, `RC_WRITE_TOKEN`, `APP_BASE_URL`

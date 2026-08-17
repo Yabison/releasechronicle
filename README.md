@@ -171,6 +171,7 @@ development and test databases. Full walkthrough: [docs/dev-environment.md](docs
 | `DEPLOY_CONFIG_FILE` | Scheduled-promotion lead time | `config/deploy.yml` |
 | `APP_BASE_URL` | Origin of the one-click links in messages | `http://localhost:3000` |
 | `RC_WEBHOOK_BLOCK_PRIVATE` | Also refuse webhooks to private/loopback addresses | `false` |
+| `RC_HOOK_DELIVERY_RETENTION_DAYS` | How long terminal hook-delivery rows are kept before the sweeper purges them | `90` |
 | `RC_DEMO_MODE` | Public demo instance: shows the demo accounts on the login page | `false` |
 | `RC_IP_ALLOWLIST` | Comma-separated CIDRs; anything else gets a 403 | *(unset — no restriction)* |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Sending email (the `email` connector) | — |
