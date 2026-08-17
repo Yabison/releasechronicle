@@ -9,7 +9,12 @@ const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
 const config = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    ignores: [".next/**", "node_modules/**", "coverage/**", "next-env.d.ts"],
+    // .claude/worktrees/ holds full checkouts of other branches. Linting them
+    // reports thousands of problems that belong to another commit and drown the
+    // ones in this one. vitest.config.ts excludes the same path, for the same
+    // reason. The CI never sees it — the directory is gitignored — so this is
+    // purely about `npm run lint` staying usable on a machine with a worktree.
+    ignores: [".next/**", "node_modules/**", "coverage/**", "next-env.d.ts", ".claude/**"],
   },
   {
     rules: {

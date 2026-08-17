@@ -49,7 +49,7 @@
 .submit:disabled { opacity: 0.55; cursor: not-allowed; }
 .submit:not(:disabled):hover { filter: brightness(1.05); }
 
-.error { color: #b42318; font-size: 0.82rem; margin: 0; }
+.error { color: var(--danger); font-size: 0.82rem; margin: 0; }
 
 /* Public demo only: the credentials below are published in the repository. */
 .demo {

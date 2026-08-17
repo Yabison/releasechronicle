@@ -38,15 +38,15 @@
   flex: none; cursor: default; line-height: 1;
   display: inline-grid; place-items: center;
   width: 20px; height: 20px; font-size: 14px; font-weight: 700;
-  background: #4338ca; color: #fff;
-  border-radius: 6px; box-shadow: 0 0 0 1px rgba(67, 56, 202, 0.35);
+  background: var(--accent); color: #fff;
+  border-radius: 6px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .sevIcon {
   flex: none; cursor: default; line-height: 1;
   font-size: 14px; font-weight: 700;
 }
-.sevIcon[data-sev="red"] { color: #dc2626; }
-.sevIcon[data-sev="orange"] { color: #f59e0b; }
+.sevIcon[data-sev="red"] { color: var(--cat-incident); }
+.sevIcon[data-sev="orange"] { color: var(--warning); }
 /* Fixed width so the status column stays aligned whatever the env name length (SECURE vs RUN). */
 .envBadge { composes: envChip from global; flex: none; box-sizing: border-box; width: 72px; text-align: center; padding: 2px 6px; }
 .tags { display: inline-flex; gap: 4px; flex: none; }

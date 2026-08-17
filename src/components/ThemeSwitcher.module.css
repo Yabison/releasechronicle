@@ -1,0 +1,29 @@
+.group { display: inline-flex; gap: 2px; }
+
+.option {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 3px 5px;
+  border-radius: 5px;
+  opacity: 0.55;
+}
+.option:hover { opacity: 0.9; background: var(--hover); }
+.option[aria-pressed="true"] { opacity: 1; background: var(--hover); }
+.option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Each button carries its label for screen readers; sighted users get the icon
+   plus the title attribute. */
+.srOnly {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
