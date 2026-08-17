@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { undoDeployStatusAction } from "@/app/actions/events";
@@ -54,7 +56,7 @@ export function UndoModal({
             {error.includes("connexion") && (
               <>
                 {" "}
-                <a href="/login" className={styles.loginLink}>{t("common.login")}</a>
+                <Link href="/login" className={styles.loginLink}>{t("common.login")}</Link>
               </>
             )}
           </p>

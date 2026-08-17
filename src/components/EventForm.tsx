@@ -107,7 +107,7 @@ export function EventForm({
 
   useEffect(() => {
     if (!defaultEnvironment && envs.length && !envs.includes(environment)) setEnvironment(envs[0]);
-  }, [envs]);
+  }, [envs, environment, defaultEnvironment]);
 
   function set(name: string, value: string) {
     setFields((f) => ({ ...f, [name]: value }));

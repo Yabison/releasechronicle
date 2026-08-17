@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useModalDismiss } from "@/lib/useModalDismiss";
@@ -55,7 +57,7 @@ export function RollbackModal({
             {error.includes("connexion") && (
               <>
                 {" "}
-                <a href="/login" className={styles.loginLink}>{t("common.login")}</a>
+                <Link href="/login" className={styles.loginLink}>{t("common.login")}</Link>
               </>
             )}
           </p>

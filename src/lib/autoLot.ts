@@ -15,7 +15,9 @@ async function isMultiMember(lot: string | null, environment: string): Promise<b
   return (await prisma.event.count({ where: { lot, environment, type: "DEPLOYMENT", deletedAt: null } })) > 1;
 }
 
-export async function attachToAutoLot(eventId: string, now: Date = new Date()): Promise<{ lot: string | null; members: number }> {
+// `_now` is unused: the grouping window derives from the event's own occurredAt
+// (see `from`/`to` below). Kept only so existing callers' signatures still match.
+export async function attachToAutoLot(eventId: string, _now: Date = new Date()): Promise<{ lot: string | null; members: number }> {
   const ev = await prisma.event.findUnique({
     where: { id: eventId },
     include: { service: { include: { product: { include: { company: true } } } } },

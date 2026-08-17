@@ -80,7 +80,7 @@ export function LotForm({
     if (envs.length && !common.environment) {
       setCommon((c) => ({ ...c, environment: envs[0] }));
     }
-  }, [envs]);
+  }, [envs, common.environment]);
 
   function set<K extends keyof typeof common>(name: K, value: string) {
     setCommon((c) => ({ ...c, [name]: value }));

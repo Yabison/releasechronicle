@@ -9,6 +9,7 @@
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lint": "eslint . --max-warnings 0",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
@@ -36,10 +37,13 @@
     "react-dom": "19.0.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
     "@types/node": "22.10.0",
     "@types/nodemailer": "^7.0.0",
     "@types/react": "19.0.1",
     "dotenv": "16.4.7",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.23",
     "prisma": "6.1.0",
     "tsx": "4.21.0",
     "typescript": "5.7.2",
