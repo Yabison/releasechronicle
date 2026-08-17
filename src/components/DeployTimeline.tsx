@@ -14,16 +14,10 @@ import { useI18n } from "@/i18n/useI18n";
 import { rollbackText } from "@/i18n/labels";
 import { useTimeFormat } from "@/lib/useTimeFormat";
 
-/** Human-friendly status labels for the stepper (STATUS_META keeps the raw enum names). */
-const STATUS_LABEL: Record<DeployStatus, string> = {
-  SCHEDULED: "Scheduled",
-  GO_CONFIRMED: "GO MEP",
-  PENDING: "Pending",
-  IN_PROGRESS: "In-progress",
-  DEPLOYED: "Deployed",
-  TESTING: "Testing",
-  VALIDATE: "Validate",
-};
+/** Human-friendly stepper label for a status (STATUS_META keeps the raw enum names). */
+function statusLabel(t: (key: string) => string, status: DeployStatus): string {
+  return t(`deploy.status.${status}`);
+}
 
 type HistItem =
   | { id: string; at: string; kind: "transition"; from: string | null; to: string; who: string | null; comment: string | null }
@@ -60,8 +54,8 @@ export function DeployTimeline({ event, path, canWrite = true }: { event: Client
   for (const t of event.statusTransitions) txByStatus.set(t.toStatus, { createdAt: t.createdAt, comment: t.comment });
   const statusTitle = (status: DeployStatus): string => {
     const tx = txByStatus.get(status);
-    if (!tx) return `${STATUS_LABEL[status]} — ${t("deploy.notReached")}`;
-    return `${STATUS_LABEL[status]} — ${stampFull(tx.createdAt)}${tx.comment ? ` · ${tx.comment}` : ""}`;
+    if (!tx) return `${statusLabel(t, status)} — ${t("deploy.notReached")}`;
+    return `${statusLabel(t, status)} — ${stampFull(tx.createdAt)}${tx.comment ? ` · ${tx.comment}` : ""}`;
   };
 
   // Status transitions and rollbacks share one chronological history.
@@ -133,13 +127,13 @@ export function DeployTimeline({ event, path, canWrite = true }: { event: Client
                   style={{ background: dotColor, color: filled || isNext ? "#fff" : "#94a3b8" }}
                   disabled={!isNext || !canWrite}
                   onClick={() => isNext && canWrite && setTarget(status)}
-                  aria-label={isNext ? t("deploy.advanceTo", { status: STATUS_LABEL[status] }) : STATUS_LABEL[status]}
+                  aria-label={isNext ? t("deploy.advanceTo", { status: statusLabel(t, status) }) : statusLabel(t, status)}
                   title={statusTitle(status)}
                 >
                   {state === "done" ? "✓" : state === "current" ? "●" : isNext ? "→" : "★"}
                 </button>
                 <span className={styles.lbl} style={{ color: isNext ? meta.color : undefined, opacity: state === "future" ? 0.45 : 1 }}>
-                  {STATUS_LABEL[status]}
+                  {statusLabel(t, status)}
                 </span>
               </div>
             );
