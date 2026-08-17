@@ -15,12 +15,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   const s = (k: string) => { const v = u.searchParams.get(k)?.trim(); return v ? v : undefined; };
   const num = (k: string) => { const v = u.searchParams.get(k); const n = v === null ? NaN : Number(v); return Number.isInteger(n) ? n : undefined; };
   const date = (k: string) => { const v = u.searchParams.get(k); if (!v) return undefined; const d = new Date(v); return Number.isNaN(d.getTime()) ? undefined : d; };
-  const okParam = u.searchParams.get("ok");
+  const DELIVERY_STATUSES = ["PENDING", "OK", "FAILED", "DEAD"] as const;
+  const statusParam = s("status");
+  if (statusParam && !DELIVERY_STATUSES.includes(statusParam as (typeof DELIVERY_STATUSES)[number])) {
+    return Response.json({ error: "invalid status filter" }, { status: 400 });
+  }
   const limit = Math.min(Math.max(num("limit") ?? 50, 1), 200);
   const offset = Math.max(num("offset") ?? 0, 0);
   const filter = {
     kind: s("kind"), type: s("type"), error: s("error"),
-    ok: okParam === "true" ? true : okParam === "false" ? false : undefined,
+    status: statusParam as import("@prisma/client").DeliveryStatus | undefined,
     statusCode: num("statusCode"),
     from: date("from"), to: date("to"),
     limit, offset,

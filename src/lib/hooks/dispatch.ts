@@ -68,7 +68,7 @@ export async function dispatchHooks(eventId: string, kind: HookEventKind, actor?
     const connector = getConnector(h.type);
     if (!connector) {
       await prisma.hookDelivery.create({
-        data: { hookId: h.id, kind, ok: false, error: `unknown connector: ${h.type}`, payload: event as unknown as Prisma.InputJsonValue },
+        data: { hookId: h.id, kind, status: "DEAD", attempts: 0, nextAttemptAt: null, error: `unknown connector: ${h.type}`, payload: event as unknown as Prisma.InputJsonValue },
       });
       continue;
     }
@@ -83,7 +83,9 @@ export async function dispatchHooks(eventId: string, kind: HookEventKind, actor?
       data: {
         hookId: h.id,
         kind,
-        ok: result.ok,
+        status: result.ok ? "OK" : "FAILED",
+        attempts: 1,
+        nextAttemptAt: result.ok ? null : new Date(Date.now() + 60_000),
         statusCode: result.statusCode ?? null,
         error: result.error ?? null,
         payload: event as unknown as Prisma.InputJsonValue,

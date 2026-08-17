@@ -6,7 +6,7 @@ import { useTimeFormat } from "@/lib/useTimeFormat";
 
 type Company = { id: string; name: string; slug: string };
 type Product = { id: string; name: string; slug: string };
-type Row = { id: string; kind: string; ok: boolean; statusCode: number | null; error: string | null; createdAt: string; payload: unknown; hookType: string };
+type Row = { id: string; kind: string; status: string; attempts: number; statusCode: number | null; error: string | null; createdAt: string; payload: unknown; hookType: string };
 
 const KINDS = ["deploy.created", "deploy.status_changed", "deploy.status_undone", "deploy.rolled_back", "incident.created", "maintenance.created"];
 const PAGE = 50;
@@ -21,7 +21,7 @@ export default function LogsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [f, setF] = useState({ kind: "", type: "", ok: "", statusCode: "", error: "", from: "", to: "" });
+  const [f, setF] = useState({ kind: "", type: "", status: "", statusCode: "", error: "", from: "", to: "" });
 
   useEffect(() => {
     fetch("/api/v1/companies").then((r) => r.json()).then(setCompanies);
@@ -40,7 +40,7 @@ export default function LogsPage() {
     const params = new URLSearchParams({ company, limit: String(PAGE), offset: String(offset) });
     if (f.kind) params.set("kind", f.kind);
     if (f.type) params.set("type", f.type);
-    if (f.ok) params.set("ok", f.ok);
+    if (f.status) params.set("status", f.status);
     if (f.statusCode) params.set("statusCode", f.statusCode);
     if (f.error) params.set("error", f.error);
     if (f.from) params.set("from", f.from);
@@ -78,7 +78,7 @@ export default function LogsPage() {
             <td><input type="date" value={f.from} onChange={(e) => setFilter({ from: e.target.value })} /> <input type="date" value={f.to} onChange={(e) => setFilter({ to: e.target.value })} /></td>
             <td><select value={f.kind} onChange={(e) => setFilter({ kind: e.target.value })}><option value="">tous</option>{KINDS.map((k) => <option key={k} value={k}>{k}</option>)}</select></td>
             <td><select value={f.type} onChange={(e) => setFilter({ type: e.target.value })}><option value="">tous</option>{["webhook", "teams", "email"].map((t) => <option key={t} value={t}>{t}</option>)}</select></td>
-            <td><select value={f.ok} onChange={(e) => setFilter({ ok: e.target.value })}><option value="">tous</option><option value="true">ok</option><option value="false">échec</option></select></td>
+            <td><select value={f.status} onChange={(e) => setFilter({ status: e.target.value })}><option value="">tous</option><option value="PENDING">PENDING</option><option value="OK">OK</option><option value="FAILED">FAILED</option><option value="DEAD">DEAD</option></select></td>
             <td><input style={{ width: 60 }} value={f.statusCode} onChange={(e) => setFilter({ statusCode: e.target.value })} /></td>
             <td><input value={f.error} onChange={(e) => setFilter({ error: e.target.value })} placeholder={t("logs.containsPh")} /></td>
             <td />
@@ -90,7 +90,7 @@ export default function LogsPage() {
               <td>{stampFull(d.createdAt)}</td>
               <td>{d.kind}</td>
               <td>{d.hookType}</td>
-              <td>{d.ok ? "✓" : "✗"}</td>
+              <td>{d.status}{d.attempts > 1 ? ` ×${d.attempts}` : ""}</td>
               <td>{d.statusCode ?? ""}</td>
               <td>{d.error ?? ""}</td>
               <td>{d.payload ? <details><summary>voir</summary><pre>{JSON.stringify(d.payload, null, 2)}</pre></details> : ""}</td>

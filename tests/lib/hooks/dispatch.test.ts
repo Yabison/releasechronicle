@@ -49,7 +49,7 @@ describe("dispatchHooks", () => {
     expect(sent[0]).toMatchObject({ kind: "deploy.created", product: "checkout", service: "api", environment: "PROD", actor: "alice" });
     const del = await prisma.hookDelivery.findMany();
     expect(del).toHaveLength(1);
-    expect(del[0].ok).toBe(true);
+    expect(del[0].status).toBe("OK");
     expect(del[0].statusCode).toBe(200);
   });
   it("matches a wildcard hook and skips a non-matching kind", async () => {
@@ -67,16 +67,16 @@ describe("dispatchHooks", () => {
     const ev = await setup([{ type: "t-boom", events: ["*"] }, { type: "t-ok", events: ["*"] }]);
     await dispatchHooks(ev.id, "deploy.created");
     expect(sent).toHaveLength(1);
-    const del = await prisma.hookDelivery.findMany({ orderBy: { ok: "asc" } });
+    const del = await prisma.hookDelivery.findMany({ orderBy: { status: "asc" } });
     expect(del).toHaveLength(2);
-    expect(del.find((d) => !d.ok)?.error).toContain("kaboom");
+    expect(del.find((d) => d.status !== "OK")?.error).toContain("kaboom");
   });
   it("logs an unknown connector type as failed and skips it", async () => {
     const ev = await setup([{ type: "ghost", events: ["*"] }]);
     await dispatchHooks(ev.id, "deploy.created");
     const del = await prisma.hookDelivery.findMany();
     expect(del).toHaveLength(1);
-    expect(del[0].ok).toBe(false);
+    expect(del[0].status).toBe("DEAD");
     expect(del[0].error).toContain("connector");
   });
   it("fires a status_changed hook whose transitions filter matches", async () => {

@@ -39,7 +39,7 @@ describe("delivery payload + listDeliveries", () => {
     const { rows } = await listDeliveries(a.productId);
     expect(rows).toHaveLength(1);
     expect(rows[0].hookType).toBe("d-ok");
-    expect(rows[0].ok).toBe(true);
+    expect(rows[0].status).toBe("OK");
     expect(rows[0].kind).toBe("deploy.created");
   });
   it("respects the limit", async () => {
