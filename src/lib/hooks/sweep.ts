@@ -13,7 +13,10 @@ function retentionDays(): number {
 }
 
 /** One pass: retry due FAILED rows and orphaned PENDING rows (batched), then
- *  purge terminal rows past retention. Every trigger funnels through here. */
+ *  purge terminal rows past retention. Every trigger funnels through here.
+ *  `retried` is the count of due rows selected and handed to delivery this
+ *  pass — a concurrent worker may already have claimed some of them, so this
+ *  is an upper bound on rows actually re-attempted, not a delivery-success count. */
 export async function sweepHookDeliveries(now: Date = new Date()): Promise<{ retried: number; purged: number }> {
   const due = await prisma.hookDelivery.findMany({
     where: {
