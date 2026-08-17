@@ -173,12 +173,13 @@ jobs:
       packages: write
     uses: ./.github/workflows/publish-images.yml
     with:
-      # rc-<version> is the candidate for the release that version will become;
+      # rc-<version>-rc.<n> pins one candidate for the release that version will
+      # become; the counter keeps two builds from overwriting each other's image.
       # `rc` stays as the moving tag the demo server's timer follows.
       # Only the rc branch carries a candidate version; a main build shows what
       # package.json says, which is the last release.
       build-version: ${{ github.ref == 'refs/heads/rc' && needs.test.outputs.rc || '' }}
       tag-rules: |
-        type=raw,value=rc-${{ needs.test.outputs.next }},enable=${{ github.ref == 'refs/heads/rc' }}
+        type=raw,value=rc-${{ needs.test.outputs.rc }},enable=${{ github.ref == 'refs/heads/rc' }}
         type=ref,event=branch
         type=sha,format=long

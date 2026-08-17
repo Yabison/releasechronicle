@@ -27,17 +27,32 @@ function lastReleaseTag(): string | null {
   }
 }
 
-function messagesSinceLastRelease(): string[] {
+/** `<tag>..HEAD`, or every commit while no release has been tagged yet. */
+function rangeSinceLastRelease(): string[] {
   const tag = lastReleaseTag();
+  return tag ? [`${tag}..HEAD`] : [];
+}
+
+function messagesSinceLastRelease(): string[] {
   // %B is the raw body (header + body), NUL-separated so a message can hold blank lines.
-  const log = git("log", ...(tag ? [`${tag}..HEAD`] : []), "--format=%B%x00");
+  const log = git("log", ...rangeSinceLastRelease(), "--format=%B%x00");
   return log
     .split("\0")
     .map((m) => m.trim())
     .filter(Boolean);
 }
 
+/**
+ * Which candidate this is for the next release: the number of commits landed since
+ * the last one. Squash merges make that one per pull request. Taken from the history
+ * rather than from a CI run number so the same commit always yields the same version,
+ * whoever builds it.
+ */
+function candidateNumber(): number {
+  return Number(git("rev-list", "--count", ...rangeSinceLastRelease(), "HEAD").trim());
+}
+
 const current = (JSON.parse(readFileSync("package.json", "utf8")) as { version: string }).version;
 const next = nextVersion(current, messagesSinceLastRelease());
 
-process.stdout.write(process.argv.includes("--rc") ? rcVersion(next) : next);
+process.stdout.write(process.argv.includes("--rc") ? rcVersion(next, candidateNumber()) : next);

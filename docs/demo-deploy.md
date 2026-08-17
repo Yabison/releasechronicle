@@ -29,7 +29,7 @@ The demo follows the `rc` branch: every merge into it republishes the moving `:r
 tag (and `:rc-demo-tools`), alongside the pinned `:rc-<version>`.
 
 ```bash
-git push origin rc          # -> images :rc and :rc-0.2.0
+git push origin rc          # -> images :rc and :rc-0.2.0-rc.15
 ```
 
 The released images (`:release-0.2.0`, `:0.2.0`, `:0.2`, `:latest`) come from merging
