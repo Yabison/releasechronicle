@@ -45,3 +45,12 @@ h2 { font-size: 1rem; font-weight: 600; margin: calc(var(--space) * 3) 0 var(--s
 [data-cat="MAINTENANCE"].catBadge { color: var(--cat-maint); background: var(--cat-maint-bg); }
 
 .deployPill { display: inline-block; padding: 1px 7px; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.02em; }
+
+/* — UI primitives: the one source for button and env-chip styling. Modules
+   compose these (composes: … from global) and add only layout on top, so the
+   five diverging button styles and six env-chip variants stay in sync. — */
+.btnPrimary { font: inherit; border: none; background: var(--accent); color: #fff; border-radius: var(--radius); padding: 6px 16px; cursor: pointer; }
+.btnPrimary:disabled { opacity: 0.6; cursor: default; }
+.btnGhost { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: var(--radius); padding: 6px 14px; cursor: pointer; }
+.btnGhost:hover:not(:disabled) { background: var(--cat-deploy-bg); }
+.envChip { color: #fff; font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 4px; }

@@ -3,16 +3,31 @@
 .crumb { color: var(--muted); font-size: 0.9em; }
 
 .counters { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 2); }
+/* Counter boxes are buttons: clicking one narrows the feed to its category. */
 .counter {
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
   padding: calc(var(--space) * 2) calc(var(--space) * 3); min-width: 130px;
+  font: inherit; text-align: left; cursor: pointer; color: inherit;
 }
+.counter:hover { background: var(--cat-deploy-bg); }
+.counter[aria-pressed="true"] { border-color: var(--accent); }
+.counter[data-alert="true"] .counterValue { color: #dc2626; }
 .counterValue { font-size: 1.6em; font-weight: 700; }
 .counterLabel { color: var(--muted); font-size: 0.85em; }
 
-.sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: calc(var(--space) * 3); align-items: start; }
-.section { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: calc(var(--space) * 2); min-width: 0; }
-.secTitle { margin: 0 0 var(--space); font-size: 0.95em; }
+.filters { display: flex; align-items: center; gap: var(--space); flex-wrap: wrap; }
+.filters select, .filters input {
+  font: inherit; padding: 4px 8px; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--surface); color: var(--text);
+}
+.filters input[type="search"] { flex: 1; min-width: 160px; }
+.filters button {
+  font: inherit; background: none; border: none; cursor: pointer;
+  color: var(--muted); padding: 2px 6px; border-radius: var(--radius);
+}
+.filters button[data-active="true"] { color: var(--text); background: var(--cat-deploy-bg); }
+
+.openTag { flex: none; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #dc2626; color: #fff; }
 
 .rows { display: flex; flex-direction: column; }
 .row {

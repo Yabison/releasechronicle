@@ -22,6 +22,8 @@ export type OverviewEventRow = {
   deployStatus: string | null;
   changeType: string | null;
   incidentType: string | null;
+  requester: string | null;
+  resolvedAt: string | null;
   startedAt: string | null;
   windowStart: string | null;
   windowEnd: string | null;
@@ -34,15 +36,13 @@ export type OverviewEventRow = {
 
 export type Overview = {
   counters: { services: number; deploys30d: number; openIncidents: number; upcomingMaintenances: number };
-  inFlight: OverviewEventRow[];
-  openIncidents: OverviewEventRow[];
-  upcomingMaintenances: OverviewEventRow[];
-  recentDeployments: OverviewEventRow[];
+  /** One feed, newest first, capped: the dashboard list filters it client-side. */
+  events: OverviewEventRow[];
 };
 
-/** Deploy statuses still moving through the workflow. */
-const IN_FLIGHT = ["SCHEDULED", "GO_CONFIRMED", "PENDING", "IN_PROGRESS", "DEPLOYED", "TESTING"] as const;
-const RECENT_MS = 7 * 86_400_000;
+/** The feed window: everything from the last 3 months, plus anything scheduled ahead. */
+const WINDOW_MS = 90 * 86_400_000;
+const FEED_CAP = 300;
 
 const INCLUDE = {
   service: {
@@ -67,6 +67,8 @@ function toRow(e: Row): OverviewEventRow {
     deployStatus: e.deployStatus,
     changeType: e.changeType,
     incidentType: e.incidentType,
+    requester: e.requester,
+    resolvedAt: iso(e.resolvedAt),
     startedAt: iso(e.startedAt),
     windowStart: iso(e.windowStart),
     windowEnd: iso(e.windowEnd),
@@ -101,60 +103,32 @@ export async function getOverview(scope: OverviewScope, anonymous: boolean): Pro
     ...(envs ? { environment: { in: envs } } : {}),
   };
   const now = new Date();
+  // The anonymous type restriction: `base` cannot carry `type` because the
+  // per-query type below would overwrite it in a spread.
+  const typeIn = types ? { type: { in: types as ("DEPLOYMENT" | "INCIDENT" | "MAINTENANCE")[] } } : {};
 
-  const [services, deploys30d, openIncidentCount, upcomingCount, inFlight, openIncidents, upcoming, recent] =
-    await Promise.all([
-      prisma.service.count({ where: serviceWhere }),
-      allowed("DEPLOYMENT")
-        ? prisma.event.count({ where: { ...base, type: "DEPLOYMENT", occurredAt: { gte: new Date(now.getTime() - 30 * 86_400_000) } } })
-        : 0,
-      allowed("INCIDENT")
-        ? prisma.event.count({ where: { ...base, type: "INCIDENT", resolvedAt: null } })
-        : 0,
-      allowed("MAINTENANCE")
-        ? prisma.event.count({ where: { ...base, type: "MAINTENANCE", windowStart: { gt: now } } })
-        : 0,
-      allowed("DEPLOYMENT")
-        ? prisma.event.findMany({
-            where: {
-              ...base, type: "DEPLOYMENT",
-              deployStatus: { in: [...IN_FLIGHT] },
-              // Old unfinished deployments are history, not "in flight" — same
-              // cutoff the demo ticker uses. Future SCHEDULED ones stay.
-              OR: [
-                { occurredAt: { gte: new Date(now.getTime() - RECENT_MS) } },
-                { scheduledAt: { gt: now } },
-              ],
-            },
-            orderBy: { occurredAt: "desc" }, take: 8, include: INCLUDE,
-          })
-        : [],
-      allowed("INCIDENT")
-        ? prisma.event.findMany({
-            where: { ...base, type: "INCIDENT", resolvedAt: null },
-            orderBy: { startedAt: "desc" }, take: 8, include: INCLUDE,
-          })
-        : [],
-      allowed("MAINTENANCE")
-        ? prisma.event.findMany({
-            where: { ...base, type: "MAINTENANCE", windowStart: { gt: now } },
-            orderBy: { windowStart: "asc" }, take: 5, include: INCLUDE,
-          })
-        : [],
-      allowed("DEPLOYMENT")
-        ? prisma.event.findMany({
-            where: { ...base, type: "DEPLOYMENT" },
-            orderBy: { occurredAt: "desc" }, take: 10, include: INCLUDE,
-          })
-        : [],
-    ]);
+  const [services, deploys30d, openIncidentCount, upcomingCount, feed] = await Promise.all([
+    prisma.service.count({ where: serviceWhere }),
+    allowed("DEPLOYMENT")
+      ? prisma.event.count({ where: { ...base, type: "DEPLOYMENT", occurredAt: { gte: new Date(now.getTime() - 30 * 86_400_000) } } })
+      : 0,
+    allowed("INCIDENT")
+      ? prisma.event.count({ where: { ...base, type: "INCIDENT", resolvedAt: null } })
+      : 0,
+    allowed("MAINTENANCE")
+      ? prisma.event.count({ where: { ...base, type: "MAINTENANCE", windowStart: { gt: now } } })
+      : 0,
+    prisma.event.findMany({
+      where: { ...base, ...typeIn, occurredAt: { gte: new Date(now.getTime() - WINDOW_MS) } },
+      orderBy: { occurredAt: "desc" },
+      take: FEED_CAP,
+      include: INCLUDE,
+    }),
+  ]);
 
   return {
     counters: { services, deploys30d, openIncidents: openIncidentCount, upcomingMaintenances: upcomingCount },
-    inFlight: inFlight.map(toRow),
-    openIncidents: openIncidents.map(toRow),
-    upcomingMaintenances: upcoming.map(toRow),
-    recentDeployments: recent.map(toRow),
+    events: feed.map(toRow),
   };
 }
 
