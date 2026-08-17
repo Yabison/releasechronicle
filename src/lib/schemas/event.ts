@@ -8,8 +8,8 @@ import {
 /**
  * Shared REST envelope: who the event belongs to, plus the passthrough extras.
  *
- * Deliberate deviation from `eventValidation.ts`: `nonEmpty`/`optionalStr` trim
- * before storing. The old validator checked `.trim() !== ""` but persisted the
+ * Deliberate deviation from the old hand-written event validator: `nonEmpty`/`optionalStr`
+ * trim before storing. The old validator checked `.trim() !== ""` but persisted the
  * raw value, so a padded `company`/`requester` passed validation and then broke
  * `getServiceBySlug` lookups downstream — trimming here fixes that latent bug.
  * One asymmetry this introduces: the upsert path's `externalIdFromPath` (from
