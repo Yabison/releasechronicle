@@ -226,6 +226,8 @@
   "home.upcoming": "Maintenances à venir",
   "home.recent": "Dernières MEP",
   "home.none": "Rien à afficher",
+  "home.searchPh": "service, version, demandeur…",
+  "home.openTag": "ouvert",
   "confirm.deleteFeed": "Supprimer ce calendrier ? Les URL d'abonnement existantes cesseront de fonctionner.",
   "confirm.deleteTag": "Supprimer le tag « {name} » ? Il sera retiré de tous les événements qui le portent.",
   "confirm.deleteEnvGroup": "Supprimer ce groupe d'environnements ?",

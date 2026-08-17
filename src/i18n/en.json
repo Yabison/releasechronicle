@@ -226,6 +226,8 @@
   "home.upcoming": "Upcoming maintenance",
   "home.recent": "Latest deployments",
   "home.none": "Nothing to show",
+  "home.searchPh": "service, version, requester…",
+  "home.openTag": "open",
   "confirm.deleteFeed": "Delete this calendar? Existing subscription URLs will stop working.",
   "confirm.deleteTag": "Delete tag “{name}”? It will be removed from every event carrying it.",
   "confirm.deleteEnvGroup": "Delete this environment group?",

@@ -48,7 +48,7 @@ export function Sidebar({ tree, me }: { tree: TreeCompany[]; me: Me }) {
       </div>
       {tree.map((company) => (
         <div key={company.id} className={styles.company}>
-          <div className={styles.companyName}>{company.name}</div>
+          <Link href={`/${company.slug}`} className={styles.companyName}>{company.name}</Link>
           {company.products.map((product) => (
             <ProductNode
               key={product.id}
@@ -86,14 +86,24 @@ function ProductNode({
 
   return (
     <div className={styles.product}>
-      <button className={styles.productRow} onClick={() => setOpen((o) => !o)}>
-        <span className={styles.caret}>{open ? "▼" : "▶"}</span>
-        <span className={styles.badge}>
-          {product.name.charAt(0).toUpperCase()}
-        </span>
-        <span className={styles.name}>{product.name}</span>
+      {/* The caret toggles the service list; the name goes to the product overview. */}
+      <div className={styles.productRow} data-active={pathname === prefix}>
+        <button
+          className={styles.caretBtn}
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-label={product.name}
+        >
+          <span className={styles.caret}>{open ? "▼" : "▶"}</span>
+        </button>
+        <Link href={prefix} className={styles.productLink}>
+          <span className={styles.badge}>
+            {product.name.charAt(0).toUpperCase()}
+          </span>
+          <span className={styles.name}>{product.name}</span>
+        </Link>
         <span className={styles.count}>{count}</span>
-      </button>
+      </div>
       {open && (
         <div className={styles.children}>
           {product.services.map((s) => {

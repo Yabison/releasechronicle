@@ -55,27 +55,34 @@ beforeEach(async () => { await resetDb(); });
 afterAll(async () => { await prisma.$disconnect(); });
 
 describe("getOverview — session", () => {
-  it("counts and lists across every company", async () => {
+  it("counts, and lists every recent event in one feed", async () => {
     await seed();
     const o = await getOverview({}, false);
     expect(o.counters.openIncidents).toBe(1);
     expect(o.counters.upcomingMaintenances).toBe(1);
-    expect(o.recentDeployments.map((d) => d.version)).toContain("9.9.9");
-    expect(o.recentDeployments.map((d) => d.version)).toContain("1.1.0");
-    expect(o.inFlight.map((d) => d.version)).toEqual(["1.2.0"]);
+    expect(o.counters.deploys30d).toBe(4);
+    const versions = o.events.filter((e) => e.type === "DEPLOYMENT").map((d) => d.version);
+    expect(versions).toContain("9.9.9");
+    expect(versions).toContain("1.1.0");
+    expect(o.events.some((e) => e.type === "INCIDENT")).toBe(true);
+    expect(o.events.some((e) => e.type === "MAINTENANCE")).toBe(true);
+    // Rows carry what the list filters on.
+    const testing = o.events.find((e) => e.version === "1.2.0");
+    expect(testing?.deployStatus).toBe("TESTING");
+    expect(testing?.requester).toBe("ci");
   });
   it("scopes to a company", async () => {
     await seed();
     const o = await getOverview({ company: "secret" }, false);
-    expect(o.recentDeployments.map((d) => d.version)).toEqual(["9.9.9"]);
+    expect(o.events.map((d) => d.version)).toEqual(["9.9.9"]);
     expect(o.counters.openIncidents).toBe(0);
   });
-  it("scopes to a product", async () => {
+  it("scopes to a product and carries the row's path", async () => {
     await seed();
     const o = await getOverview({ company: "shop", product: "checkout" }, false);
-    expect(o.recentDeployments.length).toBe(3);
-    expect(o.recentDeployments[0].company.slug).toBe("shop");
-    expect(o.recentDeployments[0].service.slug).toBe("api");
+    expect(o.events.length).toBe(5);
+    expect(o.events[0].company.slug).toBe("shop");
+    expect(o.events[0].service.slug).toBe("api");
   });
 });
 
@@ -83,12 +90,12 @@ describe("getOverview — anonymous", () => {
   it("hides private hierarchies, private environments, and non-public types", async () => {
     await seed();
     const o = await getOverview({}, true);
-    const versions = o.recentDeployments.map((d) => d.version);
+    const versions = o.events.map((d) => d.version);
     expect(versions).toContain("1.0.0");
     expect(versions).not.toContain("1.1.0"); // STAGING is private
     expect(versions).not.toContain("9.9.9"); // secret/ is private
     // Default public types are DEPLOYMENT + MAINTENANCE: the incident stays hidden.
-    expect(o.openIncidents).toEqual([]);
+    expect(o.events.some((e) => e.type === "INCIDENT")).toBe(false);
     expect(o.counters.openIncidents).toBe(0);
     expect(o.counters.upcomingMaintenances).toBe(1);
   });
