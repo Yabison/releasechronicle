@@ -28,17 +28,29 @@
 .month { margin-bottom: calc(var(--space) * 3); }
 .monthLabel { color: var(--muted); font-size: 0.8em; letter-spacing: 0.08em; margin: calc(var(--space) * 2) 0 var(--space); }
 
-.row { display: flex; align-items: center; gap: calc(var(--space) * 2); width: 100%; background: none; border: none; font: inherit; text-align: left; padding: 8px 4px; cursor: pointer; border-radius: var(--radius); }
+/* A grid, not a flex line: every cell keeps its track whatever its neighbour
+   holds, so version, status and tags stay in one vertical line down a long
+   list. A flex row let each cell breathe with its content and the columns
+   drifted apart between rows. The status track is the only elastic one. */
+.row {
+  display: grid;
+  grid-template-columns: 30px 150px 80px 76px 120px minmax(0, 1fr) 200px;
+  align-items: center;
+  gap: var(--space);
+  width: 100%;
+  background: none; border: none; font: inherit; text-align: left;
+  padding: 8px 4px; cursor: pointer; border-radius: var(--radius);
+}
 .row:hover { background: var(--cat-deploy-bg); }
 
 /* Lead icon track. Fixed width and flex:none so the icons line up vertically
    down a long list whatever the row beside them contains — the row is a flex
    line, so without this the column would breathe with its neighbours. */
 .lead { width: 30px; flex: none; display: flex; align-items: center; justify-content: center; }
-.stamp { color: var(--text); width: 104px; flex: none; white-space: nowrap; display: flex; flex-direction: column; }
+.stamp { color: var(--text); white-space: nowrap; display: flex; flex-direction: column; }
 .stampLine { display: flex; gap: 8px; }
 .stampDay { width: 40px; flex: none; }
-.version { color: var(--muted); width: 64px; flex: none; }
+.version { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 .hnoBadge {
   flex: none; cursor: default; line-height: 1;
   display: inline-grid; place-items: center;
@@ -53,13 +65,37 @@
 .sevIcon[data-sev="red"] { color: var(--cat-incident); }
 .sevIcon[data-sev="orange"] { color: var(--warning); }
 /* Fixed width so the status column stays aligned whatever the env name length (SECURE vs RUN). */
+.envCell, .typeCell { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .envBadge { composes: envChip from global; flex: none; box-sizing: border-box; width: 72px; text-align: center; padding: 2px 6px; }
-.tags { display: inline-flex; gap: 4px; flex: none; }
+
+/* Status column. Alerts live here, next to the status they qualify, instead of
+   trailing off to the right past the version where a scan down the list misses
+   them. */
+.statusCell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.statusLine { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* Status is a dot plus its label, never the colour alone. */
+.statusBadge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8em; font-weight: 600; white-space: nowrap; }
+.statusDot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+.alert {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.72em; font-weight: 600; white-space: nowrap;
+  border-radius: 6px; padding: 1px 7px;
+}
+.alert[data-level="danger"] { color: var(--danger); background: var(--danger-bg); border: 1px solid var(--danger-line); }
+.alert[data-level="warning"] { color: var(--warning-text); background: var(--warning-bg); border: 1px solid var(--warning-line); }
+
+/* Tags and the artefact/night markers, right-aligned so the ragged edge of the
+   descriptions never pushes them out of line. */
+.meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.metaIcons { display: inline-flex; align-items: center; gap: 5px; flex: none; }
+.tags { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 .tag { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
 .tagFilter { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .tagFilterChip { font: inherit; font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; cursor: pointer; }
 .tagFilterChip[data-active="true"] { color: var(--text); border-color: var(--muted); }
-.title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9em; color: var(--muted); }
 .endAt { color: var(--muted); font-size: 0.8em; flex: none; }
 /* Finished incidents & maintenances, and rolled-back deployments, are struck through. */
 .row[data-done="true"] .stamp,
@@ -78,9 +114,12 @@
 /* Narrow screens: rows and filter bars wrap instead of overflowing the viewport. */
 @media (max-width: 640px) {
   .filters { flex-wrap: wrap; row-gap: 4px; }
-  .row { flex-wrap: wrap; row-gap: 2px; }
-  .stamp { width: auto; flex-direction: row; gap: 6px; }
-  .title { flex-basis: 100%; order: 10; white-space: normal; }
+  /* Seven fixed tracks do not fit a phone: fall back to the wrapping line. */
+  .row { display: flex; flex-wrap: wrap; row-gap: 2px; align-items: center; }
+  .stamp { flex-direction: row; gap: 6px; }
+  .statusCell { flex-basis: 100%; order: 10; }
+  .meta { justify-content: flex-start; }
+  .title { white-space: normal; }
 }
 
 .showOlder {

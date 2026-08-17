@@ -11,6 +11,14 @@ import styles from "./DetailPane.module.css";
 import { useI18n } from "@/i18n/useI18n";
 import { useTimeFormat } from "@/lib/useTimeFormat";
 
+/**
+ * One row of the service timeline, laid out on the seven fixed tracks declared
+ * by `.row`: lead icon, when, environment, version, type, status, meta.
+ *
+ * Every cell is rendered even when empty. A conditional cell would shift every
+ * track after it and the columns would stop lining up between rows, which is
+ * the whole reason this is a grid.
+ */
 export function TimelineRow({
   entry,
   onClick,
@@ -41,23 +49,14 @@ export function TimelineRow({
     : lotIncomplete
       ? t("leadIcon.reasonLotIncomplete")
       : undefined;
+  const status = entry.deployStatus ? STATUS_META[entry.deployStatus as DeployStatus] : null;
+
   return (
     <button className={styles.row} onClick={onClick} data-done={entry.done} data-rolledback={entry.rolledBack}>
       <span className={styles.lead}>
         <RowLeadIcon icon={leadIcon} dangerReason={dangerReason} />
       </span>
-      <span className="catDot" data-cat={entry.category} />
-      {sev && (
-        <span
-          className={styles.sevIcon}
-          data-sev={sev}
-          role="img"
-          aria-label={sev === "red" ? t("timeline.sevError") : t("timeline.sevWarning")}
-          title={sev === "red" ? t("timeline.sevError") : t("timeline.sevWarning")}
-        >
-          ⚠
-        </span>
-      )}
+
       <span className={styles.stamp}>
         <span className={styles.stampLine}>
           <span className={styles.stampDay}>{stampDay(entry.at)}</span>
@@ -75,48 +74,89 @@ export function TimelineRow({
           </span>
         )}
       </span>
-      {envColor && (
-        <span className={styles.envBadge} style={{ background: envColor }}>
-          {entry.environment}
-        </span>
-      )}
-      <span className={styles.version}>{entry.version ? `v${entry.version}` : ""}</span>
-      <span className="catBadge" data-cat={entry.category}>
-        {entry.phase ? changeTypeLabel(t, `${entry.phase}_MEP`) : categoryLabel(t, entry.category)}
+
+      <span className={styles.envCell}>
+        {envColor && (
+          <span className={styles.envBadge} style={{ background: envColor }}>
+            {entry.environment}
+          </span>
+        )}
       </span>
-      {entry.hourType === "HNO" && (
-        <span className={styles.hnoBadge} title={t("timeline.hno")} aria-label="HNO">☾</span>
-      )}
-      {entry.deployStatus && (
-        <span
-          className="deployPill"
-          style={{ background: STATUS_META[entry.deployStatus as DeployStatus].color }}
-        >
-          {STATUS_META[entry.deployStatus as DeployStatus].label}
+
+      <span className={styles.version}>{entry.version ? `v${entry.version}` : ""}</span>
+
+      {/* The dot stays beside the label it qualifies rather than in the lead
+          track: dot plus wording is the type, the lead icon is the alert. */}
+      <span className={styles.typeCell}>
+        <span className="catDot" data-cat={entry.category} />
+        <span className="catBadge" data-cat={entry.category}>
+          {entry.phase ? changeTypeLabel(t, `${entry.phase}_MEP`) : categoryLabel(t, entry.category)}
         </span>
-      )}
-      {entry.rolledBack && (
-        <span className="deployPill" style={{ background: ROLLBACK_COLOR }}>{t("timeline.rollback")}</span>
-      )}
-      {entry.warnPre && <span className="deployPill" style={{ background: "#f59e0b" }} title={t("timeline.warnPreTitle")}>⚠ {phaseLabel(t, "PRE")}</span>}
-      {entry.deployStatus && lotMembers.length > 0 && <LotBadge members={lotMembers} />}
-      {lotWarning.length > 0 && (
-        <span
-          className="deployPill"
-          style={{ background: "#dc2626" }}
-          title={t("timeline.lotIncompleteTitle", { apps: lotWarning.join(", ") })}
-        >
-          {t("timeline.lotIncomplete")}
+      </span>
+
+      <span className={styles.statusCell}>
+        <span className={styles.statusLine}>
+          {sev && (
+            <span
+              className={styles.sevIcon}
+              data-sev={sev}
+              role="img"
+              aria-label={sev === "red" ? t("timeline.sevError") : t("timeline.sevWarning")}
+              title={sev === "red" ? t("timeline.sevError") : t("timeline.sevWarning")}
+            >
+              ⚠
+            </span>
+          )}
+          {status && (
+            <span className={styles.statusBadge}>
+              <span className={styles.statusDot} style={{ background: status.color }} />
+              {status.label}
+            </span>
+          )}
+          {entry.rolledBack && (
+            <span className={styles.alert} data-level="danger" style={{ borderColor: ROLLBACK_COLOR }}>
+              {t("timeline.rollback")}
+            </span>
+          )}
+          {entry.warnPre && (
+            <span className={styles.alert} data-level="warning" title={t("timeline.warnPreTitle")}>
+              ⚠ {phaseLabel(t, "PRE")}
+            </span>
+          )}
+          {lotIncomplete && (
+            <span
+              className={styles.alert}
+              data-level="danger"
+              title={t("timeline.lotIncompleteTitle", { apps: lotWarning.join(", ") })}
+            >
+              ⚠ {t("timeline.lotIncomplete")}
+            </span>
+          )}
         </span>
-      )}
-      <span className={styles.title}>{entry.title}</span>
-      {entry.tags && entry.tags.length > 0 && (
-        <span className={styles.tags}>
-          {entry.tags.map((t) => (
-            <span key={t} className={styles.tag} style={tagColors[t] ? { background: tagColors[t], color: "#fff", borderColor: tagColors[t] } : undefined}>{t}</span>
-          ))}
+        <span className={styles.title}>{entry.title}</span>
+      </span>
+
+      <span className={styles.meta}>
+        {entry.tags && entry.tags.length > 0 && (
+          <span className={styles.tags}>
+            {entry.tags.map((tag) => (
+              <span
+                key={tag}
+                className={styles.tag}
+                style={tagColors[tag] ? { background: tagColors[tag], color: "#fff", borderColor: tagColors[tag] } : undefined}
+              >
+                {tag}
+              </span>
+            ))}
+          </span>
+        )}
+        <span className={styles.metaIcons}>
+          {entry.hourType === "HNO" && (
+            <span className={styles.hnoBadge} title={t("timeline.hno")} aria-label="HNO">☾</span>
+          )}
+          {entry.deployStatus && lotMembers.length > 0 && <LotBadge members={lotMembers} />}
         </span>
-      )}
+      </span>
     </button>
   );
 }
