@@ -97,8 +97,9 @@ export async function ingestDeployment(
     await attachToAutoLot(event.id);
     const { detectRollbackOnIngest } = await import("@/lib/rollbackDetect");
     await detectRollbackOnIngest(event.id);
-  } catch {
-    /* never break ingest */
+  } catch (e) {
+    // Never break the ingest for enrichment — but never hide the failure either.
+    console.error(`ingest enrichment failed for event ${event.id}:`, e);
   }
   return { ok: true, event };
 }

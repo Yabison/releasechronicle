@@ -40,6 +40,32 @@ describe("reportRuntimeBuild", () => {
     expect(await prisma.event.count({ where: { incidentType: "BUILD_DRIFT", resolvedAt: null } })).toBe(0);
   });
 
+  it("never opens two BUILD_DRIFT incidents for the same service+env, even concurrently", async () => {
+    await deployed("100");
+    // Both calls read "no open incident" before either creates one — the classic
+    // check-then-create race. The partial unique index is what keeps this at 1.
+    await Promise.all([
+      reportRuntimeBuild({ serviceId, environment: "PROD", build: "999" }),
+      reportRuntimeBuild({ serviceId, environment: "PROD", build: "999" }),
+    ]);
+    expect(await prisma.event.count({ where: { incidentType: "BUILD_DRIFT", resolvedAt: null } })).toBe(1);
+  });
+
+  it("the database itself refuses a second open BUILD_DRIFT for the same service+env", async () => {
+    const mk = () =>
+      prisma.event.create({
+        data: {
+          serviceId, environment: "PROD", type: "INCIDENT", occurredAt: new Date(),
+          startedAt: new Date(), incidentType: "BUILD_DRIFT", incidentStatus: "INVESTIGATING", source: "API",
+        },
+      });
+    await mk();
+    await expect(mk()).rejects.toThrow();
+    // A RESOLVED one does not block a new open incident.
+    await prisma.event.updateMany({ where: { incidentType: "BUILD_DRIFT" }, data: { resolvedAt: new Date() } });
+    await expect(mk()).resolves.toBeTruthy();
+  });
+
   it("records the running build in RuntimeState", async () => {
     await reportRuntimeBuild({ serviceId, environment: "PROD", build: "77" });
     const rs = await prisma.runtimeState.findUnique({ where: { serviceId_environment: { serviceId, environment: "PROD" } } });
