@@ -325,7 +325,7 @@
   "err.lotDeployOnly": "le lot ne s'applique qu'aux déploiements",
   "err.badChangeType": "type invalide",
   "err.changeTypeDeployOnly": "le type ne s'applique qu'aux déploiements",
-  "err.phaseNeedsParent": "PRE MEP / POST MEP nécessite un MEP parent",
+  "err.phaseTransitionNotAllowed": "PRE MEP / POST MEP n'est accessible qu'en reclassifiant un événement déjà en phase (PRE MEP ↔ POST MEP)",
   "err.badDate": "date invalide",
   "err.eventNotFound": "événement introuvable",
   "err.badHourType": "HO/HNO invalide",
