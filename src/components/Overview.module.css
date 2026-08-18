@@ -11,7 +11,7 @@
 }
 .counter:hover { background: var(--cat-deploy-bg); }
 .counter[aria-pressed="true"] { border-color: var(--accent); }
-.counter[data-alert="true"] .counterValue { color: #dc2626; }
+.counter[data-alert="true"] .counterValue { color: var(--cat-incident); }
 .counterValue { font-size: 1.6em; font-weight: 700; }
 .counterLabel { color: var(--muted); font-size: 0.85em; }
 
@@ -27,7 +27,7 @@
 }
 .filters button[data-active="true"] { color: var(--text); background: var(--cat-deploy-bg); }
 
-.openTag { flex: none; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #dc2626; color: #fff; }
+.openTag { flex: none; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--cat-incident); color: #fff; }
 
 .rows { display: flex; flex-direction: column; }
 .row {

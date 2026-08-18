@@ -58,7 +58,7 @@
 .traceLink:hover { outline: 1px solid var(--line); outline-offset: 1px; }
 .traceEnv { composes: envChip from global; font-size: 10.5px; padding: 1px 6px; }
 .traceTime { color: var(--muted); font-size: 0.75em; }
-.traceOk { color: #16a34a; font-size: 0.82em; margin: 4px 0 0; }
+.traceOk { color: var(--success); font-size: 0.82em; margin: 4px 0 0; }
 .traceBad { color: var(--cat-incident); font-size: 0.82em; margin: 4px 0 0; }
 .traceNote { color: var(--muted); font-size: 0.82em; margin: 0; }
 
@@ -70,8 +70,8 @@
 /* Build trace = the defined env workflow as a timeline; reached=colored+clickable, not-reached=grey. */
 .wfTrace { display: flex; flex-wrap: wrap; align-items: center; margin: 6px 0; }
 .wfStep { display: inline-flex; align-items: center; }
-.wfConn { width: 18px; height: 2px; background: #e2e8f0; margin: 0 2px; }
-.wfConn[data-reached="true"] { background: #94a3b8; }
+.wfConn { width: 18px; height: 2px; background: var(--line); margin: 0 2px; }
+.wfConn[data-reached="true"] { background: var(--muted); }
 .wfNode { composes: envChip from global; font-weight: 700; padding: 2px 9px; text-decoration: none; }
 .wfNode:hover { outline: 2px solid var(--line); outline-offset: 1px; }
 .wfNodeOff { color: var(--muted); font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 4px; border: 1px dashed var(--line); background: transparent; }
@@ -86,8 +86,8 @@
 .saveBtn { composes: btnPrimary from global; align-self: flex-start; }
 .lotRollbackWarn {
   margin-top: var(--space); padding: 8px 10px; border-radius: 6px;
-  background: color-mix(in srgb, #dc2626 14%, transparent);
-  border: 1px solid #dc2626; color: var(--text); font-size: 0.85rem; font-weight: 600;
+  background: color-mix(in srgb, var(--cat-incident) 14%, transparent);
+  border: 1px solid var(--cat-incident); color: var(--text); font-size: 0.85rem; font-weight: 600;
 }
 .lotMembers { margin-top: var(--space); display: flex; flex-direction: column; gap: 4px; }
 .lotRow { display: flex; align-items: center; gap: 8px; font-size: 0.82em; }
@@ -97,4 +97,4 @@
 .dateEdit { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .dateEdit input { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
 
-.warn { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-radius: var(--radius); padding: 6px 10px; font-size: 0.85em; margin-bottom: 10px; }
+.warn { background: var(--warning-bg); color: var(--warning-text); border: 1px solid var(--warning-line); border-radius: var(--radius); padding: 6px 10px; font-size: 0.85em; margin-bottom: 10px; }
