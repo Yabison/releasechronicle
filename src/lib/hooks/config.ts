@@ -20,6 +20,22 @@ export function createHook(data: { productId: string; type: string; events: stri
 export function getHook(id: string) {
   return prisma.hook.findUnique({ where: { id } });
 }
+/** Partial update: only the keys present on `data` are written. `type`/`productId` are not updatable. */
+export function updateHook(
+  id: string,
+  data: { events?: string[]; transitions?: string[]; config?: Record<string, unknown>; targetId?: string | null; enabled?: boolean },
+) {
+  return prisma.hook.update({
+    where: { id },
+    data: {
+      ...(data.events !== undefined ? { events: data.events } : {}),
+      ...(data.transitions !== undefined ? { transitions: data.transitions } : {}),
+      ...(data.config !== undefined ? { config: data.config as Prisma.InputJsonValue } : {}),
+      ...(data.targetId !== undefined ? { targetId: data.targetId } : {}),
+      ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
+    },
+  });
+}
 export function deleteHook(id: string) {
   return prisma.hook.delete({ where: { id } });
 }
