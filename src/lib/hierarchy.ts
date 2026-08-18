@@ -4,14 +4,18 @@ import { uniqueSlug } from "@/lib/slug";
 
 // Note: the create* functions derive a unique slug then create in two steps,
 // which is not atomic. Concurrent creates with the same name can both pass the
-// slug check; the @@unique constraints are the real backstop and will reject the
-// loser with a Prisma P2002 error. Callers (API routes) should expect that and
-// surface it gracefully rather than letting it 500. Low risk for this
-// token-gated, low-concurrency tool, so no retry loop is added here.
+// slug check; the real backstop is now a PARTIAL unique index (WHERE "deletedAt"
+// IS NULL) and will reject the loser with a Prisma P2002 error. Callers (API
+// routes) should expect that and surface it gracefully rather than letting it
+// 500. Low risk for this token-gated, low-concurrency tool, so no retry loop is
+// added here. Because the backstop is partial, it agrees with the deletedAt:
+// null filters below and with the move-clash checks (which already filtered
+// deletedAt) — a soft-deleted row no longer squats its slug either in the app's
+// eyes or the database's.
 
 export async function createCompany(input: { name: string }) {
   const slug = await uniqueSlug(input.name, async (s) =>
-    (await prisma.company.count({ where: { slug: s } })) > 0,
+    (await prisma.company.count({ where: { slug: s, deletedAt: null } })) > 0,
   );
   const max = await prisma.company.aggregate({ _max: { sortOrder: true } });
   return prisma.company.create({ data: { name: input.name, slug, sortOrder: (max._max.sortOrder ?? -1) + 1 } });
@@ -40,7 +44,7 @@ export async function softDeleteCompany(id: string) {
 
 export async function createProduct(input: { companyId: string; name: string }) {
   const slug = await uniqueSlug(input.name, async (s) =>
-    (await prisma.product.count({ where: { companyId: input.companyId, slug: s } })) > 0,
+    (await prisma.product.count({ where: { companyId: input.companyId, slug: s, deletedAt: null } })) > 0,
   );
   const max = await prisma.product.aggregate({ where: { companyId: input.companyId }, _max: { sortOrder: true } });
   return prisma.product.create({
@@ -105,7 +109,7 @@ export async function createService(input: {
   type: ServiceType;
 }) {
   const slug = await uniqueSlug(input.name, async (s) =>
-    (await prisma.service.count({ where: { productId: input.productId, slug: s } })) > 0,
+    (await prisma.service.count({ where: { productId: input.productId, slug: s, deletedAt: null } })) > 0,
   );
   const max = await prisma.service.aggregate({ where: { productId: input.productId }, _max: { sortOrder: true } });
   return prisma.service.create({
