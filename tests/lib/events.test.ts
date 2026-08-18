@@ -250,4 +250,40 @@ describe("setEventCausedBy", () => {
     const result = await setEventCausedBy("nonexistent-id", null);
     expect(result).toBeNull();
   });
+
+  it("never lets two concurrent, mutually-conflicting writes create a 2-node cycle", async () => {
+    // A and B start with no cause. Fire "A caused by B" and "B caused by A" at the
+    // same time: each read-then-check-then-write races the other. Sequentially,
+    // the second call would correctly see the first link and refuse (a real
+    // cycle check working as intended); the point of this test is that even
+    // when both checks run concurrently -- each passing before the other's
+    // write lands -- the guard (a single SERIALIZABLE transaction per call,
+    // re-checked against its own transaction client) still holds: Postgres's
+    // serializable-snapshot-isolation detects the write-skew pattern and aborts
+    // one of the two transactions, so the outcome is deterministic regardless
+    // of how the two calls interleave -- never both succeeding, never a cycle.
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T09:00:00Z") }));
+    const b = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T10:00:00Z") }));
+
+    const results = await Promise.allSettled([
+      setEventCausedBy(a.id, b.id), // A <- B
+      setEventCausedBy(b.id, a.id), // B <- A
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    expect(fulfilled.length).toBeLessThanOrEqual(1);
+    // Every rejection must be the guard doing its job (a refused cycle / a detected
+    // write conflict), never some unrelated failure.
+    for (const r of results) {
+      if (r.status === "rejected") expect(r.reason).toBeInstanceOf(CausalLinkError);
+    }
+
+    const [freshA, freshB] = await Promise.all([
+      prisma.event.findUnique({ where: { id: a.id } }),
+      prisma.event.findUnique({ where: { id: b.id } }),
+    ]);
+    // The cycle itself must never exist in the data, however the race resolved.
+    expect(freshA?.causedById === b.id && freshB?.causedById === a.id).toBe(false);
+  });
 });

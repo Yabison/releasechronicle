@@ -1,5 +1,5 @@
-import type { EventType, IncidentStatus, DeployStatus, ChangeType, Event, Prisma } from "@prisma/client";
-import { DeployStatus as DeployStatusEnum } from "@prisma/client";
+import type { EventType, IncidentStatus, DeployStatus, ChangeType, Event } from "@prisma/client";
+import { DeployStatus as DeployStatusEnum, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { incidentDuration, maintenanceStatus, currentByEnvironment } from "@/lib/derive";
 import { canTransition, previousStatus } from "@/lib/deployWorkflow";
@@ -378,34 +378,60 @@ export class CausalLinkError extends Error {
  * when there is nothing to clear. Otherwise throws CausalLinkError when the cause
  * doesn't exist, is the event itself, belongs to a different product, or would
  * close a causal cycle.
+ *
+ * The existence/ownership/cycle reads and the write all run inside one
+ * SERIALIZABLE transaction, re-checked against the transaction client itself
+ * (not a separate connection). Without this, two near-simultaneous requests —
+ * A's cause set to B, and B's cause set to A — could each pass the cycle check
+ * before either commits, producing a real 2-node cycle: "cycles must be
+ * impossible" is a hard requirement, not best-effort. Under SERIALIZABLE,
+ * Postgres detects that write-skew pattern and aborts one of the two
+ * transactions (surfaced here as a CausalLinkError("cycle", …) so the caller
+ * gets the same familiar rejection rather than a raw driver error).
  */
 export async function setEventCausedBy(eventId: string, causeId: string | null) {
-  const target = await prisma.event.findUnique({ where: { id: eventId }, select: { id: true, serviceId: true } });
-  if (!target) return null;
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        const target = await tx.event.findUnique({ where: { id: eventId }, select: { id: true, serviceId: true } });
+        if (!target) return null;
 
-  if (causeId === null) {
-    return prisma.event.update({ where: { id: eventId }, data: { causedById: null } });
-  }
-  if (causeId === eventId) {
-    throw new CausalLinkError("selfLink", "an event cannot be its own cause");
-  }
+        if (causeId === null) {
+          return tx.event.update({ where: { id: eventId }, data: { causedById: null } });
+        }
+        if (causeId === eventId) {
+          throw new CausalLinkError("selfLink", "an event cannot be its own cause");
+        }
 
-  const cause = await prisma.event.findUnique({ where: { id: causeId }, select: { id: true, serviceId: true } });
-  if (!cause) {
-    throw new CausalLinkError("causeNotFound", "cause event not found");
-  }
+        const cause = await tx.event.findUnique({ where: { id: causeId }, select: { id: true, serviceId: true } });
+        if (!cause) {
+          throw new CausalLinkError("causeNotFound", "cause event not found");
+        }
 
-  const [targetService, causeService] = await Promise.all([
-    prisma.service.findUnique({ where: { id: target.serviceId }, select: { productId: true } }),
-    prisma.service.findUnique({ where: { id: cause.serviceId }, select: { productId: true } }),
-  ]);
-  if (!targetService || !causeService || targetService.productId !== causeService.productId) {
-    throw new CausalLinkError("differentProduct", "the cause must belong to the same product");
-  }
+        const [targetService, causeService] = await Promise.all([
+          tx.service.findUnique({ where: { id: target.serviceId }, select: { productId: true } }),
+          tx.service.findUnique({ where: { id: cause.serviceId }, select: { productId: true } }),
+        ]);
+        if (!targetService || !causeService || targetService.productId !== causeService.productId) {
+          throw new CausalLinkError("differentProduct", "the cause must belong to the same product");
+        }
 
-  if (await wouldCreateCycle(eventId, causeId)) {
-    throw new CausalLinkError("cycle", "this link would create a causal cycle");
-  }
+        if (await wouldCreateCycle(eventId, causeId, tx)) {
+          throw new CausalLinkError("cycle", "this link would create a causal cycle");
+        }
 
-  return prisma.event.update({ where: { id: eventId }, data: { causedById: causeId } });
+        return tx.event.update({ where: { id: eventId }, data: { causedById: causeId } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    // P2034: "Transaction failed due to a write conflict or a deadlock" — Postgres's
+    // serialization-failure signal. It means the concurrency guard just did its job;
+    // refuse the link exactly as a detected cycle would, rather than leaking a raw
+    // driver error to the caller.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      throw new CausalLinkError("cycle", "concurrent update — refusing to risk a causal cycle, please retry");
+    }
+    throw e;
+  }
 }
