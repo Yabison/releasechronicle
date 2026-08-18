@@ -79,7 +79,8 @@
 /* Out-of-hours marker, beside the time it qualifies. A plain grey glyph: it
    annotates the timestamp rather than competing with the status, which is the
    only thing in the row that earns a filled badge. */
-.hnoBadge { flex: none; cursor: default; line-height: 1; color: var(--muted); font-size: 13px; }
+.hnoBadge { flex: none; cursor: default; display: inline-flex; align-items: center; color: var(--text-soft); }
+.hnoBadge svg { width: 12px; height: 12px; }
 .sevIcon {
   flex: none; cursor: default; line-height: 1;
   font-size: 14px; font-weight: 700;

@@ -294,7 +294,7 @@
   "logs.containsPh": "contient…",
   "logs.next": "Suivant →",
   "logs.prev": "← Précédent",
-  "timeline.hno": "HNO (heures non ouvrées)",
+  "timeline.hno": "HNO/NWH — heures non ouvrées",
   "admin.groupHelp": "Un groupe apparaît dans le filtre d’environnement de la vue événements (ex : ALLPROD = run + secure + prod).",
   "admin.addGroupBtn": "+ groupe",
   "admin.moveToCompanyLabel": "Déplacer vers company",

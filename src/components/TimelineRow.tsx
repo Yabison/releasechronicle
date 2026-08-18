@@ -65,7 +65,13 @@ export function TimelineRow({
           {/* Out-of-hours is a property of *when* it ran, so it sits with the
               time rather than off in the trailing metadata. */}
           {entry.hourType === "HNO" && (
-            <span className={styles.hnoBadge} title={t("timeline.hno")} aria-label="HNO">☾</span>
+            /* A filled crescent, not the ☾ character: the text glyph rendered as
+               a hairline outline that vanished at 13px next to the timestamp. */
+            <span className={styles.hnoBadge} title={t("timeline.hno")} role="img" aria-label={t("timeline.hno")}>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M21 14.2A9 9 0 1 1 9.8 3 7.2 7.2 0 0 0 21 14.2z" />
+              </svg>
+            </span>
           )}
         </span>
         {entry.done && entry.endAt && (
