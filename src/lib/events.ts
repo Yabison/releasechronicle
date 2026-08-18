@@ -30,8 +30,8 @@ function toCreateData(data: EventData): Prisma.EventUncheckedCreateInput {
     externalId: data.externalId ?? null,
     metadata: (data.metadata as Prisma.InputJsonValue) ?? undefined,
     tags: data.tags ?? [],
-    // `fields` is produced by the per-type validators (eventValidation.ts); its keys are
-    // known type columns only and never collide with the canonical columns set above.
+    // `fields` is produced by the per-type zod schemas (src/lib/schemas/event.ts); its
+    // keys are known type columns only and never collide with the canonical columns set above.
     ...data.fields,
   };
 }

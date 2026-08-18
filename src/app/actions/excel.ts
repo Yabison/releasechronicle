@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import type { EventType } from "@prisma/client";
-import { validateDeploymentBody, validateIncidentBody, validateMaintenanceBody } from "@/lib/eventValidation";
+import { deploymentBodySchema, incidentBodySchema, maintenanceBodySchema } from "@/lib/schemas/event";
+import { zodErrorMessage } from "@/lib/schemas/parse";
 import { createEvent, upsertEventByExternalId, type EventData } from "@/lib/events";
 import { readWorkbook, buildWorkbook, rowToBody, eventToRow, type ExcelRow } from "@/lib/excel";
 import { getServiceBySlug } from "@/lib/hierarchy";
@@ -17,12 +18,14 @@ export type ImportError = { row: number; error: string; vars?: Record<string, st
 export type ImportResult = { ok: true; count: number } | { ok: false; errors: ImportError[] };
 
 function validateRow(body: Record<string, unknown>) {
-  switch (body.type) {
-    case "DEPLOYMENT": return validateDeploymentBody(body);
-    case "INCIDENT": return validateIncidentBody(body);
-    case "MAINTENANCE": return validateMaintenanceBody(body);
-    default: return { ok: false as const, error: "err.unknownRowType", vars: { type: String(body.type) } };
-  }
+  const schema =
+    body.type === "DEPLOYMENT" ? deploymentBodySchema :
+    body.type === "INCIDENT" ? incidentBodySchema :
+    body.type === "MAINTENANCE" ? maintenanceBodySchema : null;
+  if (!schema) return { ok: false as const, error: "err.unknownRowType", vars: { type: String(body.type) } };
+  const v = schema.safeParse(body);
+  if (!v.success) return { ok: false as const, error: zodErrorMessage(v.error) };
+  return { ok: true as const, value: v.data };
 }
 
 /** Import events from an uploaded .xlsx. All-or-nothing: any bad row aborts the whole file. */

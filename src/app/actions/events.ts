@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import type { EventType, ChangeType } from "@prisma/client";
 import { DeployStatus } from "@prisma/client";
 import {
-  validateDeploymentBody,
-  validateIncidentBody,
-  validateMaintenanceBody,
-  type ValidatedEvent,
-} from "@/lib/eventValidation";
+  deploymentBodySchema,
+  incidentBodySchema,
+  maintenanceBodySchema,
+  type EventBodyShape,
+} from "@/lib/schemas/event";
+import { zodErrorMessage } from "@/lib/schemas/parse";
 import { persistValidated } from "@/lib/ingest";
 import { getActiveEnvSlugs } from "@/lib/environment";
 import { emitHooks } from "@/lib/hooks/dispatch";
@@ -58,45 +59,33 @@ export async function createEventAction(input: CreateEventInput): Promise<Create
   if (!(await getSession())) return fail("err.loginRequired");
   const { type, path, ...body } = input;
 
-  let v:
-    | ReturnType<typeof validateDeploymentBody>
-    | ReturnType<typeof validateIncidentBody>
-    | ReturnType<typeof validateMaintenanceBody>;
+  const schema =
+    type === "DEPLOYMENT" ? deploymentBodySchema :
+    type === "INCIDENT" ? incidentBodySchema :
+    type === "MAINTENANCE" ? maintenanceBodySchema : null;
+  if (!schema) return fail("err.unknownEventType");
 
-  switch (type) {
-    case "DEPLOYMENT":
-      v = validateDeploymentBody(body);
-      break;
-    case "INCIDENT":
-      v = validateIncidentBody(body);
-      break;
-    case "MAINTENANCE":
-      v = validateMaintenanceBody(body);
-      break;
-    default:
-      return fail("err.unknownEventType");
-  }
-
-  if (!v.ok) return { ok: false, error: v.error };
+  const v = schema.safeParse(body);
+  if (!v.success) return { ok: false, error: zodErrorMessage(v.error) };
 
   // PRE/POST MEP: inherit the parent's environment and keep the date before/after it.
   if (type === "DEPLOYMENT") {
-    const f = (v.value.fields ?? {}) as { changeType?: string; parentId?: string | null };
+    const f = (v.data.fields ?? {}) as { changeType?: string; parentId?: string | null };
     if ((f.changeType === "PRE_MEP" || f.changeType === "POST_MEP") && f.parentId) {
       const parent = await prisma.event.findUnique({ where: { id: f.parentId }, select: { environment: true, occurredAt: true } });
       if (!parent) return fail("err.parentNotFound");
-      (v.value as { environment: string }).environment = parent.environment;
-      const when = v.value.occurredAt;
+      (v.data as { environment: string }).environment = parent.environment;
+      const when = v.data.occurredAt;
       if (f.changeType === "PRE_MEP" && when >= parent.occurredAt) return fail("err.preBeforeParent");
       if (f.changeType === "POST_MEP" && when <= parent.occurredAt) return fail("err.postAfterParent");
     }
   }
 
-  if (!(await getActiveEnvSlugs()).includes(v.value.environment)) {
+  if (!(await getActiveEnvSlugs()).includes(v.data.environment)) {
     return fail("err.unknownEnv");
   }
 
-  const res = await persistValidated(type, v.value as ValidatedEvent<Record<string, unknown>>);
+  const res = await persistValidated(type, v.data as EventBodyShape<Record<string, unknown>>);
   if (res.status >= 400) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     return data.error ? { ok: false, error: data.error } : fail("err.requestFailed", { status: res.status });
@@ -460,15 +449,15 @@ export async function createLotAction(input: CreateLotInput): Promise<{ ok: true
       ...(common.occurredAt ? { occurredAt: common.occurredAt } : {}),
       ...(common.scheduledAt ? { scheduledAt: common.scheduledAt } : {}),
     };
-    const v = validateDeploymentBody(body);
-    if (!v.ok) return fail("err.lotRow", { n: i + 1, reason: v.error });
+    const v = deploymentBodySchema.safeParse(body);
+    if (!v.success) return fail("err.lotRow", { n: i + 1, reason: zodErrorMessage(v.error) });
     const svc = await getServiceBySlug(it.company, it.product, it.service);
     if (!svc) return fail("err.lotRow", { n: i + 1, reason: "err.serviceNotFound" });
     validated.push({
       data: {
-        serviceId: svc.id, environment: v.value.environment, type: "DEPLOYMENT",
-        occurredAt: v.value.occurredAt, externalId: v.value.externalId,
-        tags: v.value.tags ?? [], fields: v.value.fields,
+        serviceId: svc.id, environment: v.data.environment, type: "DEPLOYMENT",
+        occurredAt: v.data.occurredAt, externalId: v.data.externalId,
+        tags: v.data.tags ?? [], fields: v.data.fields,
       } as EventData,
     });
   }

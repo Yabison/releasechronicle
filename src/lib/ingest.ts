@@ -4,7 +4,7 @@ import { isUniqueViolation } from "@/lib/http";
 import { emitHooks } from "@/lib/hooks/dispatch";
 import "@/lib/hooks";
 import type { EventType } from "@prisma/client";
-import type { ValidatedEvent } from "@/lib/eventValidation";
+import type { EventBodyShape } from "@/lib/schemas/event";
 
 export class ServiceNotFoundError extends Error {
   constructor() {
@@ -28,7 +28,7 @@ export class EnvNotActiveError extends Error {
  */
 export async function persistValidatedEvent<F extends Record<string, unknown>>(
   type: EventType,
-  v: ValidatedEvent<F>,
+  v: EventBodyShape<F>,
   externalIdFromPath?: string,
 ) {
   const service = await getServiceBySlug(v.service.company, v.service.product, v.service.service);
@@ -72,7 +72,7 @@ export async function persistValidatedEvent<F extends Record<string, unknown>>(
 /** REST-facing wrapper: same behavior/status codes as before, returning a Response. */
 export async function persistValidated<F extends Record<string, unknown>>(
   type: EventType,
-  v: ValidatedEvent<F>,
+  v: EventBodyShape<F>,
   externalIdFromPath?: string,
 ): Promise<Response> {
   try {

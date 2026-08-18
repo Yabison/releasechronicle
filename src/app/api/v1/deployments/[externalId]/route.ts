@@ -1,5 +1,6 @@
 import { requireWriteToken } from "@/lib/auth";
-import { validateDeploymentBody } from "@/lib/eventValidation";
+import { deploymentBodySchema } from "@/lib/schemas/event";
+import { parseBody } from "@/lib/schemas/parse";
 import { persistValidated } from "@/lib/ingest";
 
 export async function PUT(
@@ -9,8 +10,7 @@ export async function PUT(
   const denied = requireWriteToken(req);
   if (denied) return denied;
   const { externalId } = await params;
-  const body = await req.json().catch(() => null);
-  const v = validateDeploymentBody(body);
-  if (!v.ok) return Response.json({ error: v.error }, { status: 400 });
-  return persistValidated("DEPLOYMENT", v.value, externalId);
+  const parsed = await parseBody(req, deploymentBodySchema);
+  if (!parsed.ok) return parsed.res;
+  return persistValidated("DEPLOYMENT", parsed.value, externalId);
 }
