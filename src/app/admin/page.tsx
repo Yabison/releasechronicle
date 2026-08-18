@@ -36,7 +36,7 @@ const NAV: { id: Section; label: string }[] = [
 
 type Company = { id: string; name: string; slug: string; autoLotNaming: string; sortOrder?: number };
 type Product = { id: string; name: string; slug: string; envWorkflow: string[]; sortOrder?: number };
-type Hook = { id: string; type: string; events: string[]; transitions: string[]; config: { url?: string; to?: string[] }; enabled: boolean; targetId?: string | null };
+type Hook = { id: string; type: string; events: string[]; transitions: string[]; config: { url?: string; to?: string[]; [key: string]: unknown }; enabled: boolean; targetId?: string | null };
 type IngestSource = { id: string; label: string; token: string; defaultEnvironment: string | null };
 type Service = { id: string; name: string; slug: string; type?: string; buildUrlTemplate?: string | null; isMaster?: boolean; envWorkflow?: string[]; envWorkflowOverride?: boolean; sortOrder?: number };
 type Target = { id: string; type: string; label: string; config: { to?: string[]; url?: string; locale?: string } };
@@ -66,6 +66,10 @@ export default function AdminPage() {
   // creating a new one (POST). The same form/state is reused for both, per the
   // "no second modal" constraint.
   const [editingHookId, setEditingHookId] = useState<string | null>(null);
+  // The raw config of the hook currently being edited (null when creating). The
+  // form only knows `url`/`to`, but a config can carry keys it doesn't own (e.g.
+  // webhook `headers`); this is spread back in on save so editing never drops them.
+  const [editingRawConfig, setEditingRawConfig] = useState<Record<string, unknown> | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [sources, setSources] = useState<IngestSource[]>([]);
   const [srcService, setSrcService] = useState("");
@@ -333,6 +337,12 @@ export default function AdminPage() {
 
   async function loadProducts(companySlug: string) {
     setProdCompany(companySlug);
+    // A company switch invalidates the hooks section entirely: the previous
+    // product/hooks/edit-in-progress belong to a different company and must not
+    // leak into whatever gets picked next.
+    setHookProduct("");
+    setHooks([]);
+    resetHookForm();
     if (!companySlug) { setProducts([]); setProdServices({}); return; }
     const res = await fetch(`/api/v1/products?company=${companySlug}`);
     const list: Product[] = await res.json();
@@ -482,7 +492,7 @@ export default function AdminPage() {
     void loadServices(productSlug);
     if (!prodCompany || !productSlug) { setHooks([]); return; }
     const res = await fetch(`/api/v1/products/${productSlug}/hooks?company=${prodCompany}`);
-    setHooks(await res.json());
+    setHooks(res.ok ? await res.json() : []);
   }
   async function loadServices(productSlug: string) {
     if (!prodCompany || !productSlug) { setServices([]); return; }
@@ -541,6 +551,7 @@ export default function AdminPage() {
   // edit was cancelled, an edit was saved, or the product/company changed.
   function resetHookForm() {
     setEditingHookId(null);
+    setEditingRawConfig(null);
     setHookType("webhook");
     setHookTargetId("");
     setHookUrl("");
@@ -563,6 +574,11 @@ export default function AdminPage() {
     setHookTargetId(h.targetId ?? "");
     setHookEvents(h.events.length ? h.events : ["*"]);
     setHookTransitions(h.transitions ?? []);
+    // A target-based hook's config is owned by the target ({} on the hook itself),
+    // so there's nothing to preserve there. Otherwise, keep the full config —
+    // including keys the form doesn't own (e.g. webhook `headers`) — so saving
+    // the edit can spread it back in instead of replacing it wholesale.
+    setEditingRawConfig(h.targetId ? null : (h.config ?? {}));
     if (h.targetId) {
       setHookUrl("");
       setHookTo("");
@@ -584,7 +600,9 @@ export default function AdminPage() {
       const to = hookTo.split(",").map((s) => s.trim()).filter(Boolean);
       if (hookType === "email" && to.length === 0) { setHookMsg("Au moins un destinataire email requis."); return; }
       if (hookType !== "email" && !hookUrl.trim()) { setHookMsg("URL requise."); return; }
-      payload.config = hookType === "email" ? { to } : { url: hookUrl.trim() };
+      // Spread the hook's raw config first so keys the form doesn't own (e.g.
+      // webhook `headers`) survive the edit instead of being silently dropped.
+      payload.config = hookType === "email" ? { ...editingRawConfig, to } : { ...editingRawConfig, url: hookUrl.trim() };
       // Explicit detach: harmless no-op if the hook already had no target, and
       // required if switching a target-based hook back to inline config.
       payload.targetId = null;
