@@ -3,6 +3,8 @@ import { resetDb, prisma } from "../setup/db";
 import { sessionCookie } from "../setup/session";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
+import { getCausalSummaries } from "@/lib/causal";
+import { publicEventScopeWhere, type Scope } from "@/lib/apiVisibility";
 
 import { GET as companiesGET } from "@/app/api/v1/companies/route";
 import { GET as productsGET } from "@/app/api/v1/products/route";
@@ -167,5 +169,60 @@ describe("lot candidates", () => {
     await seed();
     expect((await candidatesGET(req("/api/v1/lots/candidates?company=shop&environment=PROD"))).status).toBe(401);
     expect((await candidatesGET(req("/api/v1/lots/candidates?company=shop&environment=PROD", AUTH))).status).toBe(200);
+  });
+});
+
+describe("causal summary visibility", () => {
+  /**
+   * Same product ("Checkout"), two services: "api" is fully public, "internal" is
+   * not (even though its product and company are). A cause is deliberately allowed
+   * to live on a sibling service of the same product (see listCausalCandidates) —
+   * so the causal summary must apply the same public/anonymous rules as the rest
+   * of the API to that sibling, exactly like publicEventScopeWhere already does
+   * for the service-events route above.
+   */
+  async function seedCrossServiceCause() {
+    await prisma.environmentConfig.create({
+      data: { slug: "PROD", name: "PROD", color: "#22c55e", sortOrder: 0, public: true },
+    });
+    const shop = await createCompany({ name: "Shop" });
+    const shopProd = await createProduct({ companyId: shop.id, name: "Checkout" });
+    const publicSvc = await createService({ productId: shopProd.id, name: "API", type: "API" });
+    const privateSvc = await createService({ productId: shopProd.id, name: "Internal", type: "API" });
+    await prisma.company.update({ where: { id: shop.id }, data: { public: true } });
+    await prisma.product.update({ where: { id: shopProd.id }, data: { public: true } });
+    await prisma.service.update({ where: { id: publicSvc.id }, data: { public: true } });
+    // privateSvc.public stays false — the leak this test guards against.
+
+    const cause = await createEvent({
+      serviceId: privateSvc.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+      fields: { version: "1.0.0", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED" },
+    });
+    const effect = await createEvent({
+      serviceId: publicSvc.id, environment: "PROD", type: "INCIDENT", occurredAt: new Date(), tags: [],
+      fields: { incidentType: "outage", incidentStatus: "INVESTIGATING", startedAt: new Date(), resolvedAt: null, comment: null },
+    });
+    await prisma.event.update({ where: { id: effect.id }, data: { causedById: cause.id } });
+    return { cause, effect };
+  }
+
+  it("omits a cross-service cause hidden in a non-public sibling service from an anonymous viewer", async () => {
+    const { cause, effect } = await seedCrossServiceCause();
+    const anonScope: Scope = { anonymous: true, types: ["DEPLOYMENT", "MAINTENANCE"], envs: ["PROD"] };
+    const map = await getCausalSummaries(
+      [{ id: effect.id, causedById: cause.id }],
+      publicEventScopeWhere(anonScope),
+    );
+    expect(map.get(effect.id)?.causedBy).toBeUndefined();
+  });
+
+  it("shows the same cross-service cause to a signed-in caller", async () => {
+    const { cause, effect } = await seedCrossServiceCause();
+    const sessionScope: Scope = { anonymous: false };
+    const map = await getCausalSummaries(
+      [{ id: effect.id, causedById: cause.id }],
+      publicEventScopeWhere(sessionScope),
+    );
+    expect(map.get(effect.id)?.causedBy?.id).toBe(cause.id);
   });
 });

@@ -248,6 +248,7 @@
   "drawer.causality": "Causality",
   "drawer.causedBySelect": "Caused by",
   "drawer.causeNone": "(none)",
+  "drawer.causeUnknown": "(unavailable)",
   "drawer.externalLink": "External link",
   "time.local": "local",
   "time.switchTitle": "Show times in your timezone or in UTC",

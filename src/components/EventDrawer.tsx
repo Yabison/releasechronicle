@@ -5,8 +5,7 @@ import { slugify } from "@/lib/slug";
 import { traceRelease } from "@/lib/releaseTrace";
 import { useRouter } from "next/navigation";
 import { useModalDismiss } from "@/lib/useModalDismiss";
-import type { ClientEvent, EventSummary } from "@/lib/timeline";
-import { resolveCausal } from "@/lib/timeline";
+import type { ClientEvent } from "@/lib/timeline";
 import { durationParts } from "@/lib/derive";
 import { updateIncidentAction, updateEventLotAction, updateEventChangeTypeAction, addEventCommentAction, updateEventTagsAction, updateEventDateAction, updateEventHourTypeAction, updateEventCausedByAction } from "@/app/actions/events";
 import { buildUrl } from "@/lib/buildUrl";
@@ -209,19 +208,29 @@ function HourEdit({ event, path }: { event: ClientEvent; path: string }) {
 /** A candidate cause fetched for the "caused by" picker (same product, before this event). */
 type CausalOption = { id: string; type: string; environment: string; version: string | null; occurredAt: string; serviceSlug: string };
 
+/** One resolved end of a causal link — always carries its service, since a cause
+ *  or effect may live on a sibling service of the same product. */
+export type CausalEntry = { id: string; type: string; environment: string; version: string | null; occurredAt: string; serviceSlug: string };
+export type CausalInfo = { causedBy?: CausalEntry; led: CausalEntry[] };
+
 /** Read-only causal links, plus (when editable) a select to set/clear the cause.
- *  Candidates are fetched lazily on first focus, mirroring the Tags component's
- *  `fetch("/api/v1/tags")` on-demand pattern rather than paying the query for
- *  every event in the feed whether or not anyone edits it. */
+ *  `causal` is resolved product-wide against the database by the page's data path
+ *  (see getCausalSummaries in @/lib/causal) — never derived from `all`, which is
+ *  only this service's own events and would silently miss any cross-service link.
+ *  Candidates for the picker are still fetched lazily on first focus, mirroring the
+ *  Tags component's `fetch("/api/v1/tags")` on-demand pattern rather than paying
+ *  that query for every event in the feed whether or not anyone edits it. */
 function Causal({
   event,
+  all,
   causal,
   path,
   editable,
   onOpenEvent,
 }: {
   event: ClientEvent;
-  causal: { causedBy?: EventSummary; led: EventSummary[] };
+  all: ClientEvent[];
+  causal: CausalInfo;
   path?: string;
   editable: boolean;
   onOpenEvent?: (id: string) => void;
@@ -247,9 +256,14 @@ function Causal({
 
   const optionLabel = (o: CausalOption) =>
     `${o.serviceSlug} · ${o.type} · ${o.environment}${o.version ? ` v${o.version}` : ""} · ${stampShort(o.occurredAt)}`;
+  const entryLabel = (e: CausalEntry) => `${e.serviceSlug} · ${e.type} (${e.environment})`;
   // The currently-linked cause may fall outside the candidate window (e.g. an
   // older link) — keep it selectable even when it's missing from `options`.
   const currentUnlisted = val && !options?.some((o) => o.id === val);
+  // A causal reference only opens in this drawer when it's one of the events this
+  // page already loaded (same service, in-window); a cross-service or out-of-window
+  // one still displays fully, just not as a dead/no-op click into nothing.
+  const openable = (id: string) => all.some((e) => e.id === id);
 
   return (
     <div className={styles.section}>
@@ -257,17 +271,25 @@ function Causal({
       {causal.causedBy && (
         <p className={styles.causal}>
           caused by →{" "}
-          <button type="button" className={styles.linkBtn} onClick={() => onOpenEvent?.(causal.causedBy!.id)}>
-            {causal.causedBy.type} ({causal.causedBy.environment})
-          </button>
+          {openable(causal.causedBy.id) ? (
+            <button type="button" className={styles.linkBtn} onClick={() => onOpenEvent?.(causal.causedBy!.id)}>
+              {entryLabel(causal.causedBy)}
+            </button>
+          ) : (
+            <span>{entryLabel(causal.causedBy)}</span>
+          )}
         </p>
       )}
       {causal.led.map((l) => (
         <p key={l.id} className={styles.causal}>
           led to ←{" "}
-          <button type="button" className={styles.linkBtn} onClick={() => onOpenEvent?.(l.id)}>
-            {l.type} ({l.environment})
-          </button>
+          {openable(l.id) ? (
+            <button type="button" className={styles.linkBtn} onClick={() => onOpenEvent?.(l.id)}>
+              {entryLabel(l)}
+            </button>
+          ) : (
+            <span>{entryLabel(l)}</span>
+          )}
         </p>
       ))}
       {editable && (
@@ -295,9 +317,10 @@ function Causal({
           >
             <option value="">{t("drawer.causeNone")}</option>
             {currentUnlisted && (
-              <option value={val}>
-                {causal.causedBy ? `${causal.causedBy.type} (${causal.causedBy.environment})` : val}
-              </option>
+              // Resolved via `causal.causedBy` whenever the link is visible to us; the
+              // only way to land here without it is a link to a row we may not see
+              // (soft-deleted, or hidden by visibility rules) — never show the raw id.
+              <option value={val}>{causal.causedBy ? entryLabel(causal.causedBy) : t("drawer.causeUnknown")}</option>
             )}
             {loading && <option disabled>{t("common.loading")}</option>}
             {options?.map((o) => (
@@ -335,6 +358,7 @@ export function EventDrawer({
   onNewPhase,
   onOpenEvent,
   canWrite = true,
+  causal = { led: [] },
 }: {
   event: ClientEvent;
   all: ClientEvent[];
@@ -349,10 +373,13 @@ export function EventDrawer({
   onNewPhase?: (changeType: string, parentId: string) => void;
   onOpenEvent?: (id: string) => void;
   canWrite?: boolean;
+  /** Product-wide causal resolution for this event, computed server-side (see
+   *  getCausalSummaries in @/lib/causal). Defaults to "no links" so callers that
+   *  haven't wired it through yet degrade to "block hidden", not a crash. */
+  causal?: CausalInfo;
 }) {
   // Anonymous / read-only visitors see the full detail but no mutating controls.
   const editable = canWrite && !!path;
-  const causal = resolveCausal(event, all);
   // Follow this build across environments + check the env workflow.
   const trace = useMemo(
     () => (event.type === "DEPLOYMENT" && event.version ? traceRelease(all, event.version, envWorkflow) : null),
@@ -675,7 +702,7 @@ export function EventDrawer({
         )}
 
         {(causal.causedBy || causal.led.length > 0 || editable) && (
-          <Causal event={event} causal={causal} path={path} editable={editable} onOpenEvent={onOpenEvent} />
+          <Causal event={event} all={all} causal={causal} path={path} editable={editable} onOpenEvent={onOpenEvent} />
         )}
 
         {event.rollbacks.length + event.qaValidations.length + event.observations.length > 0 && (

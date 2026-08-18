@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
-import { listCausalCandidates, wouldCreateCycle } from "@/lib/causal";
+import { listCausalCandidates, wouldCreateCycle, getCausalSummaries } from "@/lib/causal";
 
 async function seedProduct(companyName = "Acme", productName = "Checkout") {
   const c = await createCompany({ name: companyName });
@@ -119,5 +119,84 @@ describe("wouldCreateCycle", () => {
     const outsider = await createEvent(deployData(s.id, new Date("2026-09-01T08:00:00Z")));
     // Never reaches `outsider` nor a null terminator: the cap must stop the walk.
     expect(await wouldCreateCycle(outsider.id, ids[0])).toBe(true);
+  });
+});
+
+describe("getCausalSummaries", () => {
+  it("resolves a same-service cause", async () => {
+    const { p } = await seedProduct();
+    const s = await createService({ productId: p.id, name: "A", type: "API" });
+    const cause = await createEvent(deployData(s.id, new Date("2026-08-01T10:00:00Z")));
+    const effect = await createEvent(incidentData(s.id, new Date("2026-08-01T12:00:00Z")));
+    await prisma.event.update({ where: { id: effect.id }, data: { causedById: cause.id } });
+
+    const map = await getCausalSummaries([{ id: effect.id, causedById: cause.id }]);
+    const summary = map.get(effect.id);
+    expect(summary?.causedBy?.id).toBe(cause.id);
+    expect(summary?.causedBy?.serviceSlug).toBe(s.slug);
+  });
+
+  it("resolves a cross-service, same-product cause, including its serviceSlug", async () => {
+    const { p } = await seedProduct();
+    const serviceA = await createService({ productId: p.id, name: "Incidents", type: "API" });
+    const serviceB = await createService({ productId: p.id, name: "Deploys", type: "API" });
+    const cause = await createEvent(deployData(serviceB.id, new Date("2026-08-01T10:00:00Z")));
+    const effect = await createEvent(incidentData(serviceA.id, new Date("2026-08-01T12:00:00Z")));
+    await prisma.event.update({ where: { id: effect.id }, data: { causedById: cause.id } });
+
+    // The displayed set is only serviceA's own event -- exactly the shape the
+    // per-service page would pass in. The cause lives on serviceB and must still
+    // resolve, unlike the old array-lookup approach.
+    const map = await getCausalSummaries([{ id: effect.id, causedById: cause.id }]);
+    const summary = map.get(effect.id);
+    expect(summary?.causedBy?.id).toBe(cause.id);
+    expect(summary?.causedBy?.serviceSlug).toBe(serviceB.slug);
+  });
+
+  it("returns the led entries for a cause among the displayed events", async () => {
+    const { p } = await seedProduct();
+    const s = await createService({ productId: p.id, name: "A", type: "API" });
+    const cause = await createEvent(deployData(s.id, new Date("2026-08-01T10:00:00Z")));
+    const effect = await createEvent(incidentData(s.id, new Date("2026-08-01T12:00:00Z")));
+    await prisma.event.update({ where: { id: effect.id }, data: { causedById: cause.id } });
+
+    const map = await getCausalSummaries([{ id: cause.id, causedById: null }]);
+    const summary = map.get(cause.id);
+    expect(summary?.led.map((l) => l.id)).toEqual([effect.id]);
+  });
+
+  it("excludes a soft-deleted cause", async () => {
+    const { p } = await seedProduct();
+    const s = await createService({ productId: p.id, name: "A", type: "API" });
+    const cause = await createEvent(deployData(s.id, new Date("2026-08-01T10:00:00Z")));
+    const effect = await createEvent(incidentData(s.id, new Date("2026-08-01T12:00:00Z")));
+    await prisma.event.update({ where: { id: effect.id }, data: { causedById: cause.id } });
+    await prisma.event.update({ where: { id: cause.id }, data: { deletedAt: new Date() } });
+
+    const map = await getCausalSummaries([{ id: effect.id, causedById: cause.id }]);
+    expect(map.get(effect.id)?.causedBy).toBeUndefined();
+  });
+
+  it("excludes a soft-deleted led event", async () => {
+    const { p } = await seedProduct();
+    const s = await createService({ productId: p.id, name: "A", type: "API" });
+    const cause = await createEvent(deployData(s.id, new Date("2026-08-01T10:00:00Z")));
+    const effect = await createEvent(incidentData(s.id, new Date("2026-08-01T12:00:00Z")));
+    await prisma.event.update({ where: { id: effect.id }, data: { causedById: cause.id } });
+    await prisma.event.update({ where: { id: effect.id }, data: { deletedAt: new Date() } });
+
+    const map = await getCausalSummaries([{ id: cause.id, causedById: null }]);
+    expect(map.get(cause.id)?.led).toEqual([]);
+  });
+
+  it("returns an empty summary for an event with no links", async () => {
+    const { p } = await seedProduct();
+    const s = await createService({ productId: p.id, name: "A", type: "API" });
+    const ev = await createEvent(deployData(s.id, new Date("2026-08-01T10:00:00Z")));
+
+    const map = await getCausalSummaries([{ id: ev.id, causedById: null }]);
+    const summary = map.get(ev.id);
+    expect(summary?.causedBy).toBeUndefined();
+    expect(summary?.led).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 /** How far back (relative to the target event's own occurredAt) a candidate cause may lie. */
@@ -6,6 +7,8 @@ const DEFAULT_WINDOW_DAYS = 30;
 const DEFAULT_LIMIT = 20;
 /** Depth cap for the causedBy-chain walk: bounds an already-corrupted (cyclic) chain. */
 const MAX_CHAIN_DEPTH = 20;
+
+type Db = typeof prisma | Prisma.TransactionClient;
 
 export type CausalCandidate = {
   id: string;
@@ -73,11 +76,11 @@ export async function listCausalCandidates(
  * that predates this check) cannot loop forever -- hitting the cap is treated
  * as a cycle, refusing the new link rather than risking one.
  */
-export async function wouldCreateCycle(eventId: string, causeId: string): Promise<boolean> {
+export async function wouldCreateCycle(eventId: string, causeId: string, db: Db = prisma): Promise<boolean> {
   let currentId: string | null = causeId;
   for (let depth = 0; depth < MAX_CHAIN_DEPTH; depth++) {
     if (currentId === eventId) return true;
-    const current: { causedById: string | null } | null = await prisma.event.findUnique({
+    const current: { causedById: string | null } | null = await db.event.findUnique({
       where: { id: currentId },
       select: { causedById: true },
     });
@@ -86,4 +89,72 @@ export async function wouldCreateCycle(eventId: string, causeId: string): Promis
   }
   // Depth cap reached without resolving: refuse rather than risk a real cycle.
   return true;
+}
+
+/** A resolved causal picture for one event: its cause (if any) and what it led to. */
+export type CausalSummary = { causedBy?: CausalCandidate; led: CausalCandidate[] };
+
+const CAUSAL_SELECT = {
+  id: true,
+  type: true,
+  environment: true,
+  version: true,
+  occurredAt: true,
+  service: { select: { slug: true } },
+} satisfies Prisma.EventSelect;
+
+type CausalRow = { id: string; type: string; environment: string; version: string | null; occurredAt: Date; service: { slug: string } };
+
+function toCandidate(r: CausalRow): CausalCandidate {
+  return { id: r.id, type: r.type, environment: r.environment, version: r.version, occurredAt: r.occurredAt, serviceSlug: r.service.slug };
+}
+
+/**
+ * Batched, product-wide causal summaries for a set of displayed events. Resolves
+ * against the database — not the caller's per-service event list — because a
+ * cause is deliberately allowed to live on a sibling service of the same product
+ * (see `listCausalCandidates`); a client-side array scoped to one service can
+ * never see it. Exactly two queries regardless of how many events are passed in,
+ * so rendering a feed of drawers costs nothing per-drawer. Soft-deleted rows are
+ * excluded on both sides. `extraWhere` lets callers additionally restrict which
+ * rows may be resolved/exposed (e.g. public/anonymous visibility) — a row excluded
+ * by it is omitted from the result exactly like a soft-deleted one, never leaked
+ * as a raw id.
+ */
+export async function getCausalSummaries(
+  targets: { id: string; causedById: string | null }[],
+  extraWhere?: Prisma.EventWhereInput,
+): Promise<Map<string, CausalSummary>> {
+  const eventIds = targets.map((t) => t.id);
+  const causeIds = [...new Set(targets.map((t) => t.causedById).filter((id): id is string => !!id))];
+
+  const [causeRows, ledRows] = await Promise.all([
+    causeIds.length
+      ? prisma.event.findMany({ where: { id: { in: causeIds }, deletedAt: null, ...(extraWhere ?? {}) }, select: CAUSAL_SELECT })
+      : Promise.resolve([]),
+    eventIds.length
+      ? prisma.event.findMany({
+          where: { causedById: { in: eventIds }, deletedAt: null, ...(extraWhere ?? {}) },
+          select: { ...CAUSAL_SELECT, causedById: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const causeById = new Map(causeRows.map((r) => [r.id, toCandidate(r)]));
+  const ledByCauseId = new Map<string, CausalCandidate[]>();
+  for (const r of ledRows) {
+    const key = r.causedById as string;
+    const list = ledByCauseId.get(key);
+    if (list) list.push(toCandidate(r));
+    else ledByCauseId.set(key, [toCandidate(r)]);
+  }
+
+  const result = new Map<string, CausalSummary>();
+  for (const t of targets) {
+    result.set(t.id, {
+      causedBy: t.causedById ? causeById.get(t.causedById) : undefined,
+      led: ledByCauseId.get(t.id) ?? [],
+    });
+  }
+  return result;
 }
