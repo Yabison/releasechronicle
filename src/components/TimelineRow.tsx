@@ -40,6 +40,7 @@ export function TimelineRow({
   const lotIncomplete = lotWarning.length > 0;
   const leadIcon = rowLeadIcon({
     category: entry.category,
+    deployStatus: entry.deployStatus ?? null,
     hasRollback: Boolean(entry.rolledBack),
     lotIncomplete,
   });

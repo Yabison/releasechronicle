@@ -5,13 +5,36 @@ import type { LeadIcon } from "@/lib/rowLeadIcon";
 import styles from "./RowLeadIcon.module.css";
 
 /**
- * Glyphs are shape-first: release and hotfix share the green of this list, so the
- * check and the bolt have to carry the difference on their own — desaturate the
- * page and the two must still read apart. Danger is a circle where incident is a
- * triangle, for the same reason: "this deployment went wrong" and "this entry is
- * an incident" are different claims and must not look alike.
+ * Glyphs are shape-first: desaturate the page and every state must still read
+ * apart. Danger is a circle where incident is a triangle for that reason —
+ * "this deployment went wrong" and "this entry is an incident" are different
+ * claims and must not look alike.
  */
 const GLYPH: Record<LeadIcon, React.ReactNode> = {
+  // Waiting and pending share the clock: the difference is the colour and the
+  // label, not the shape — they are the same state seen before and after its due
+  // time, and inventing a second glyph would imply a different kind of thing.
+  scheduled: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  waiting: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  // In flight: an arrow coming back round on itself, distinct from both the
+  // static clock and the closing check.
+  running: (
+    <>
+      <path d="M20 12a8 8 0 1 1-2.3-5.6" />
+      <path d="M20 4v5h-5" />
+    </>
+  ),
+  validated: <path d="M5 12l5 5L20 7" />,
   release: <path d="M5 12l5 5L20 7" />,
   hotfix: <path d="M13 2L3 14h7l-1 8 11-14h-7l1-6z" />,
   incident: (

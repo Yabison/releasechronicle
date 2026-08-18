@@ -66,6 +66,8 @@
   --lead-incident-bg: #fceceb;  --lead-incident-fg: #e34948;
   --lead-maint-bg: #e9f0fb;     --lead-maint-fg: #2a78d6;
   --lead-danger-bg: #fbe4e4;    --lead-danger-fg: #d03b3b;
+  --lead-idle-bg: #f1f1f2;      --lead-idle-fg: #6b7280;
+  --lead-busy-bg: #fdf0e3;      --lead-busy-fg: #b45309;
 
   /* Status wording, as text rather than as a pill fill. The pill colours are
      chosen to sit under white text and fail badly the other way round — GO at
@@ -126,6 +128,8 @@
   --lead-maint-bg: #10202e;     --lead-maint-fg: #74c0fc;
   /* Distinct from incident: the two glyphs must not merge in the dark either. */
   --lead-danger-bg: #3a1a1a;    --lead-danger-fg: #ff9d9d;
+  --lead-idle-bg: #242832;      --lead-idle-fg: #9aa0ab;
+  --lead-busy-bg: #2e2110;      --lead-busy-fg: #ffc078;
 
   --st-scheduled: #c084fc;
   --st-go: #22d3ee;
@@ -174,6 +178,8 @@
     --lead-maint-bg: #10202e;     --lead-maint-fg: #74c0fc;
     /* Distinct from incident: the two glyphs must not merge in the dark either. */
     --lead-danger-bg: #3a1a1a;    --lead-danger-fg: #ff9d9d;
+    --lead-idle-bg: #242832;      --lead-idle-fg: #9aa0ab;
+    --lead-busy-bg: #2e2110;      --lead-busy-fg: #ffc078;
 
     --st-scheduled: #c084fc;
     --st-go: #22d3ee;

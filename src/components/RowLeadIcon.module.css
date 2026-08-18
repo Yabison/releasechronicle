@@ -13,6 +13,11 @@
 .icon svg { width: 14px; height: 14px; }
 .icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Neutral while nothing is due, amber once it is, green when it closes. */
+.icon[data-icon="scheduled"] { background: var(--lead-idle-bg); color: var(--lead-idle-fg); }
+.icon[data-icon="waiting"],
+.icon[data-icon="running"] { background: var(--lead-busy-bg); color: var(--lead-busy-fg); }
+.icon[data-icon="validated"],
 .icon[data-icon="release"],
 .icon[data-icon="hotfix"] { background: var(--lead-release-bg); color: var(--lead-release-fg); }
 .icon[data-icon="incident"] { background: var(--lead-incident-bg); color: var(--lead-incident-fg); }

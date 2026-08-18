@@ -6,24 +6,49 @@ import type { EntryCategory } from "./eventTimeline";
  * Pure and separate from the component so the priority rule is testable on its
  * own — the same split as entrySeverity().
  *
- * `danger` is a priority override, not a fifth category: an entry whose status
- * reads DEPLOYED but which rolled back, or which left a lot half-rolled-back, is
- * the case this exists to surface. It wins over the category glyph.
+ * A deployment is read by its **status**, not its category: the row already
+ * spells out RELEASE / HOTFIX in the type column, so repeating it in the icon
+ * would waste the one slot the eye lands on first. What that slot answers is
+ * "where is this in the pipeline, and is it in trouble".
  *
- * Deliberate deviation from the brief, which put every `hasError` entry on
- * danger: an open incident keeps the incident triangle. The triangle already
- * says "something is wrong"; swapping it for the danger circle would claim
- * "this entry has a deployment problem", which is a different statement. The
- * category dot beside the icon carries the type either way.
+ * `danger` overrides everything. An entry reading DEPLOYED, or even VALIDATE,
+ * that rolled back or left a lot half-rolled-back is the case this exists to
+ * surface.
+ *
+ * Entries with no deploy status — incidents, maintenances — keep their own
+ * glyph, since the pipeline says nothing about them.
  */
-export type LeadIcon = "danger" | "release" | "hotfix" | "incident" | "maintenance";
+export type LeadIcon =
+  | "danger"
+  | "scheduled"
+  | "waiting"
+  | "running"
+  | "validated"
+  | "release"
+  | "hotfix"
+  | "incident"
+  | "maintenance";
 
 export type LeadIconInput = {
   category: EntryCategory;
+  /** DeployStatus, or null on an incident or a maintenance. */
+  deployStatus: string | null;
   /** The deployment has at least one rollback. */
   hasRollback: boolean;
   /** Some sibling of its lot was not rolled back with it. */
   lotIncomplete: boolean;
+};
+
+/** DEPLOYED and TESTING count as in flight: validation still stands between
+ *  them and a finished release. */
+const BY_STATUS: Record<string, LeadIcon> = {
+  SCHEDULED: "scheduled",
+  GO_CONFIRMED: "scheduled",
+  PENDING: "waiting",
+  IN_PROGRESS: "running",
+  DEPLOYED: "running",
+  TESTING: "running",
+  VALIDATE: "validated",
 };
 
 const BY_CATEGORY: Record<EntryCategory, LeadIcon> = {
@@ -33,7 +58,8 @@ const BY_CATEGORY: Record<EntryCategory, LeadIcon> = {
   MAINTENANCE: "maintenance",
 };
 
-export function rowLeadIcon({ category, hasRollback, lotIncomplete }: LeadIconInput): LeadIcon {
+export function rowLeadIcon({ category, deployStatus, hasRollback, lotIncomplete }: LeadIconInput): LeadIcon {
   if (hasRollback || lotIncomplete) return "danger";
+  if (deployStatus && BY_STATUS[deployStatus]) return BY_STATUS[deployStatus];
   return BY_CATEGORY[category];
 }
