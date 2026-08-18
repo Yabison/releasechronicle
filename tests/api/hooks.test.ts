@@ -123,6 +123,21 @@ describe("hooks API config object", () => {
   });
 });
 
+describe("DELETE hook ownership", () => {
+  it("404s a DELETE on a hook belonging to a different product and leaves it intact", async () => {
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: { url: "https://h/x" }, enabled: true },
+    });
+    const c = await createCompany({ name: "Other" });
+    await createProduct({ companyId: c.id, name: "Billing" });
+    const res = await DELETE(new Request("http://x?company=other", { method: "DELETE", headers: AUTH }), dctx("billing", hook.id));
+    expect(res.status).toBe(404);
+    expect(await prisma.hook.count({ where: { id: hook.id } })).toBe(1);
+  });
+});
+
 describe("GET hook deliveries", () => {
   it("rejects GET without a session (payloads hold message bodies)", async () => {
     await seed();
