@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
-import { getProductBySlug } from "@/lib/hierarchy";
 import { getHook, updateHook, deleteHook } from "@/lib/hooks/config";
 import { getTarget } from "@/lib/notificationTarget";
 import { checkConfiguredOutboundUrl } from "@/lib/outboundUrl";
 import { auditRequest } from "@/lib/audit";
 import { parseBody } from "@/lib/schemas/parse";
+import { resolveProduct, hostOf } from "@/lib/hooks/productRoute";
 
 const putSchema = z.object({
   type: z.unknown().optional(), // not updatable; accepted and ignored rather than 400ing
@@ -16,18 +16,6 @@ const putSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
-const hostOf = (raw: string): string | null => {
-  try { return new URL(raw).host; } catch { return null; }
-};
-
-async function resolve(req: Request, slug: string) {
-  const company = new URL(req.url).searchParams.get("company");
-  if (!company) return { error: Response.json({ error: "company query param is required" }, { status: 400 }) };
-  const product = await getProductBySlug(company, slug);
-  if (!product) return { error: Response.json({ error: "not found" }, { status: 404 }) };
-  return { product };
-}
-
 function isEmptyConfig(config: unknown): boolean {
   return !config || typeof config !== "object" || Array.isArray(config) || Object.keys(config).length === 0;
 }
@@ -36,7 +24,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
   const denied = await requireAdmin(req);
   if (denied) return denied;
   const { slug, hookId } = await params;
-  const r = await resolve(req, slug);
+  const r = await resolveProduct(req, slug);
   if (r.error) return r.error;
   const hook = await getHook(hookId);
   if (!hook || hook.productId !== r.product.id) return Response.json({ error: "not found" }, { status: 404 });
@@ -59,6 +47,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
   if (targetId !== undefined && targetId !== null) {
     // Attaching / re-pointing to a target: same invariant as POST — target type
     // must match the hook's own type, and config is then owned by the target.
+    // A config sent alongside is refused rather than silently dropped: storing
+    // it would leave dead data that a future detach could reactivate unchecked.
+    if (hasConfig) {
+      return Response.json({ error: "config cannot be set while attaching a target" }, { status: 400 });
+    }
     const target = await getTarget(targetId);
     if (!target) return Response.json({ error: "unknown target" }, { status: 400 });
     if (target.type !== hook.type) return Response.json({ error: "target type mismatch" }, { status: 400 });
@@ -69,17 +62,28 @@ export async function PUT(req: Request, { params }: { params: Promise<{ slug: st
     if (detaching) data.targetId = null;
 
     const willHaveNoTarget = detaching || !hook.targetId;
-    if (hasConfig) {
-      if (willHaveNoTarget) {
-        // Same policy as notification targets/POST: refuse an unreachable-by-policy
-        // url up front instead of logging a failed delivery per event.
-        const url = configObj && typeof configObj.url === "string" ? configObj.url.trim() : "";
-        if (url) {
-          const checked = checkConfiguredOutboundUrl(url);
-          if (!checked.ok) return Response.json({ error: checked.reason }, { status: 400 });
-          host = hostOf(url);
-        }
+    if (hasConfig && !willHaveNoTarget) {
+      // A target remains attached: config is owned by the target (same
+      // invariant as POST/attach, above). Refuse rather than storing a config
+      // that sits dead until a later detach reactivates it unvalidated.
+      return Response.json({ error: "config cannot be set while a target is attached" }, { status: 400 });
+    }
+
+    if (hasConfig || detaching) {
+      // Validate the URL the row will actually end up with — not the shape of
+      // this request. This also re-checks a config that was written before a
+      // target existed (or before the policy tightened) whenever detaching is
+      // about to put it back in charge of delivery.
+      const resultingConfig = (hasConfig ? configObj : hook.config) as Record<string, unknown> | null;
+      const url = typeof resultingConfig?.url === "string" ? resultingConfig.url.trim() : "";
+      if (url) {
+        const checked = checkConfiguredOutboundUrl(url);
+        if (!checked.ok) return Response.json({ error: checked.reason }, { status: 400 });
+        host = hostOf(url);
       }
+    }
+
+    if (hasConfig) {
       data.config = configObj as Record<string, unknown>;
     }
 
@@ -106,7 +110,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ slug:
   const denied = await requireAdmin(req);
   if (denied) return denied;
   const { slug, hookId } = await params;
-  const r = await resolve(req, slug);
+  const r = await resolveProduct(req, slug);
   if (r.error) return r.error;
   // The [slug] segment used to be decorative: this checks the hook actually
   // belongs to the resolved product before deleting it.
