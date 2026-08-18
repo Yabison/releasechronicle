@@ -17,6 +17,9 @@ export function createHook(data: { productId: string; type: string; events: stri
     },
   });
 }
+export function getHook(id: string) {
+  return prisma.hook.findUnique({ where: { id } });
+}
 export function deleteHook(id: string) {
   return prisma.hook.delete({ where: { id } });
 }
