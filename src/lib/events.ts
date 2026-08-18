@@ -185,9 +185,35 @@ export async function setEventLot(eventId: string, lot: string | null) {
   return prisma.event.update({ where: { id: eventId }, data: { lot } });
 }
 
-/** Change a deployment's changeType (e.g. MEP → MEP HOTFIX). Returns null if not a deployment. */
+export class PhaseTransitionError extends Error {}
+
+/**
+ * Change a deployment's changeType (e.g. MEP → MEP HOTFIX). Returns null if not a
+ * deployment. Leaving a phase (PRE_MEP/POST_MEP → anything else) is always allowed;
+ * entering PRE_MEP or POST_MEP is allowed only when the event is ALREADY a phase
+ * (i.e. reclassifying PRE_MEP ↔ POST_MEP). An event that is not currently a phase
+ * may never become one through this path.
+ *
+ * Why: creation enforces more than "has a parentId" for phases — see the
+ * PRE_MEP/POST_MEP branch in `createEventAction` (src/app/actions/events.ts), which
+ * also overwrites the event's environment with the parent's and rejects a date
+ * at/after the parent's (PRE_MEP) or at/before it (POST_MEP). That is true for the
+ * REST/UI path (`deploymentBodySchema`). It is NOT true for the CI ingest path:
+ * `ciDeploymentBodySchema` (src/lib/schemas/ciDeployment.ts) accepts the full
+ * changeType enum with no parentId field at all, so a CI-ingested deployment can
+ * already be a parentless PRE_MEP/POST_MEP. Restricting entry here to "already a
+ * phase" doesn't manufacture the invariants creation enforces for a *fresh* phase
+ * (parent environment/date ordering) — it only allows moving between the two
+ * phase values, which carries no parent-dependent invariant to begin with.
+ */
 export async function setEventChangeType(eventId: string, changeType: ChangeType) {
-  if (!(await assertDeployment(eventId))) return null;
+  const event = await assertDeployment(eventId);
+  if (!event) return null;
+  const enteringPhase = changeType === "PRE_MEP" || changeType === "POST_MEP";
+  const alreadyPhase = event.changeType === "PRE_MEP" || event.changeType === "POST_MEP";
+  if (enteringPhase && !alreadyPhase) {
+    throw new PhaseTransitionError("PRE_MEP/POST_MEP can only be entered by reclassifying an event that is already a phase");
+  }
   return prisma.event.update({ where: { id: eventId }, data: { changeType } });
 }
 

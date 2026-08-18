@@ -36,7 +36,7 @@ const NAV: { id: Section; label: string }[] = [
 
 type Company = { id: string; name: string; slug: string; autoLotNaming: string; sortOrder?: number };
 type Product = { id: string; name: string; slug: string; envWorkflow: string[]; sortOrder?: number };
-type Hook = { id: string; type: string; events: string[]; transitions: string[]; config: { url?: string; to?: string[] }; enabled: boolean; targetId?: string | null };
+type Hook = { id: string; type: string; events: string[]; transitions: string[]; config: { url?: string; to?: string[]; [key: string]: unknown }; enabled: boolean; targetId?: string | null };
 type IngestSource = { id: string; label: string; token: string; defaultEnvironment: string | null };
 type Service = { id: string; name: string; slug: string; type?: string; buildUrlTemplate?: string | null; isMaster?: boolean; envWorkflow?: string[]; envWorkflowOverride?: boolean; sortOrder?: number };
 type Target = { id: string; type: string; label: string; config: { to?: string[]; url?: string; locale?: string } };
@@ -62,6 +62,14 @@ export default function AdminPage() {
   const [hookEvents, setHookEvents] = useState<string[]>(["*"]);
   const [hookTransitions, setHookTransitions] = useState<string[]>([]);
   const [hookMsg, setHookMsg] = useState("");
+  // Non-null while the hook form is editing an existing hook (PUT) instead of
+  // creating a new one (POST). The same form/state is reused for both, per the
+  // "no second modal" constraint.
+  const [editingHookId, setEditingHookId] = useState<string | null>(null);
+  // The raw config of the hook currently being edited (null when creating). The
+  // form only knows `url`/`to`, but a config can carry keys it doesn't own (e.g.
+  // webhook `headers`); this is spread back in on save so editing never drops them.
+  const [editingRawConfig, setEditingRawConfig] = useState<Record<string, unknown> | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [sources, setSources] = useState<IngestSource[]>([]);
   const [srcService, setSrcService] = useState("");
@@ -329,6 +337,12 @@ export default function AdminPage() {
 
   async function loadProducts(companySlug: string) {
     setProdCompany(companySlug);
+    // A company switch invalidates the hooks section entirely: the previous
+    // product/hooks/edit-in-progress belong to a different company and must not
+    // leak into whatever gets picked next.
+    setHookProduct("");
+    setHooks([]);
+    resetHookForm();
     if (!companySlug) { setProducts([]); setProdServices({}); return; }
     const res = await fetch(`/api/v1/products?company=${companySlug}`);
     const list: Product[] = await res.json();
@@ -472,10 +486,13 @@ export default function AdminPage() {
   async function loadHooks(productSlug: string) {
     setHookProduct(productSlug);
     setSrcService(""); setSources([]);
+    // Switching product would otherwise let a stale editingHookId (belonging to
+    // the previous product) leak into a PUT sent to the new product's hooks.
+    resetHookForm();
     void loadServices(productSlug);
     if (!prodCompany || !productSlug) { setHooks([]); return; }
     const res = await fetch(`/api/v1/products/${productSlug}/hooks?company=${prodCompany}`);
-    setHooks(await res.json());
+    setHooks(res.ok ? await res.json() : []);
   }
   async function loadServices(productSlug: string) {
     if (!prodCompany || !productSlug) { setServices([]); return; }
@@ -527,6 +544,101 @@ export default function AdminPage() {
     await fetch(`/api/v1/products/${hookProduct}/hooks/${id}?company=${prodCompany}`, {
       method: "DELETE",
     });
+    await loadHooks(hookProduct);
+  }
+
+  // Clears the hook form back to "create" defaults, whether that's because an
+  // edit was cancelled, an edit was saved, or the product/company changed.
+  function resetHookForm() {
+    setEditingHookId(null);
+    setEditingRawConfig(null);
+    setHookType("webhook");
+    setHookTargetId("");
+    setHookUrl("");
+    setHookTo("");
+    setHookEvents(["*"]);
+    setHookTransitions([]);
+  }
+  function cancelEditHook() {
+    resetHookForm();
+    setHookMsg("");
+  }
+  // Loads an existing hook into the create form, switching it into "edit" mode.
+  // `type` is intentionally left as-is but the form disables that field: the
+  // backend accepts and ignores a `type` in the PUT body, so letting it be
+  // edited here would silently do nothing.
+  function startEditHook(h: Hook) {
+    setEditingHookId(h.id);
+    setHookMsg("");
+    setHookType(h.type);
+    setHookTargetId(h.targetId ?? "");
+    setHookEvents(h.events.length ? h.events : ["*"]);
+    setHookTransitions(h.transitions ?? []);
+    // A target-based hook's config is owned by the target ({} on the hook itself),
+    // so there's nothing to preserve there. Otherwise, keep the full config —
+    // including keys the form doesn't own (e.g. webhook `headers`) — so saving
+    // the edit can spread it back in instead of replacing it wholesale.
+    setEditingRawConfig(h.targetId ? null : (h.config ?? {}));
+    if (h.targetId) {
+      setHookUrl("");
+      setHookTo("");
+    } else {
+      setHookUrl(h.config?.url ?? "");
+      setHookTo((h.config?.to ?? []).join(", "));
+    }
+  }
+  async function saveHookEdit() {
+    if (!hookProduct || !editingHookId) return;
+    setHookMsg("");
+    const transitions = hookEvents.includes("deploy.status_changed") ? hookTransitions : [];
+    // Partial update: only send the fields the form owns. `type` is never sent —
+    // it's not updatable and the form keeps it disabled while editing.
+    const payload: Record<string, unknown> = { events: hookEvents, transitions };
+    if (hookTargetId) {
+      payload.targetId = hookTargetId;
+    } else {
+      const to = hookTo.split(",").map((s) => s.trim()).filter(Boolean);
+      if (hookType === "email" && to.length === 0) { setHookMsg("Au moins un destinataire email requis."); return; }
+      if (hookType !== "email" && !hookUrl.trim()) { setHookMsg("URL requise."); return; }
+      // Spread the hook's raw config first so keys the form doesn't own (e.g.
+      // webhook `headers`) survive the edit instead of being silently dropped.
+      payload.config = hookType === "email" ? { ...editingRawConfig, to } : { ...editingRawConfig, url: hookUrl.trim() };
+      // Explicit detach: harmless no-op if the hook already had no target, and
+      // required if switching a target-based hook back to inline config.
+      payload.targetId = null;
+    }
+    const res = await fetch(`/api/v1/products/${hookProduct}/hooks/${editingHookId}?company=${prodCompany}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      resetHookForm();
+      setHookMsg(tr("admin.hookUpdated"));
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setHookMsg(d.error ?? `Erreur ${res.status}`);
+    }
+    // Always re-read from the server: a rejected PUT must not leave the form's
+    // optimistic state looking like it stuck.
+    await loadHooks(hookProduct);
+  }
+  function submitHookForm() {
+    if (editingHookId) void saveHookEdit();
+    else void addHook();
+  }
+  async function toggleHookEnabled(h: Hook) {
+    setHookMsg("");
+    const res = await fetch(`/api/v1/products/${hookProduct}/hooks/${h.id}?company=${prodCompany}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: !h.enabled }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setHookMsg(d.error ?? `Erreur ${res.status}`);
+    }
+    // Re-read from the server either way, so a rejected toggle visibly snaps back.
     await loadHooks(hookProduct);
   }
 
@@ -586,9 +698,14 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcScope, prodCompany]);
 
-  useEffect(() => {
+  // hookTargetId reset used to live in a useEffect keyed on hookType, but that
+  // fired on every hookType change including the programmatic one made when
+  // populating the form from startEditHook, clobbering the target it had just
+  // set. Resetting it directly in the (user-only) onChange below avoids that.
+  function onHookTypeChange(value: string) {
+    setHookType(value);
     setHookTargetId("");
-  }, [hookType]);
+  }
 
   const companyPicker = (
     <label className={styles.slug}>
@@ -922,20 +1039,25 @@ ${fields.join(",\n")}
                         {h.transitions.length > 0 && (
                           <span className={styles.transBadge}>{h.transitions.map((t) => t.replace(">", " → ")).join(", ")}</span>
                         )}
-                        {!h.enabled && <span className={styles.muted}>(désactivé)</span>}
+                        <label className={styles.slug}>
+                          <input type="checkbox" checked={h.enabled} onChange={() => toggleHookEnabled(h)} />{" "}
+                          {tr("admin.hookEnabledLabel")}
+                        </label>
+                        <button onClick={() => startEditHook(h)}>{tr("admin.editHook")}</button>
                         <button className={styles.danger} onClick={() => removeHook(h.id)}>×</button>
                       </li>
                     ))}
                   </ul>
 
                   <div className={styles.hookForm}>
-                    <div className={styles.cardHead}>{tr("admin.newHook")}</div>
+                    <div className={styles.cardHead}>{editingHookId ? tr("admin.editHookTitle") : tr("admin.newHook")}</div>
                     <div className={styles.row}>
-                      <select value={hookType} onChange={(e) => setHookType(e.target.value)}>
+                      <select value={hookType} onChange={(e) => onHookTypeChange(e.target.value)} disabled={!!editingHookId}>
                         <option value="webhook">webhook</option>
                         <option value="teams">teams</option>
                         <option value="email">email</option>
                       </select>
+                      {editingHookId && <span className={styles.muted}>{tr("admin.hookTypeLocked")}</span>}
                       <select value={hookTargetId} onChange={(e) => setHookTargetId(e.target.value)}>
                         <option value="">{tr("admin.hookNoneOption")}</option>
                         {targets.filter((t) => t.type === hookType).map((t) => (
@@ -975,7 +1097,10 @@ ${fields.join(",\n")}
                       </>
                     )}
 
-                    <button className={styles.primary} onClick={addHook}>+ hook</button>
+                    <button className={styles.primary} onClick={submitHookForm}>
+                      {editingHookId ? tr("common.save") : "+ hook"}
+                    </button>
+                    {editingHookId && <button onClick={cancelEditHook}>{tr("common.cancel")}</button>}
                     {hookMsg && <span className={styles.muted} style={{ marginLeft: 8 }}>{hookMsg}</span>}
                   </div>
                 </>

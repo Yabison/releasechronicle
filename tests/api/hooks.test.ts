@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import type { Prisma } from "@prisma/client";
 import { resetDb, prisma } from "../setup/db";
 import { sessionCookie } from "../setup/session";
 import { createCompany, createProduct } from "@/lib/hierarchy";
 import { GET as listGET, POST } from "@/app/api/v1/products/[slug]/hooks/route";
-import { DELETE } from "@/app/api/v1/products/[slug]/hooks/[hookId]/route";
+import { DELETE, PUT } from "@/app/api/v1/products/[slug]/hooks/[hookId]/route";
 import { GET as deliveriesGET } from "@/app/api/v1/products/[slug]/hooks/deliveries/route";
 
 let AUTH: { cookie: string };
@@ -17,6 +18,11 @@ async function seed() {
 function post(body: unknown, headers: Record<string, string> = {}) {
   return new Request("http://x/api/v1/products/checkout/hooks?company=acme", {
     method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body),
+  });
+}
+function put(body: unknown, headers: Record<string, string> = {}, company = "acme") {
+  return new Request(`http://x?company=${company}`, {
+    method: "PUT", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body),
   });
 }
 const ctx = (slug: string) => ({ params: Promise.resolve({ slug }) });
@@ -120,6 +126,203 @@ describe("hooks API config object", () => {
       body: JSON.stringify({ type: "ghost", config: { to: ["a@x"] } }),
     });
     expect((await POST(req, ctx("checkout"))).status).toBe(400);
+  });
+});
+
+describe("PUT hook", () => {
+  async function seedHook(config: Record<string, unknown> = { url: "https://h/x" }) {
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: config as Prisma.InputJsonValue, enabled: true },
+    });
+    return { product, hook };
+  }
+
+  it("rejects PUT without a session", async () => {
+    const { hook } = await seedHook();
+    const res = await PUT(put({ events: ["deploy.created"] }), dctx("checkout", hook.id));
+    expect(res.status).toBe(401);
+  });
+
+  it("writes only the supplied field on a partial update", async () => {
+    const { hook } = await seedHook({ url: "https://h/x" });
+    const res = await PUT(put({ events: ["deploy.created"] }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.events).toEqual(["deploy.created"]);
+    expect(json.transitions).toEqual([]);
+    expect(json.config).toEqual({ url: "https://h/x" });
+    expect(json.enabled).toBe(true);
+  });
+
+  it("round-trips enabled false then true", async () => {
+    const { hook } = await seedHook();
+    const off = await PUT(put({ enabled: false }, AUTH), dctx("checkout", hook.id));
+    expect(off.status).toBe(200);
+    expect((await off.json()).enabled).toBe(false);
+    const on = await PUT(put({ enabled: true }, AUTH), dctx("checkout", hook.id));
+    expect(on.status).toBe(200);
+    expect((await on.json()).enabled).toBe(true);
+  });
+
+  it("changing targetId to a same-type target succeeds and forces config to {}", async () => {
+    const { hook } = await seedHook();
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    const res = await PUT(put({ targetId: target.id }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.targetId).toBe(target.id);
+    expect(json.config).toEqual({});
+  });
+
+  it("rejects changing targetId to a different-type target", async () => {
+    const { hook } = await seedHook();
+    const target = await prisma.notificationTarget.create({ data: { type: "email", label: "Ops", config: { to: ["a@x"] } } });
+    const res = await PUT(put({ targetId: target.id }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("target type mismatch");
+    expect((await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } })).targetId).toBeNull();
+  });
+
+  it("rejects an unknown targetId", async () => {
+    const { hook } = await seedHook();
+    const res = await PUT(put({ targetId: "ghost" }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("unknown target");
+  });
+
+  it("rejects a config.url that fails the outbound url check and leaves the hook unmodified", async () => {
+    const { hook } = await seedHook({ url: "https://h/x" });
+    const res = await PUT(put({ config: { url: "http://169.254.169.254/latest" } }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/link-local/);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.config).toEqual({ url: "https://h/x" });
+  });
+
+  it("detaching a target requires a usable config", async () => {
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: {}, targetId: target.id, enabled: true },
+    });
+    const res = await PUT(put({ targetId: null }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.targetId).toBe(target.id);
+  });
+
+  it("detaching a target with a fresh config succeeds", async () => {
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: {}, targetId: target.id, enabled: true },
+    });
+    const res = await PUT(put({ targetId: null, config: { url: "https://h/detached" } }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.targetId).toBeNull();
+    expect(json.config).toEqual({ url: "https://h/detached" });
+  });
+
+  it("rejects a config.url that fails the guard on a hook that has a target attached, and leaves the stored config unchanged", async () => {
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: {}, targetId: target.id, enabled: true },
+    });
+    const res = await PUT(put({ config: { url: "http://169.254.169.254/latest" } }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.config).toEqual({});
+    expect(stored.targetId).toBe(target.id);
+  });
+
+  it("rejects a config on a hook that has a target attached even with a benign url (config is owned by the target)", async () => {
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: {}, targetId: target.id, enabled: true },
+    });
+    const res = await PUT(put({ config: { url: "https://h/x" } }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/target is attached/);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.config).toEqual({});
+    expect(stored.targetId).toBe(target.id);
+  });
+
+  it("rejects attaching a target together with a config in the same request", async () => {
+    const { hook } = await seedHook();
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    const res = await PUT(put({ targetId: target.id, config: { url: "https://h/x" } }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.targetId).toBeNull();
+    expect(stored.config).toEqual({ url: "https://h/x" });
+  });
+
+  it("two-step detach bypass: storing a bad config while targeted is rejected, and detaching afterwards never reactivates it", async () => {
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: {}, targetId: target.id, enabled: true },
+    });
+    // Step 1: try to sneak a link-local config onto the still-targeted hook.
+    const step1 = await PUT(put({ config: { url: "http://169.254.169.254/latest" } }, AUTH), dctx("checkout", hook.id));
+    expect(step1.status).toBe(400);
+    // Step 2: detach with no config in the body — the (unchanged, empty) stored
+    // config must not pass as "usable", so the hook never ends up detached with
+    // a bad — or any — config live.
+    const step2 = await PUT(put({ targetId: null }, AUTH), dctx("checkout", hook.id));
+    expect(step2.status).toBe(400);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.targetId).toBe(target.id);
+    expect(stored.config).toEqual({});
+  });
+
+  it("ignores a type field in the body instead of changing the stored type", async () => {
+    const { hook } = await seedHook();
+    const res = await PUT(put({ type: "email" }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(200);
+    expect((await res.json()).type).toBe("webhook");
+  });
+
+  it("404s a PUT on a hook belonging to a different product", async () => {
+    const { hook } = await seedHook();
+    const c = await createCompany({ name: "Other" });
+    await createProduct({ companyId: c.id, name: "Billing" });
+    const res = await PUT(put({ enabled: false }, AUTH, "other"), dctx("billing", hook.id));
+    expect(res.status).toBe(404);
+    expect((await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } })).enabled).toBe(true);
+  });
+
+  it("audits an update without logging config", async () => {
+    const { hook } = await seedHook();
+    await PUT(put({ enabled: false }, AUTH), dctx("checkout", hook.id));
+    const row = await prisma.auditLog.findFirstOrThrow({ where: { action: "hook.updated" } });
+    expect(row.detail).not.toHaveProperty("config");
+  });
+});
+
+describe("DELETE hook ownership", () => {
+  it("404s a DELETE on a hook belonging to a different product and leaves it intact", async () => {
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: { url: "https://h/x" }, enabled: true },
+    });
+    const c = await createCompany({ name: "Other" });
+    await createProduct({ companyId: c.id, name: "Billing" });
+    const res = await DELETE(new Request("http://x?company=other", { method: "DELETE", headers: AUTH }), dctx("billing", hook.id));
+    expect(res.status).toBe(404);
+    expect(await prisma.hook.count({ where: { id: hook.id } })).toBe(1);
   });
 });
 

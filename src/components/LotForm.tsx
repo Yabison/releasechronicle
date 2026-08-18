@@ -11,6 +11,7 @@ import styles from "./EventForm.module.css";
 const CHANGE_TYPES = ["NORMAL", "HOTFIX", "POSTMEP_SQL"];
 const DEPLOY_STATUSES = [
   "SCHEDULED",
+  "GO_CONFIRMED",
   "PENDING",
   "IN_PROGRESS",
   "DEPLOYED",
