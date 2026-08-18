@@ -226,6 +226,9 @@ export function DetailPane({
   const selectedEvent = events.find((e) => e.id === selected) ?? null;
   const nothing = maintenancesToShow.length === 0 && groups.length === 0;
 
+  /** True once the filter excludes something; all six on means "no filter". */
+  const narrowed = active.size < FILTER_KEYS.length;
+
   function toggle(cat: FilterKey) {
     setActive((prev) => {
       const next = new Set(prev);
@@ -279,18 +282,25 @@ export function DetailPane({
       </div>
       <div className={styles.filters}>
         <span className={styles.filtersLabel}>{t("detail.filter")}</span>
-        {FILTER_KEYS.map((c) => (
-          <button
-            key={c}
-            data-active={active.has(c)}
-            data-cat={c}
-            aria-pressed={active.has(c)}
-            onClick={() => toggle(c)}
-          >
-            {active.has(c) && <span className={styles.filterCheck} aria-hidden>✓</span>}
-            {filterLabel(t, c)}
-          </button>
-        ))}
+        {FILTER_KEYS.map((c) => {
+          // Everything on is the resting state, not a selection: filling all six
+          // pills would shout that a filter is applied when none is. The pills
+          // light up only once the set actually narrows. aria-pressed keeps
+          // telling the truth either way.
+          const filled = narrowed && active.has(c);
+          return (
+            <button
+              key={c}
+              data-active={filled}
+              data-cat={c}
+              aria-pressed={active.has(c)}
+              onClick={() => toggle(c)}
+            >
+              {filled && <span className={styles.filterCheck} aria-hidden>✓</span>}
+              {filterLabel(t, c)}
+            </button>
+          );
+        })}
       </div>
 
       <div className={styles.search}>
