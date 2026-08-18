@@ -185,9 +185,22 @@ export async function setEventLot(eventId: string, lot: string | null) {
   return prisma.event.update({ where: { id: eventId }, data: { lot } });
 }
 
-/** Change a deployment's changeType (e.g. MEP → MEP HOTFIX). Returns null if not a deployment. */
+export class PhaseParentError extends Error {}
+
+/**
+ * Change a deployment's changeType (e.g. MEP → MEP HOTFIX). Returns null if not a
+ * deployment. Leaving a phase (PRE_MEP/POST_MEP → anything else) is always allowed;
+ * entering PRE_MEP or POST_MEP requires the event to already have a parent — the
+ * creation validators require a parentId (and a comment) for phases, and there is no
+ * UI to attach a parent after the fact, so reclassifying into a phase without one
+ * would manufacture a state creation itself forbids.
+ */
 export async function setEventChangeType(eventId: string, changeType: ChangeType) {
-  if (!(await assertDeployment(eventId))) return null;
+  const event = await assertDeployment(eventId);
+  if (!event) return null;
+  if ((changeType === "PRE_MEP" || changeType === "POST_MEP") && !event.parentId) {
+    throw new PhaseParentError("PRE_MEP/POST_MEP requires the event to already have a parent");
+  }
   return prisma.event.update({ where: { id: eventId }, data: { changeType } });
 }
 

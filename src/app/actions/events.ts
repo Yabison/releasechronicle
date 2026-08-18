@@ -31,6 +31,7 @@ import {
   AnnotationTargetError,
   IncidentTargetError,
   DeployTransitionError,
+  PhaseParentError,
 } from "@/lib/events";
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { prisma } from "@/lib/db";
@@ -275,9 +276,13 @@ export async function updateEventLotAction(input: {
   return { ok: true };
 }
 
-const CHANGE_TYPES: ChangeType[] = ["POSTMEP_SQL", "HOTFIX", "NORMAL"];
+const CHANGE_TYPES: ChangeType[] = ["POSTMEP_SQL", "HOTFIX", "NORMAL", "PRE_MEP", "POST_MEP"];
 
-/** Change a deployment's type after the fact (e.g. a MEP reclassified as MEP HOTFIX). */
+/**
+ * Change a deployment's type after the fact (e.g. a MEP reclassified as MEP HOTFIX).
+ * Entering PRE_MEP/POST_MEP without a parent is rejected by the domain layer — see
+ * `setEventChangeType` — since there is no UI to attach a parent retroactively.
+ */
 export async function updateEventChangeTypeAction(input: {
   eventId: string;
   changeType: string;
@@ -293,6 +298,9 @@ export async function updateEventChangeTypeAction(input: {
   } catch (e) {
     if (e instanceof AnnotationTargetError) {
       return fail("err.changeTypeDeployOnly");
+    }
+    if (e instanceof PhaseParentError) {
+      return fail("err.phaseNeedsParent");
     }
     throw e;
   }
