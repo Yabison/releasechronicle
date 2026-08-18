@@ -228,6 +228,65 @@ describe("PUT hook", () => {
     expect(json.config).toEqual({ url: "https://h/detached" });
   });
 
+  it("rejects a config.url that fails the guard on a hook that has a target attached, and leaves the stored config unchanged", async () => {
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: {}, targetId: target.id, enabled: true },
+    });
+    const res = await PUT(put({ config: { url: "http://169.254.169.254/latest" } }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.config).toEqual({});
+    expect(stored.targetId).toBe(target.id);
+  });
+
+  it("rejects a config on a hook that has a target attached even with a benign url (config is owned by the target)", async () => {
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: {}, targetId: target.id, enabled: true },
+    });
+    const res = await PUT(put({ config: { url: "https://h/x" } }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/target is attached/);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.config).toEqual({});
+    expect(stored.targetId).toBe(target.id);
+  });
+
+  it("rejects attaching a target together with a config in the same request", async () => {
+    const { hook } = await seedHook();
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    const res = await PUT(put({ targetId: target.id, config: { url: "https://h/x" } }, AUTH), dctx("checkout", hook.id));
+    expect(res.status).toBe(400);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.targetId).toBeNull();
+    expect(stored.config).toEqual({ url: "https://h/x" });
+  });
+
+  it("two-step detach bypass: storing a bad config while targeted is rejected, and detaching afterwards never reactivates it", async () => {
+    const target = await prisma.notificationTarget.create({ data: { type: "webhook", label: "CI", config: { url: "https://target/x" } } });
+    await seed();
+    const product = await prisma.product.findFirstOrThrow({ where: { slug: "checkout" } });
+    const hook = await prisma.hook.create({
+      data: { productId: product.id, type: "webhook", events: ["*"], transitions: [], config: {}, targetId: target.id, enabled: true },
+    });
+    // Step 1: try to sneak a link-local config onto the still-targeted hook.
+    const step1 = await PUT(put({ config: { url: "http://169.254.169.254/latest" } }, AUTH), dctx("checkout", hook.id));
+    expect(step1.status).toBe(400);
+    // Step 2: detach with no config in the body — the (unchanged, empty) stored
+    // config must not pass as "usable", so the hook never ends up detached with
+    // a bad — or any — config live.
+    const step2 = await PUT(put({ targetId: null }, AUTH), dctx("checkout", hook.id));
+    expect(step2.status).toBe(400);
+    const stored = await prisma.hook.findUniqueOrThrow({ where: { id: hook.id } });
+    expect(stored.targetId).toBe(target.id);
+    expect(stored.config).toEqual({});
+  });
+
   it("ignores a type field in the body instead of changing the stored type", async () => {
     const { hook } = await seedHook();
     const res = await PUT(put({ type: "email" }, AUTH), dctx("checkout", hook.id));
