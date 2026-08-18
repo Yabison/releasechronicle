@@ -61,6 +61,11 @@ export function TimelineRow({
         <span className={styles.stampLine}>
           <span className={styles.stampDay}>{stampDay(entry.at)}</span>
           <span>{stampTime(entry.at)}</span>
+          {/* Out-of-hours is a property of *when* it ran, so it sits with the
+              time rather than off in the trailing metadata. */}
+          {entry.hourType === "HNO" && (
+            <span className={styles.hnoBadge} title={t("timeline.hno")} aria-label="HNO">☾</span>
+          )}
         </span>
         {entry.done && entry.endAt && (
           <span className={`${styles.stampLine} ${styles.endAt}`}>
@@ -156,11 +161,6 @@ export function TimelineRow({
             ))}
           </span>
         )}
-        <span className={styles.metaIcons}>
-          {entry.hourType === "HNO" && (
-            <span className={styles.hnoBadge} title={t("timeline.hno")} aria-label="HNO">☾</span>
-          )}
-        </span>
       </span>
     </button>
   );

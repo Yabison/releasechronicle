@@ -51,13 +51,10 @@
 .stampLine { display: flex; gap: 8px; }
 .stampDay { width: 40px; flex: none; }
 .version { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
-.hnoBadge {
-  flex: none; cursor: default; line-height: 1;
-  display: inline-grid; place-items: center;
-  width: 20px; height: 20px; font-size: 14px; font-weight: 700;
-  background: var(--accent); color: #fff;
-  border-radius: 6px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
-}
+/* Out-of-hours marker, beside the time it qualifies. A plain grey glyph: it
+   annotates the timestamp rather than competing with the status, which is the
+   only thing in the row that earns a filled badge. */
+.hnoBadge { flex: none; cursor: default; line-height: 1; color: var(--muted); font-size: 13px; }
 .sevIcon {
   flex: none; cursor: default; line-height: 1;
   font-size: 14px; font-weight: 700;
@@ -89,7 +86,6 @@
 /* Tags and the artefact/night markers, right-aligned so the ragged edge of the
    descriptions never pushes them out of line. */
 .meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
-.metaIcons { display: inline-flex; align-items: center; gap: 5px; flex: none; }
 .tags { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 .tag { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
 .tagFilter { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
