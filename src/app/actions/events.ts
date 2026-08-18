@@ -27,10 +27,12 @@ import {
   setEventTags,
   setEventOccurredAt,
   createEvent,
+  setEventCausedBy,
   type EventData,
   AnnotationTargetError,
   IncidentTargetError,
   DeployTransitionError,
+  CausalLinkError,
 } from "@/lib/events";
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { prisma } from "@/lib/db";
@@ -396,6 +398,31 @@ export async function addEventCommentAction(input: {
     await addEventComment(input.eventId, author, body);
   } catch {
     return fail("err.eventNotFound");
+  }
+  revalidatePath(input.path);
+  return { ok: true };
+}
+
+const CAUSAL_ERROR_KEYS: Record<CausalLinkError["reason"], string> = {
+  selfLink: "err.causeSelfLink",
+  causeNotFound: "err.causeNotFound",
+  differentProduct: "err.causeDifferentProduct",
+  cycle: "err.causeCycle",
+};
+
+/** Set (or clear, with null causeId) the event that caused this one. */
+export async function updateEventCausedByAction(input: {
+  eventId: string;
+  causeId: string | null;
+  path: string;
+}): Promise<CreateEventResult> {
+  if (!(await getSession())) return fail("err.loginRequired");
+  try {
+    const updated = await setEventCausedBy(input.eventId, input.causeId);
+    if (!updated) return fail("err.eventNotFound");
+  } catch (e) {
+    if (e instanceof CausalLinkError) return fail(CAUSAL_ERROR_KEYS[e.reason]);
+    throw e;
   }
   revalidatePath(input.path);
   return { ok: true };
