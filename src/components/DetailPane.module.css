@@ -127,4 +127,6 @@
 
 /* Status wording. The colour is carried by the text itself, so it needs the
    text-safe --st-* tokens, not the pill fills. */
-.statusText { font-size: 0.82em; font-weight: 600; white-space: nowrap; }
+/* No nowrap: the long wording ("Programmé - En attente du GO/NOGO") is a
+   sentence, and the status track is the elastic one, so it may wrap. */
+.statusText { font-size: 0.82em; font-weight: 600; }

@@ -1,7 +1,7 @@
 import { entrySeverity, type TimelineEntry } from "@/lib/eventTimeline";
 import { rowLeadIcon } from "@/lib/rowLeadIcon";
 import { RowLeadIcon } from "./RowLeadIcon";
-import { categoryLabel, changeTypeLabel, phaseLabel, deployStatusLabel } from "@/i18n/labels";
+import { categoryLabel, changeTypeLabel, phaseLabel, deployStatusLongLabel } from "@/i18n/labels";
 import { STATUS_TEXT_VAR } from "@/lib/deployStatusMeta";
 import type { DeployStatus } from "@prisma/client";
 import { LotBadge } from "./LotBadge";
@@ -111,7 +111,7 @@ export function TimelineRow({
           ) : (
             status && (
               <span className={styles.statusText} style={{ color: STATUS_TEXT_VAR[status] }}>
-                {deployStatusLabel(t, status)}
+                {deployStatusLongLabel(t, status)}
               </span>
             )
           )}
