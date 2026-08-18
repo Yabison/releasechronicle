@@ -35,14 +35,15 @@
 }
 .filters button:hover { border-color: var(--muted); color: var(--text); }
 .filters button[data-active="true"] {
-  background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600;
+  background: var(--text-soft); color: var(--bg); border-color: var(--text-soft); font-weight: 600;
 }
-/* The two categories that mean something is wrong keep their colour while
-   unselected, so they stand out in a row of neutral pills. */
+/* The same two categories the type column colours: incident and maintenance,
+   where the category is itself the information. The release family — including
+   hotfix — stays neutral, so the chips and the rows tell the same story. */
 .filters button[data-cat="INCIDENT"]:not([data-active="true"]) { color: var(--cat-incident); border-color: var(--cat-incident); }
-.filters button[data-cat="HOTFIX"]:not([data-active="true"]) { color: var(--cat-hotfix); border-color: var(--cat-hotfix); }
+.filters button[data-cat="MAINTENANCE"]:not([data-active="true"]) { color: var(--cat-maint); border-color: var(--cat-maint); }
 .filters button[data-cat="INCIDENT"][data-active="true"] { background: var(--cat-incident); border-color: var(--cat-incident); color: #fff; }
-.filters button[data-cat="HOTFIX"][data-active="true"] { background: var(--cat-hotfix); border-color: var(--cat-hotfix); color: #fff; }
+.filters button[data-cat="MAINTENANCE"][data-active="true"] { background: var(--cat-maint); border-color: var(--cat-maint); color: #fff; }
 .filterCheck { font-size: 0.85em; line-height: 1; }
 
 .month { margin-bottom: calc(var(--space) * 3); }
@@ -92,7 +93,7 @@
    PRE-RELEASE, POST-RELEASE and HOTFIX are the ordinary case — three quarters
    of a list painted in category colours spends the reader's attention on what
    never varies, and leaves none for the incident. */
-.typeBadge { font-size: 0.78em; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; color: var(--text); }
+.typeBadge { font-size: 0.78em; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; color: var(--text-soft); }
 .typeBadge[data-cat="INCIDENT"] { color: var(--cat-incident); }
 .typeBadge[data-cat="MAINTENANCE"] { color: var(--cat-maint); }
 .envBadge { composes: envChip from global; flex: none; box-sizing: border-box; width: 72px; text-align: center; padding: 2px 6px; }

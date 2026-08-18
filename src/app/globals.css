@@ -18,6 +18,9 @@
   --hover: rgba(0, 0, 0, 0.04);
   --text: #1f2328;
   --muted: #8a8f98;
+  /* Between --text and --muted. Labels that should read as labels, not as
+     headings: the type wording in a timeline row, a selected filter pill. */
+  --text-soft: #4f545c;
   --line: #ececf0;
   /* Same role as --line where it has to stay visible on its own: tree guides. */
   --line-strong: #b9bec7;
@@ -100,6 +103,7 @@
   --hover: rgba(255, 255, 255, 0.06);
   --text: #e6e8ec;
   --muted: #9aa0ab;
+  --text-soft: #b8bcc4;
   --line: #2b2f3a;
   --line-strong: #3d434f;
   --accent: #8da2fb;
@@ -150,6 +154,7 @@
     --hover: rgba(255, 255, 255, 0.06);
     --text: #e6e8ec;
     --muted: #9aa0ab;
+    --text-soft: #b8bcc4;
     --line: #2b2f3a;
     --line-strong: #3d434f;
     --accent: #8da2fb;
