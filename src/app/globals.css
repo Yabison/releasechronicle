@@ -66,6 +66,18 @@
   --lead-incident-bg: #fceceb;  --lead-incident-fg: #e34948;
   --lead-maint-bg: #e9f0fb;     --lead-maint-fg: #2a78d6;
   --lead-danger-bg: #fbe4e4;    --lead-danger-fg: #d03b3b;
+
+  /* Status wording, as text rather than as a pill fill. The pill colours are
+     chosen to sit under white text and fail badly the other way round — GO at
+     2.43:1, TESTING 2.15, VALIDATE 2.28 on white. These are the text-safe
+     variants, all above 5:1 on their own background. */
+  --st-scheduled: #7e22ce;
+  --st-go: #0e7490;
+  --st-pending: #475569;
+  --st-progress: #1d4ed8;
+  --st-deployed: #4338ca;
+  --st-testing: #b45309;
+  --st-validate: #15803d;
 }
 
 /* Dark values, defined once and applied twice: on an explicit choice, and on
@@ -115,6 +127,14 @@
   /* Distinct from incident: the two glyphs must not merge in the dark either. */
   --lead-danger-bg: #3a1a1a;    --lead-danger-fg: #ff9d9d;
 
+  --st-scheduled: #c084fc;
+  --st-go: #22d3ee;
+  --st-pending: #94a3b8;
+  --st-progress: #60a5fa;
+  --st-deployed: #a5b4fc;
+  --st-testing: #fbbf24;
+  --st-validate: #4ade80;
+
   color-scheme: dark;
 }
 
@@ -154,6 +174,14 @@
     --lead-maint-bg: #10202e;     --lead-maint-fg: #74c0fc;
     /* Distinct from incident: the two glyphs must not merge in the dark either. */
     --lead-danger-bg: #3a1a1a;    --lead-danger-fg: #ff9d9d;
+
+    --st-scheduled: #c084fc;
+    --st-go: #22d3ee;
+    --st-pending: #94a3b8;
+    --st-progress: #60a5fa;
+    --st-deployed: #a5b4fc;
+    --st-testing: #fbbf24;
+    --st-validate: #4ade80;
 
     color-scheme: dark;
   }

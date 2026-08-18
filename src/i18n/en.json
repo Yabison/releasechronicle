@@ -407,5 +407,6 @@
   "go.notFound": "Deployment not found.",
   "go.already": "This action was already performed (current status: {status}).",
   "go.title": "Confirm the action",
-  "go.question": "Move {what} from {from} to {to}?"
+  "go.question": "Move {what} from {from} to {to}?",
+  "timeline.failedRollback": "Failed - rolled back"
 }

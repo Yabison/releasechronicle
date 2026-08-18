@@ -1,8 +1,8 @@
 import { entrySeverity, type TimelineEntry } from "@/lib/eventTimeline";
 import { rowLeadIcon } from "@/lib/rowLeadIcon";
 import { RowLeadIcon } from "./RowLeadIcon";
-import { categoryLabel, changeTypeLabel, phaseLabel } from "@/i18n/labels";
-import { STATUS_META, ROLLBACK_COLOR } from "@/lib/deployStatusMeta";
+import { categoryLabel, changeTypeLabel, phaseLabel, deployStatusLabel } from "@/i18n/labels";
+import { STATUS_TEXT_VAR } from "@/lib/deployStatusMeta";
 import type { DeployStatus } from "@prisma/client";
 import { LotBadge } from "./LotBadge";
 import type { LotMember } from "@/lib/deployLot";
@@ -49,7 +49,7 @@ export function TimelineRow({
     : lotIncomplete
       ? t("leadIcon.reasonLotIncomplete")
       : undefined;
-  const status = entry.deployStatus ? STATUS_META[entry.deployStatus as DeployStatus] : null;
+  const status = (entry.deployStatus ?? null) as DeployStatus | null;
 
   return (
     <button className={styles.row} onClick={onClick} data-done={entry.done} data-rolledback={entry.rolledBack}>
@@ -85,54 +85,60 @@ export function TimelineRow({
 
       <span className={styles.version}>{entry.version ? `v${entry.version}` : ""}</span>
 
-      {/* The dot stays beside the label it qualifies rather than in the lead
-          track: dot plus wording is the type, the lead icon is the alert. */}
       <span className={styles.typeCell}>
-        <span className="catDot" data-cat={entry.category} />
         <span className="catBadge" data-cat={entry.category}>
           {entry.phase ? changeTypeLabel(t, `${entry.phase}_MEP`) : categoryLabel(t, entry.category)}
         </span>
       </span>
 
+      {/* Lot marker, then the status in words and in its own colour, then any
+          alert on its own line beneath. A rollback replaces the status wording
+          rather than sitting beside it: "DEPLOYED + rollback" reads as a
+          contradiction, "Échec - Rollback" is what actually happened. */}
       <span className={styles.statusCell}>
         <span className={styles.statusLine}>
-          {sev && (
+          {entry.deployStatus && lotMembers.length > 0 && <LotBadge members={lotMembers} />}
+          {entry.rolledBack ? (
+            <span className={styles.statusText} style={{ color: "var(--danger)" }}>
+              {t("timeline.failedRollback")}
+            </span>
+          ) : (
+            status && (
+              <span className={styles.statusText} style={{ color: STATUS_TEXT_VAR[status] }}>
+                {deployStatusLabel(t, status)}
+              </span>
+            )
+          )}
+          {sev === "orange" && (
             <span
               className={styles.sevIcon}
               data-sev={sev}
               role="img"
-              aria-label={sev === "red" ? t("timeline.sevError") : t("timeline.sevWarning")}
-              title={sev === "red" ? t("timeline.sevError") : t("timeline.sevWarning")}
+              aria-label={t("timeline.sevWarning")}
+              title={t("timeline.sevWarning")}
             >
               ⚠
             </span>
           )}
-          {status && (
-            <span className={styles.statusBadge}>
-              <span className={styles.statusDot} style={{ background: status.color }} />
-              {status.label}
-            </span>
-          )}
-          {entry.rolledBack && (
-            <span className={styles.alert} data-level="danger" style={{ borderColor: ROLLBACK_COLOR }}>
-              {t("timeline.rollback")}
-            </span>
-          )}
-          {entry.warnPre && (
-            <span className={styles.alert} data-level="warning" title={t("timeline.warnPreTitle")}>
-              ⚠ {phaseLabel(t, "PRE")}
-            </span>
-          )}
-          {lotIncomplete && (
-            <span
-              className={styles.alert}
-              data-level="danger"
-              title={t("timeline.lotIncompleteTitle", { apps: lotWarning.join(", ") })}
-            >
-              ⚠ {t("timeline.lotIncomplete")}
-            </span>
-          )}
         </span>
+        {(entry.warnPre || lotIncomplete) && (
+          <span className={styles.statusLine}>
+            {entry.warnPre && (
+              <span className={styles.alert} data-level="warning" title={t("timeline.warnPreTitle")}>
+                ⚠ {phaseLabel(t, "PRE")}
+              </span>
+            )}
+            {lotIncomplete && (
+              <span
+                className={styles.alert}
+                data-level="danger"
+                title={t("timeline.lotIncompleteTitle", { apps: lotWarning.join(", ") })}
+              >
+                ⚠ {t("timeline.lotIncomplete")}
+              </span>
+            )}
+          </span>
+        )}
         <span className={styles.title}>{entry.title}</span>
       </span>
 
@@ -154,7 +160,6 @@ export function TimelineRow({
           {entry.hourType === "HNO" && (
             <span className={styles.hnoBadge} title={t("timeline.hno")} aria-label="HNO">☾</span>
           )}
-          {entry.deployStatus && lotMembers.length > 0 && <LotBadge members={lotMembers} />}
         </span>
       </span>
     </button>

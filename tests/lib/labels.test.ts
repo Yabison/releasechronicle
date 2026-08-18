@@ -7,15 +7,15 @@ const tr = (locale: "fr" | "en") =>
 
 describe("changeTypeLabel", () => {
   it("localizes every change type", () => {
-    expect(changeTypeLabel(tr("fr"), "NORMAL")).toBe("MEP");
-    expect(changeTypeLabel(tr("fr"), "PRE_MEP")).toBe("PRE MEP");
-    expect(changeTypeLabel(tr("fr"), "POST_MEP")).toBe("POST MEP");
+    expect(changeTypeLabel(tr("fr"), "NORMAL")).toBe("RELEASE");
+    expect(changeTypeLabel(tr("fr"), "PRE_MEP")).toBe("PRE-RELEASE");
+    expect(changeTypeLabel(tr("fr"), "POST_MEP")).toBe("POST-RELEASE");
     expect(changeTypeLabel(tr("en"), "NORMAL")).toBe("RELEASE");
     expect(changeTypeLabel(tr("en"), "PRE_MEP")).toBe("PRE-RELEASE");
     expect(changeTypeLabel(tr("en"), "POST_MEP")).toBe("POST-RELEASE");
   });
   it("defaults a missing change type to NORMAL", () => {
-    expect(changeTypeLabel(tr("fr"), null)).toBe("MEP");
+    expect(changeTypeLabel(tr("fr"), null)).toBe("RELEASE");
     expect(changeTypeLabel(tr("en"), undefined)).toBe("RELEASE");
   });
   it("falls back to the raw value for an unknown change type", () => {
@@ -39,7 +39,7 @@ describe("phaseLabel", () => {
 
 describe("categoryLabel", () => {
   it("localizes timeline categories, unknown ones fall back", () => {
-    expect(categoryLabel(tr("fr"), "DEPLOY")).toBe("MEP");
+    expect(categoryLabel(tr("fr"), "DEPLOY")).toBe("RELEASE");
     expect(categoryLabel(tr("en"), "DEPLOY")).toBe("RELEASE");
     expect(categoryLabel(tr("en"), "NOPE")).toBe("NOPE");
   });
