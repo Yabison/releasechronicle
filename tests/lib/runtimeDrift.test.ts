@@ -71,4 +71,11 @@ describe("reportRuntimeBuild", () => {
     const rs = await prisma.runtimeState.findUnique({ where: { serviceId_environment: { serviceId, environment: "PROD" } } });
     expect(rs?.build).toBe("77");
   });
+
+  it("links the opened BUILD_DRIFT incident to the deployment whose version was expected", async () => {
+    const dep = await deployed("100");
+    const drift = await reportRuntimeBuild({ serviceId, environment: "PROD", build: "099" });
+    const incident = await prisma.event.findUnique({ where: { id: drift.incidentId! } });
+    expect(incident?.causedById).toBe(dep.id);
+  });
 });
