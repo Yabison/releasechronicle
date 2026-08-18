@@ -40,4 +40,34 @@ describe("REST vs CI divergence (locked contract)", () => {
     expect(rest.fields.lot).toBe("1.0.0");
     expect(ci.fields.lot).toBe("1.0.0");
   });
+
+  // This test exists to freeze the exact field SET each schema produces, not just
+  // the defaults that differ. Two independently-written field lists are how the
+  // original REST and CI validators drifted apart in the first place — any field
+  // added to either schema's output tomorrow must fail one of these assertions
+  // and force a conscious decision about whether the other side needs it too.
+  it("locks the exact field set of each schema, including the fields each side lacks", () => {
+    const rest = deploymentBodySchema.parse({ ...envelope, version: "1.0.0", requester: "alice", changeType: "HOTFIX" });
+    const ci = ciDeploymentBodySchema.parse({ version: "1.0.0" });
+
+    expect(Object.keys(ci.fields).sort()).toEqual([
+      "changeType", "comment", "deployStatus", "externalLink", "lot", "requester", "scheduledAt", "version",
+    ]);
+    expect(Object.keys(rest.fields).sort()).toEqual([
+      "changeType", "comment", "deployStatus", "externalLink", "hourType", "lot", "parentId", "requester", "scheduledAt", "version",
+    ]);
+    // REST carries parentId/hourType; CI has neither.
+    expect(Object.keys(rest.fields).filter((k) => !(k in ci.fields)).sort()).toEqual(["hourType", "parentId"]);
+
+    // occurredAt: REST always stamps a Date (defaulting to now when absent);
+    // the CI schema's output has no occurredAt at all — the CI route stamps it.
+    expect(rest.occurredAt).toBeInstanceOf(Date);
+    expect("occurredAt" in ci).toBe(false);
+
+    // environment: required on REST (a body without it fails); optional on CI
+    // (a body without it parses — the DB-backed fallback lives in ingestDeployment.ts).
+    const { environment: _environment, ...envelopeWithoutEnv } = envelope;
+    expect(deploymentBodySchema.safeParse({ ...envelopeWithoutEnv, version: "1", requester: "a", changeType: "NORMAL" }).success).toBe(false);
+    expect(ciDeploymentBodySchema.safeParse({ version: "1" }).success).toBe(true);
+  });
 });

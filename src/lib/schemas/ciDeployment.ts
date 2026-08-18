@@ -5,7 +5,9 @@ import { nonEmpty, optionalStr, optionalOrNull, commentStr, isoDate, changeTypeS
 /**
  * The CI ingest variant of a deployment body. Every way it diverges from the
  * REST schema is a visible default in THIS file:
- *   requester → "ci", changeType → NORMAL, deployStatus → DEPLOYED, lot → version.
+ *   requester → "ci", changeType → NORMAL, deployStatus → DEPLOYED.
+ * (`lot → version` is NOT a divergence — `deploymentBodySchema` in event.ts
+ * defaults `lot` the same way when absent; shared with REST, not listed here.)
  * Service resolution (token scope) and the environment fallback/active check
  * stay in ingestDeployment.ts — they need the DB.
  */

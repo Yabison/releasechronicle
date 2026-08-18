@@ -15,6 +15,16 @@ import {
  * One asymmetry this introduces: the upsert path's `externalIdFromPath` (from
  * the URL, not this schema) is NOT trimmed, so a body-supplied `externalId` is
  * now trimmed while a path-supplied one stays raw. Accepted as pathological.
+ *
+ * Reject, don't silently ignore: a non-string where a string is expected now
+ * 400s, whereas the old `str()` helper treated it as absent. Deliberate — it
+ * matches the CI schema, which already 400ed on the same input shape; making
+ * REST looser here would re-create the REST/CI drift this chantier removed.
+ * Affects six fields: `externalId`, deployment `version`, `lot`,
+ * `externalLink`, `parentId`, and maintenance `version`. Exception: the
+ * batch-1 route ids (`companyId`/`productId`/`buildUrlTemplate`) keep
+ * silent-ignore — those PUTs mix that field with others, so dropping it
+ * silently is load-bearing there.
  */
 const envelope = {
   company: nonEmpty(),

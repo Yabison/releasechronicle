@@ -65,6 +65,23 @@ describe("deploymentBodySchema", () => {
     expect(deploymentBodySchema.parse(deploy({ hourType: "HNO" })).fields.hourType).toBe("HNO");
     expect(deploymentBodySchema.parse(deploy({ hourType: "whatever" })).fields.hourType).toBeNull();
   });
+  // isoDate is tested in isolation in common.test.ts; these confirm it is actually
+  // WIRED to occurredAt/scheduledAt with correct offset normalization (ported from
+  // the deleted eventValidation.test.ts, which covered this before the zod rewrite).
+  it("normalizes a non-UTC positive offset on occurredAt to the correct instant", () => {
+    const v = deploymentBodySchema.parse(deploy({ occurredAt: "2026-06-25T12:00:00+02:00" }));
+    expect(v.occurredAt.toISOString()).toBe("2026-06-25T10:00:00.000Z");
+    expect(v.occurredAt).toEqual(new Date("2026-06-25T10:00:00Z"));
+  });
+  it("normalizes a negative offset on occurredAt to the correct instant", () => {
+    const v = deploymentBodySchema.parse(deploy({ occurredAt: "2026-06-24T22:30:00-05:00" }));
+    expect(v.occurredAt.toISOString()).toBe("2026-06-25T03:30:00.000Z");
+  });
+  it("normalizes an offset on scheduledAt, and rejects an invalid scheduledAt string", () => {
+    const v = deploymentBodySchema.parse(deploy({ deployStatus: "SCHEDULED", scheduledAt: "2026-09-01T09:00:00+02:00" }));
+    expect(v.fields.scheduledAt?.toISOString()).toBe("2026-09-01T07:00:00.000Z");
+    expect(deploymentBodySchema.safeParse(deploy({ scheduledAt: "not-a-date" })).success).toBe(false);
+  });
 });
 
 describe("incidentBodySchema", () => {
@@ -84,6 +101,10 @@ describe("incidentBodySchema", () => {
     expect(incidentBodySchema.safeParse(incident({ incidentType: " " })).success).toBe(false);
     expect(incidentBodySchema.safeParse(incident({ startedAt: "bogus" })).success).toBe(false);
   });
+  it("carries the resolvedAt VALUE through to fields, not just the derived status", () => {
+    const v = incidentBodySchema.parse(incident({ resolvedAt: "2026-06-25T11:00:00Z" }));
+    expect(v.fields.resolvedAt).toEqual(new Date("2026-06-25T11:00:00Z"));
+  });
 });
 
 describe("maintenanceBodySchema", () => {
@@ -96,5 +117,9 @@ describe("maintenanceBodySchema", () => {
   it("allows an equal window, rejects an inverted one", () => {
     expect(maintenanceBodySchema.safeParse(maint({ windowEnd: "2026-06-25T08:00:00Z" })).success).toBe(true);
     expect(maintenanceBodySchema.safeParse(maint({ windowEnd: "2026-06-25T07:00:00Z" })).success).toBe(false);
+  });
+  it("rejects a missing windowEnd", () => {
+    const { windowEnd: _windowEnd, ...withoutEnd } = maint();
+    expect(maintenanceBodySchema.safeParse(withoutEnd).success).toBe(false);
   });
 });
