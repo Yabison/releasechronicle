@@ -280,7 +280,14 @@ export function DetailPane({
       <div className={styles.filters}>
         <span className={styles.filtersLabel}>{t("detail.filter")}</span>
         {FILTER_KEYS.map((c) => (
-          <button key={c} data-active={active.has(c)} onClick={() => toggle(c)}>
+          <button
+            key={c}
+            data-active={active.has(c)}
+            data-cat={c}
+            aria-pressed={active.has(c)}
+            onClick={() => toggle(c)}
+          >
+            {active.has(c) && <span className={styles.filterCheck} aria-hidden>✓</span>}
             {filterLabel(t, c)}
           </button>
         ))}

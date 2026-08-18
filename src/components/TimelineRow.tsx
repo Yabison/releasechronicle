@@ -92,7 +92,7 @@ export function TimelineRow({
       <span className={styles.version}>{entry.version ? `v${entry.version}` : ""}</span>
 
       <span className={styles.typeCell}>
-        <span className="catBadge" data-cat={entry.category}>
+        <span className={styles.typeBadge} data-cat={entry.category}>
           {entry.phase ? changeTypeLabel(t, `${entry.phase}_MEP`) : categoryLabel(t, entry.category)}
         </span>
       </span>

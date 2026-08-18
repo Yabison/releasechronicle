@@ -20,10 +20,30 @@
 .legend { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 2); margin: var(--space) 0; }
 .legendItem { display: inline-flex; align-items: center; gap: 6px; }
 
-.filters { display: flex; align-items: center; gap: calc(var(--space) * 2); margin: var(--space) 0 calc(var(--space) * 3); }
+.filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: var(--space) 0 calc(var(--space) * 3); }
 .filtersLabel { color: var(--muted); }
-.filters button { font: inherit; background: none; border: none; cursor: pointer; color: var(--muted); padding: 2px 6px; border-radius: var(--radius); }
-.filters button[data-active="true"] { color: var(--text); background: var(--cat-deploy-bg); }
+
+/* Outlined pills. The selected one inverts to a solid fill so "on" is a
+   different shape of contrast, not a slightly different shade — the previous
+   pale-green background was easy to miss on a screen full of pale green. */
+.filters button {
+  font: inherit; font-size: 0.82em; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 14px;
+}
+.filters button:hover { border-color: var(--muted); color: var(--text); }
+.filters button[data-active="true"] {
+  background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600;
+}
+/* The two categories that mean something is wrong keep their colour while
+   unselected, so they stand out in a row of neutral pills. */
+.filters button[data-cat="INCIDENT"]:not([data-active="true"]) { color: var(--cat-incident); border-color: var(--cat-incident); }
+.filters button[data-cat="HOTFIX"]:not([data-active="true"]) { color: var(--cat-hotfix); border-color: var(--cat-hotfix); }
+.filters button[data-cat="INCIDENT"][data-active="true"] { background: var(--cat-incident); border-color: var(--cat-incident); color: #fff; }
+.filters button[data-cat="HOTFIX"][data-active="true"] { background: var(--cat-hotfix); border-color: var(--cat-hotfix); color: #fff; }
+.filterCheck { font-size: 0.85em; line-height: 1; }
 
 .month { margin-bottom: calc(var(--space) * 3); }
 .monthLabel { color: var(--muted); font-size: 0.8em; letter-spacing: 0.08em; margin: calc(var(--space) * 2) 0 var(--space); }
@@ -63,6 +83,18 @@
 .sevIcon[data-sev="orange"] { color: var(--warning); }
 /* Fixed width so the status column stays aligned whatever the env name length (SECURE vs RUN). */
 .envCell, .typeCell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+
+/* Type wording. Its own class rather than the global .catBadge: the row wants
+   the release family in plain text, and fighting that rule's specificity from a
+   module would also have repainted the counters, which still use it.
+
+   Colour is kept only where the category is itself the alert. RELEASE,
+   PRE-RELEASE, POST-RELEASE and HOTFIX are the ordinary case — three quarters
+   of a list painted in category colours spends the reader's attention on what
+   never varies, and leaves none for the incident. */
+.typeBadge { font-size: 0.78em; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; color: var(--text); }
+.typeBadge[data-cat="INCIDENT"] { color: var(--cat-incident); }
+.typeBadge[data-cat="MAINTENANCE"] { color: var(--cat-maint); }
 .envBadge { composes: envChip from global; flex: none; box-sizing: border-box; width: 72px; text-align: center; padding: 2px 6px; }
 
 /* Status column. Alerts live here, next to the status they qualify, instead of
