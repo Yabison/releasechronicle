@@ -1,6 +1,5 @@
 import { defineConfig } from "vitest/config";
 import { resolve } from "node:path";
-import { TEST_DATABASE_URL } from "./tests/setup/testDatabaseUrl";
 
 export default defineConfig({
   test: {
@@ -22,8 +21,15 @@ export default defineConfig({
     // Inject test DB URL before any module (including the Prisma singleton) loads.
     // Static ESM imports are hoisted above dotenv config() calls, so the env
     // must be set at the config level to guarantee the PrismaClient picks it up.
+    //
+    // Spelled out here rather than imported from tests/setup/testDatabaseUrl.ts:
+    // `.dockerignore` excludes `tests`, and `next build` type-checks this file, so
+    // importing across that boundary breaks the image build (and only there — a
+    // full checkout resolves it fine). tests/setup/testDatabaseUrl.ts carries the
+    // same literal for globalSetup, and tests/setup/testDatabaseUrl.test.ts fails
+    // if the two ever drift apart.
     env: {
-      DATABASE_URL: TEST_DATABASE_URL,
+      DATABASE_URL: "postgresql://rc:rc@localhost:5433/releasechronicle_test",
       RC_WRITE_TOKEN: "test-token",
     },
   },
