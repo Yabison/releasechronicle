@@ -314,9 +314,7 @@ export function EventDrawer({
         {event.type === "DEPLOYMENT" ? (
           <div className={styles.hdr}>
             <span className={styles.hdrEnv} style={{ background: envColors[event.environment] ?? "#64748b" }}>{event.environment}</span>
-            {isPhase ? (
-              <span className={styles.hdrPhase}>{changeTypeLabel(t, event.changeType)}</span>
-            ) : editable ? (
+            {editable ? (
               <select
                 className={styles.typeSelect}
                 value={changeInput}
@@ -335,6 +333,11 @@ export function EventDrawer({
                 <option value="NORMAL">{changeTypeLabel(t, "NORMAL")}</option>
                 <option value="HOTFIX">{changeTypeLabel(t, "HOTFIX")}</option>
                 {event.changeType === "POSTMEP_SQL" && <option value="POSTMEP_SQL">{changeTypeLabel(t, "POSTMEP_SQL")}</option>}
+                {/* PRE_MEP/POST_MEP can only be entered by reclassifying an event that is
+                    already a phase (see setEventChangeType) — offering them otherwise would
+                    just produce a server rejection, so they're only listed here when isPhase. */}
+                {isPhase && <option value="PRE_MEP">{changeTypeLabel(t, "PRE_MEP")}</option>}
+                {isPhase && <option value="POST_MEP">{changeTypeLabel(t, "POST_MEP")}</option>}
               </select>
             ) : (
               <span className={styles.hdrPhase}>{changeTypeLabel(t, event.changeType)}</span>
