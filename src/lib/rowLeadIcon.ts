@@ -11,6 +11,9 @@ import type { EntryCategory } from "./eventTimeline";
  * would waste the one slot the eye lands on first. What that slot answers is
  * "where is this in the pipeline, and is it in trouble".
  *
+ * The in-flight states are violet rather than amber: a warm glyph at 14px sat
+ * too close to the red of `danger` to be told apart at a glance.
+ *
  * `danger` overrides everything. An entry reading DEPLOYED, or even VALIDATE,
  * that rolled back or left a lot half-rolled-back is the case this exists to
  * surface.
