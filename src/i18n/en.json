@@ -329,7 +329,7 @@
   "err.lotDeployOnly": "lots apply only to deployments",
   "err.badChangeType": "invalid type",
   "err.changeTypeDeployOnly": "the type applies only to deployments",
-  "err.phaseNeedsParent": "PRE MEP / POST MEP requires a parent MEP",
+  "err.phaseTransitionNotAllowed": "PRE MEP / POST MEP can only be entered by reclassifying an event that is already a phase (PRE MEP ↔ POST MEP)",
   "err.badDate": "invalid date",
   "err.eventNotFound": "event not found",
   "err.badHourType": "invalid WH/NWH",

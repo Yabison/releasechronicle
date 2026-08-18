@@ -11,7 +11,7 @@ import {
   addObservation,
   setEventChangeType,
   AnnotationTargetError,
-  PhaseParentError,
+  PhaseTransitionError,
 } from "@/lib/events";
 
 async function seedService() {
@@ -209,17 +209,16 @@ describe("setEventChangeType", () => {
     expect(updated?.changeType).toBe("NORMAL");
   });
 
-  it("throws PhaseParentError entering PRE_MEP without a parent", async () => {
+  it("throws PhaseTransitionError entering PRE_MEP without already being a phase", async () => {
     const s = await seedService();
     const dep = await createEvent(deployData(s.id));
-    await expect(setEventChangeType(dep.id, "PRE_MEP")).rejects.toBeInstanceOf(PhaseParentError);
+    await expect(setEventChangeType(dep.id, "PRE_MEP")).rejects.toBeInstanceOf(PhaseTransitionError);
   });
 
-  it("allows NORMAL -> POST_MEP when the event already has a parent", async () => {
+  it("rejects NORMAL -> POST_MEP even when the event already has a parent (parent presence alone is not enough)", async () => {
     const s = await seedService();
     const parent = await createEvent(deployData(s.id));
     const dep = await createEvent(deployData(s.id, { fields: { ...deployData(s.id).fields, parentId: parent.id } }));
-    const updated = await setEventChangeType(dep.id, "POST_MEP");
-    expect(updated?.changeType).toBe("POST_MEP");
+    await expect(setEventChangeType(dep.id, "POST_MEP")).rejects.toBeInstanceOf(PhaseTransitionError);
   });
 });

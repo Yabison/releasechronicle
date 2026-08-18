@@ -54,16 +54,18 @@ describe("updateEventChangeTypeAction", () => {
     expect(await updateEventChangeTypeAction({ eventId: ev.id, changeType: "NORMAL", path: "/" })).toEqual({ ok: true });
   });
 
-  it("rejects entering PRE_MEP on an event with no parent", async () => {
+  it("rejects entering PRE_MEP on an event that is not already a phase, even with no parent", async () => {
     const ev = await seedDeploy(); // NORMAL, no parentId
     const res = await updateEventChangeTypeAction({ eventId: ev.id, changeType: "PRE_MEP", path: "/" });
-    expect(res).toEqual({ ok: false, error: "err.phaseNeedsParent" });
+    expect(res).toEqual({ ok: false, error: "err.phaseTransitionNotAllowed" });
     expect((await prisma.event.findUnique({ where: { id: ev.id } }))?.changeType).toBe("NORMAL");
   });
 
-  it("allows NORMAL -> POST_MEP on an event that already has a parent", async () => {
+  it("rejects NORMAL -> POST_MEP even on an event that already has a parent (parent presence alone is not enough)", async () => {
     const parent = await seedDeploy();
     const ev = await seedDeploy({ changeType: "NORMAL", parentId: parent.id });
-    expect(await updateEventChangeTypeAction({ eventId: ev.id, changeType: "POST_MEP", path: "/" })).toEqual({ ok: true });
+    const res = await updateEventChangeTypeAction({ eventId: ev.id, changeType: "POST_MEP", path: "/" });
+    expect(res).toEqual({ ok: false, error: "err.phaseTransitionNotAllowed" });
+    expect((await prisma.event.findUnique({ where: { id: ev.id } }))?.changeType).toBe("NORMAL");
   });
 });

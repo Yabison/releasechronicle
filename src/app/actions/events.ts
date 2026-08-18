@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { EventType, ChangeType } from "@prisma/client";
-import { DeployStatus } from "@prisma/client";
+import { DeployStatus, ChangeType as ChangeTypeEnum } from "@prisma/client";
 import {
   deploymentBodySchema,
   incidentBodySchema,
@@ -31,7 +31,7 @@ import {
   AnnotationTargetError,
   IncidentTargetError,
   DeployTransitionError,
-  PhaseParentError,
+  PhaseTransitionError,
 } from "@/lib/events";
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { prisma } from "@/lib/db";
@@ -276,12 +276,14 @@ export async function updateEventLotAction(input: {
   return { ok: true };
 }
 
-const CHANGE_TYPES: ChangeType[] = ["POSTMEP_SQL", "HOTFIX", "NORMAL", "PRE_MEP", "POST_MEP"];
+// The allowlist is just every ChangeType value — no hand-maintained copy to drift.
+const CHANGE_TYPES: ChangeType[] = Object.values(ChangeTypeEnum);
 
 /**
  * Change a deployment's type after the fact (e.g. a MEP reclassified as MEP HOTFIX).
- * Entering PRE_MEP/POST_MEP without a parent is rejected by the domain layer — see
- * `setEventChangeType` — since there is no UI to attach a parent retroactively.
+ * Entering PRE_MEP/POST_MEP on an event that isn't already a phase is rejected by
+ * the domain layer — see `setEventChangeType` — since only PRE_MEP ↔ POST_MEP
+ * reclassification is allowed; a non-phase event can never become one here.
  */
 export async function updateEventChangeTypeAction(input: {
   eventId: string;
@@ -299,8 +301,8 @@ export async function updateEventChangeTypeAction(input: {
     if (e instanceof AnnotationTargetError) {
       return fail("err.changeTypeDeployOnly");
     }
-    if (e instanceof PhaseParentError) {
-      return fail("err.phaseNeedsParent");
+    if (e instanceof PhaseTransitionError) {
+      return fail("err.phaseTransitionNotAllowed");
     }
     throw e;
   }
