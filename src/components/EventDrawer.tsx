@@ -5,10 +5,10 @@ import { slugify } from "@/lib/slug";
 import { traceRelease } from "@/lib/releaseTrace";
 import { useRouter } from "next/navigation";
 import { useModalDismiss } from "@/lib/useModalDismiss";
-import type { ClientEvent } from "@/lib/timeline";
+import type { ClientEvent, EventSummary } from "@/lib/timeline";
 import { resolveCausal } from "@/lib/timeline";
 import { durationParts } from "@/lib/derive";
-import { updateIncidentAction, updateEventLotAction, updateEventChangeTypeAction, addEventCommentAction, updateEventTagsAction, updateEventDateAction, updateEventHourTypeAction } from "@/app/actions/events";
+import { updateIncidentAction, updateEventLotAction, updateEventChangeTypeAction, addEventCommentAction, updateEventTagsAction, updateEventDateAction, updateEventHourTypeAction, updateEventCausedByAction } from "@/app/actions/events";
 import { buildUrl } from "@/lib/buildUrl";
 import { STATUS_META } from "@/lib/deployStatusMeta";
 import type { DeployStatus } from "@prisma/client";
@@ -202,6 +202,112 @@ function HourEdit({ event, path }: { event: ClientEvent; path: string }) {
         <option value="HNO">{t("form.hnoLong")}</option>
       </select>
       {err && <span className={styles.error}>{err}</span>}
+    </div>
+  );
+}
+
+/** A candidate cause fetched for the "caused by" picker (same product, before this event). */
+type CausalOption = { id: string; type: string; environment: string; version: string | null; occurredAt: string; serviceSlug: string };
+
+/** Read-only causal links, plus (when editable) a select to set/clear the cause.
+ *  Candidates are fetched lazily on first focus, mirroring the Tags component's
+ *  `fetch("/api/v1/tags")` on-demand pattern rather than paying the query for
+ *  every event in the feed whether or not anyone edits it. */
+function Causal({
+  event,
+  causal,
+  path,
+  editable,
+  onOpenEvent,
+}: {
+  event: ClientEvent;
+  causal: { causedBy?: EventSummary; led: EventSummary[] };
+  path?: string;
+  editable: boolean;
+  onOpenEvent?: (id: string) => void;
+}) {
+  const router = useRouter();
+  const { t } = useI18n();
+  const { stampShort } = useTimeFormat();
+  const [options, setOptions] = useState<CausalOption[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [val, setVal] = useState(event.causedById ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function loadOptions() {
+    if (options || loading) return;
+    setLoading(true);
+    fetch(`/api/v1/events/by-id/${event.id}/causal-candidates`)
+      .then((r) => r.json())
+      .then((rows: CausalOption[]) => setOptions(rows))
+      .catch(() => setOptions([]))
+      .finally(() => setLoading(false));
+  }
+
+  const optionLabel = (o: CausalOption) =>
+    `${o.serviceSlug} · ${o.type} · ${o.environment}${o.version ? ` v${o.version}` : ""} · ${stampShort(o.occurredAt)}`;
+  // The currently-linked cause may fall outside the candidate window (e.g. an
+  // older link) — keep it selectable even when it's missing from `options`.
+  const currentUnlisted = val && !options?.some((o) => o.id === val);
+
+  return (
+    <div className={styles.section}>
+      <h2>{t("drawer.causality")}</h2>
+      {causal.causedBy && (
+        <p className={styles.causal}>
+          caused by →{" "}
+          <button type="button" className={styles.linkBtn} onClick={() => onOpenEvent?.(causal.causedBy!.id)}>
+            {causal.causedBy.type} ({causal.causedBy.environment})
+          </button>
+        </p>
+      )}
+      {causal.led.map((l) => (
+        <p key={l.id} className={styles.causal}>
+          led to ←{" "}
+          <button type="button" className={styles.linkBtn} onClick={() => onOpenEvent?.(l.id)}>
+            {l.type} ({l.environment})
+          </button>
+        </p>
+      ))}
+      {editable && (
+        <div className={styles.dateEdit}>
+          <span className={styles.key}>{t("drawer.causedBySelect")}</span>
+          <select
+            value={val}
+            disabled={pending}
+            onFocus={loadOptions}
+            onChange={(e) => {
+              const next = e.target.value;
+              setVal(next);
+              setErr(null);
+              if (next === (event.causedById ?? "")) return;
+              startTransition(async () => {
+                const res = await updateEventCausedByAction({ eventId: event.id, causeId: next || null, path: path! });
+                if (res.ok) {
+                  router.refresh();
+                } else {
+                  setErr(actionMessage(t, res));
+                  setVal(event.causedById ?? ""); // server rejected it — don't leave an optimistic value that didn't stick
+                }
+              });
+            }}
+          >
+            <option value="">{t("drawer.causeNone")}</option>
+            {currentUnlisted && (
+              <option value={val}>
+                {causal.causedBy ? `${causal.causedBy.type} (${causal.causedBy.environment})` : val}
+              </option>
+            )}
+            {loading && <option disabled>{t("common.loading")}</option>}
+            {options?.map((o) => (
+              <option key={o.id} value={o.id}>{optionLabel(o)}</option>
+            ))}
+          </select>
+          {pending && <span className={styles.typeSaving}>…</span>}
+        </div>
+      )}
+      {err && <p className={styles.error}>{err}</p>}
     </div>
   );
 }
@@ -568,14 +674,8 @@ export function EventDrawer({
           </div>
         )}
 
-        {(causal.causedBy || causal.led.length > 0) && (
-          <div className={styles.section}>
-            <h2>{t("drawer.causality")}</h2>
-            {causal.causedBy && <p className={styles.causal}>caused by → {causal.causedBy.type} ({causal.causedBy.environment})</p>}
-            {causal.led.map((l) => (
-              <p key={l.id} className={styles.causal}>led to ← {l.type} ({l.environment})</p>
-            ))}
-          </div>
+        {(causal.causedBy || causal.led.length > 0 || editable) && (
+          <Causal event={event} causal={causal} path={path} editable={editable} onOpenEvent={onOpenEvent} />
         )}
 
         {event.rollbacks.length + event.qaValidations.length + event.observations.length > 0 && (

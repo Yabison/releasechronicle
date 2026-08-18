@@ -246,6 +246,8 @@
   "drawer.durationMin": "Durée (min)",
   "drawer.window": "Fenêtre",
   "drawer.causality": "Causalité",
+  "drawer.causedBySelect": "Causé par",
+  "drawer.causeNone": "(aucune)",
   "drawer.externalLink": "Lien externe",
   "time.local": "local",
   "time.switchTitle": "Afficher les heures dans votre fuseau ou en UTC",
