@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
-import { getProductBySlug } from "@/lib/hierarchy";
 import { listHooks, createHook } from "@/lib/hooks/config";
 import { getConnector } from "@/lib/hooks/registry";
 import { getTarget } from "@/lib/notificationTarget";
 import { checkConfiguredOutboundUrl } from "@/lib/outboundUrl";
 import { auditRequest } from "@/lib/audit";
 import { parseBody } from "@/lib/schemas/parse";
+import { resolveProduct, hostOf } from "@/lib/hooks/productRoute";
 import "@/lib/hooks";
 
 const postSchema = z.object({
@@ -19,24 +19,12 @@ const postSchema = z.object({
   enabled: z.unknown().optional(),
 });
 
-const hostOf = (raw: string): string | null => {
-  try { return new URL(raw).host; } catch { return null; }
-};
-
-async function resolve(req: Request, slug: string) {
-  const company = new URL(req.url).searchParams.get("company");
-  if (!company) return { error: Response.json({ error: "company query param is required" }, { status: 400 }) };
-  const product = await getProductBySlug(company, slug);
-  if (!product) return { error: Response.json({ error: "not found" }, { status: 404 }) };
-  return { product };
-}
-
 // Admin-only: hook config carries webhook URLs and custom auth headers.
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
   const { slug } = await params;
-  const r = await resolve(req, slug);
+  const r = await resolveProduct(req, slug);
   if (r.error) return r.error;
   return Response.json(await listHooks(r.product.id));
 }
@@ -45,7 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const denied = await requireAdmin(req);
   if (denied) return denied;
   const { slug } = await params;
-  const r = await resolve(req, slug);
+  const r = await resolveProduct(req, slug);
   if (r.error) return r.error;
   const parsed = await parseBody(req, postSchema);
   if (!parsed.ok) return parsed.res;

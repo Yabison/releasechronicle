@@ -10,8 +10,10 @@ import {
   addQaValidation,
   addObservation,
   setEventCausedBy,
+  setEventChangeType,
   AnnotationTargetError,
   CausalLinkError,
+  PhaseTransitionError,
 } from "@/lib/events";
 
 async function seedService() {
@@ -285,5 +287,48 @@ describe("setEventCausedBy", () => {
     ]);
     // The cycle itself must never exist in the data, however the race resolved.
     expect(freshA?.causedById === b.id && freshB?.causedById === a.id).toBe(false);
+  });
+});
+
+describe("setEventChangeType", () => {
+  it("returns null when the event does not exist", async () => {
+    expect(await setEventChangeType("does-not-exist", "HOTFIX")).toBeNull();
+  });
+
+  it("throws AnnotationTargetError when the event is not a deployment (unchanged)", async () => {
+    const s = await seedService();
+    const inc = await createEvent({
+      serviceId: s.id, environment: "PROD", type: "INCIDENT",
+      occurredAt: new Date(), fields: { incidentType: "x", startedAt: new Date(), resolvedAt: null, comment: null },
+    });
+    await expect(setEventChangeType(inc.id, "HOTFIX")).rejects.toBeInstanceOf(AnnotationTargetError);
+  });
+
+  it("allows PRE_MEP -> POST_MEP when the event has a parent", async () => {
+    const s = await seedService();
+    const parent = await createEvent(deployData(s.id));
+    const dep = await createEvent(deployData(s.id, { fields: { ...deployData(s.id).fields, changeType: "PRE_MEP", parentId: parent.id } }));
+    const updated = await setEventChangeType(dep.id, "POST_MEP");
+    expect(updated?.changeType).toBe("POST_MEP");
+  });
+
+  it("allows leaving a phase (PRE_MEP -> NORMAL) even with no parent", async () => {
+    const s = await seedService();
+    const dep = await createEvent(deployData(s.id, { fields: { ...deployData(s.id).fields, changeType: "PRE_MEP", parentId: null } }));
+    const updated = await setEventChangeType(dep.id, "NORMAL");
+    expect(updated?.changeType).toBe("NORMAL");
+  });
+
+  it("throws PhaseTransitionError entering PRE_MEP without already being a phase", async () => {
+    const s = await seedService();
+    const dep = await createEvent(deployData(s.id));
+    await expect(setEventChangeType(dep.id, "PRE_MEP")).rejects.toBeInstanceOf(PhaseTransitionError);
+  });
+
+  it("rejects NORMAL -> POST_MEP even when the event already has a parent (parent presence alone is not enough)", async () => {
+    const s = await seedService();
+    const parent = await createEvent(deployData(s.id));
+    const dep = await createEvent(deployData(s.id, { fields: { ...deployData(s.id).fields, parentId: parent.id } }));
+    await expect(setEventChangeType(dep.id, "POST_MEP")).rejects.toBeInstanceOf(PhaseTransitionError);
   });
 });
