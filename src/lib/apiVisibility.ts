@@ -53,7 +53,10 @@ export function publicEventScopeWhere(scope: Scope): Prisma.EventWhereInput {
   if (!scope.anonymous) return {};
   return {
     ...publicEventWhere(scope),
-    service: { public: true, product: { public: true, company: { public: true } } },
+    // deletedAt only needs checking at the service level: the invariant a live
+    // service always has a live product and company makes the deeper levels
+    // redundant here.
+    service: { public: true, deletedAt: null, product: { public: true, company: { public: true } } },
   };
 }
 

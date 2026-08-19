@@ -7,6 +7,8 @@ import { getMessages } from "@/i18n";
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("@/lib/auth/session", async (orig) => ({ ...(await orig<object>()), getSession: async () => ({ sub: "u", name: "Tester", roles: ["admin", "devops", "qa"] }) }));
 import { importEventsXlsx, exportEventsXlsx } from "@/app/actions/excel";
+import { readWorkbook } from "@/lib/excel";
+import { deleteService } from "@/lib/hierarchyDelete";
 
 async function seed() {
   const c = await createCompany({ name: "Acme" });
@@ -110,5 +112,16 @@ describe("exportEventsXlsx", () => {
     const bytes = await exportEventsXlsx({});
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(bytes.byteLength).toBeGreaterThan(0);
+  });
+
+  it("omits events of a soft-deleted service", async () => {
+    await seed();
+    const buf = await buildWorkbook([dep({ externalId: "dep-1" })]);
+    await importEventsXlsx(fileFrom(buf));
+    const svc = await prisma.service.findFirstOrThrow({ where: { slug: "payment-api" } });
+    await deleteService(svc.id);
+    const bytes = await exportEventsXlsx({});
+    const rows = await readWorkbook(bytes);
+    expect(rows).toHaveLength(0);
   });
 });

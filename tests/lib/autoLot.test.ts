@@ -3,6 +3,7 @@ import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
 import { attachToAutoLot } from "@/lib/autoLot";
+import { deleteService } from "@/lib/hierarchyDelete";
 
 async function setup(opts: { naming?: string } = {}) {
   const c = await createCompany({ name: "Acme" });
@@ -61,5 +62,16 @@ describe("attachToAutoLot", () => {
     expect(r.members).toBe(1);
     const rows = await prisma.event.findMany({ where: { id: { in: [a.id, b.id] } } });
     expect(rows.every((e) => e.lot === "REL-1" && !e.autoLot)).toBe(true);
+  });
+  it("does not group a deployment whose service has been soft-deleted", async () => {
+    const { sMaster, sDep } = await setup();
+    const base = new Date("2026-08-08T10:00:00Z");
+    const m = await deploy(sMaster, base, "1.0.0");
+    const d = await deploy(sDep, new Date(base.getTime() + 10 * 60_000), "2.0.0");
+    await deleteService(sMaster);
+    const r = await attachToAutoLot(d.id, new Date(base.getTime() + 10 * 60_000));
+    expect(r.members).toBe(1);
+    const rows = await prisma.event.findMany({ where: { id: { in: [m.id, d.id] } } });
+    expect(rows.every((e) => !e.autoLot)).toBe(true);
   });
 });

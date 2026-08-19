@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
-import { siblings, getLotMembers, lotKey, type LotMember } from "@/lib/deployLot";
+import { siblings, getLotMembers, lotKey, listLotCandidates, type LotMember } from "@/lib/deployLot";
+import { deleteService } from "@/lib/hierarchyDelete";
 
 const M = (over: Partial<LotMember>): LotMember => ({
   eventId: "x", company: "c", product: "p", service: "s", version: "1", environment: "PROD", deployStatus: "DEPLOYED", isMaster: false, rolledBack: false, ...over,
@@ -54,5 +55,26 @@ describe("getLotMembers", () => {
   });
   it("returns an empty map for no lots", async () => {
     expect(await getLotMembers([])).toEqual({});
+  });
+  it("excludes members whose service has been soft-deleted", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    await dep(s.id, {});
+    await deleteService(s.id);
+    const map = await getLotMembers(["rel-1"]);
+    expect(map[lotKey("PROD", "rel-1")] ?? []).toHaveLength(0);
+  });
+});
+
+describe("listLotCandidates", () => {
+  it("excludes deployments of a soft-deleted service", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    await dep(s.id, {});
+    await deleteService(s.id);
+    const candidates = await listLotCandidates("acme", "PROD");
+    expect(candidates).toHaveLength(0);
   });
 });

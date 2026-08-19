@@ -21,7 +21,7 @@ function buildWhere(filter: CalendarFilter): Prisma.EventWhereInput {
   const product: Prisma.ProductWhereInput = {};
   if (filter.company) product.company = { slug: filter.company };
   if (filter.product) product.slug = filter.product;
-  const service: Prisma.ServiceWhereInput = {};
+  const service: Prisma.ServiceWhereInput = { deletedAt: null };
   if (filter.service) service.slug = filter.service;
   if (filter.publicScope) {
     // Narrowed, never widened: a feed asking for INCIDENT still only gets the
@@ -38,7 +38,7 @@ function buildWhere(filter: CalendarFilter): Prisma.EventWhereInput {
     return where;
   }
   if (Object.keys(product).length) service.product = product;
-  if (Object.keys(service).length) where.service = service;
+  where.service = service;
   return where;
 }
 

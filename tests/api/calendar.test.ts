@@ -4,6 +4,7 @@ import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
 import { GET } from "@/app/api/v1/calendar.ics/route";
 import { sessionCookie } from "../setup/session";
+import { deleteService } from "@/lib/hierarchyDelete";
 
 async function seed() {
   const c = await createCompany({ name: "Acme" });
@@ -42,6 +43,28 @@ describe("GET /calendar.ics", () => {
     await createEvent({ serviceId, environment: "QA", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
       fields: { version: "1", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "1" } });
     const body = await (await get("?environment=PROD")).text();
+    expect((body.match(/BEGIN:VEVENT/g) ?? []).length).toBe(0);
+  });
+  it("excludes a soft-deleted service's deployments for a session", async () => {
+    const serviceId = await seed();
+    await createEvent({ serviceId, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+      fields: { version: "1.2.3", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "L1" } });
+    await deleteService(serviceId);
+    const body = await (await get()).text();
+    expect((body.match(/BEGIN:VEVENT/g) ?? []).length).toBe(0);
+  });
+  it("excludes a soft-deleted service's deployments from the anonymous public feed", async () => {
+    const c = await createCompany({ name: "Beta" });
+    const p = await createProduct({ companyId: c.id, name: "Widgets" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    await prisma.company.update({ where: { id: c.id }, data: { public: true } });
+    await prisma.product.update({ where: { id: p.id }, data: { public: true } });
+    await prisma.service.update({ where: { id: s.id }, data: { public: true } });
+    await prisma.environmentConfig.create({ data: { slug: "PROD", name: "PROD", color: "#22c55e", sortOrder: 0, public: true } });
+    await createEvent({ serviceId: s.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+      fields: { version: "1.2.3", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "L1" } });
+    await deleteService(s.id);
+    const body = await (await GET(new Request("http://x/api/v1/calendar.ics"))).text();
     expect((body.match(/BEGIN:VEVENT/g) ?? []).length).toBe(0);
   });
 });
