@@ -9,6 +9,14 @@ export type DriftResult = { drift: boolean; running: string; expected: string | 
  * when they match again, auto-resolve any open one. Returns the drift status.
  */
 export async function reportRuntimeBuild(input: { serviceId: string; environment: string; build: string }): Promise<DriftResult> {
+  // Defensive only: the sole HTTP caller (POST /api/v1/ingest/runtime) already resolves
+  // serviceId via getServiceBySlug, which filters deletedAt: null — a deleted service
+  // never reaches this function through that route. This closes the hole for a direct
+  // call (tests, a future caller) bypassing that resolution: report no drift and record
+  // nothing rather than upserting RuntimeState or opening an incident for a dead service.
+  const live = await prisma.service.findFirst({ where: { id: input.serviceId, deletedAt: null }, select: { id: true } });
+  if (!live) return { drift: false, running: input.build, expected: null };
+
   await prisma.runtimeState.upsert({
     where: { serviceId_environment: { serviceId: input.serviceId, environment: input.environment } },
     create: { serviceId: input.serviceId, environment: input.environment, build: input.build },

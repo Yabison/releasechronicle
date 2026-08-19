@@ -26,7 +26,10 @@ export const CLAIM_LEASE_MS = 600_000;
  *  and return their ids. The payload is snapshotted here; retries reuse it. */
 export async function enqueueHooks(eventId: string, kind: HookEventKind, actor?: string | null): Promise<string[]> {
   const ev = await prisma.event.findUnique({
-    where: { id: eventId },
+    // A deleted service or product must not fire hooks: filtering the load itself
+    // (rather than checking after) means a deleted chain yields no event and falls
+    // through the same `if (!ev) return []` early return as a missing event.
+    where: { id: eventId, service: { deletedAt: null, product: { deletedAt: null } } },
     include: { service: { include: { product: { include: { company: true, hooks: true } } } } },
   });
   if (!ev) return [];

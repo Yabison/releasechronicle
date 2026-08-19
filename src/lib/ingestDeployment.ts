@@ -1,4 +1,5 @@
 import type { Event, IngestSource } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { createEvent, type EventData } from "@/lib/events";
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { ciDeploymentBodySchema } from "@/lib/schemas/ciDeployment";
@@ -23,7 +24,14 @@ async function resolveIngestServiceId(
 ): Promise<{ ok: true; serviceId: string } | { ok: false; status: number; error: string }> {
   if (source.scope === "SERVICE") {
     if (!source.serviceId) return { ok: false, status: 400, error: "source has no service" };
-    return { ok: true, serviceId: source.serviceId };
+    // findIngestSourceByToken already refuses a token whose service is deleted, but
+    // resolveIngestServiceId is also reachable with a source fetched another way
+    // (e.g. tests, or a future caller) — re-check here so this branch never hands
+    // back a dead service id on its own. Same 404/"service not found" shape as the
+    // COMPANY/GLOBAL branches below use for an unresolvable service.
+    const svc = await prisma.service.findFirst({ where: { id: source.serviceId, deletedAt: null }, select: { id: true } });
+    if (!svc) return { ok: false, status: 404, error: "service not found" };
+    return { ok: true, serviceId: svc.id };
   }
   if (source.scope === "COMPANY") {
     const product = b.product, service = b.service;
