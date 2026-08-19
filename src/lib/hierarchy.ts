@@ -61,7 +61,20 @@ export function getCompanyBySlugIncludingDeleted(slug: string) {
   return prisma.company.findFirst({ where: { slug }, orderBy: { deletedAt: { sort: "desc", nulls: "last" } } });
 }
 
+/** The named parent (company/product) for a create or move is missing or itself
+ *  soft-deleted. Without this check a stale admin request (or a crafted one) can
+ *  reparent/create under a deleted row, producing an orphan that is invisible and
+ *  undeletable through the API — every slug resolver walks through a live-only
+ *  parent, so GET/PUT/DELETE on it all 404 — while its events keep flowing into
+ *  the read-side aggregates, which trust the invariant that a live service always
+ *  has a live product and company. */
+export class InvalidParentError extends Error {}
+
 export async function createProduct(input: { companyId: string; name: string }) {
+  const company = await prisma.company.findUnique({ where: { id: input.companyId }, select: { deletedAt: true } });
+  if (!company || company.deletedAt) {
+    throw new InvalidParentError(`company '${input.companyId}' not found or deleted`);
+  }
   const slug = await uniqueSlug(input.name, async (s) =>
     (await prisma.product.count({ where: { companyId: input.companyId, slug: s, deletedAt: null } })) > 0,
   );
@@ -145,6 +158,10 @@ export async function createService(input: {
   name: string;
   type: ServiceType;
 }) {
+  const product = await prisma.product.findUnique({ where: { id: input.productId }, select: { deletedAt: true } });
+  if (!product || product.deletedAt) {
+    throw new InvalidParentError(`product '${input.productId}' not found or deleted`);
+  }
   const slug = await uniqueSlug(input.name, async (s) =>
     (await prisma.service.count({ where: { productId: input.productId, slug: s, deletedAt: null } })) > 0,
   );
@@ -217,6 +234,10 @@ export class SlugConflictError extends Error {}
 export async function moveService(serviceId: string, targetProductId: string) {
   const svc = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!svc) return null;
+  const targetProduct = await prisma.product.findUnique({ where: { id: targetProductId }, select: { deletedAt: true } });
+  if (!targetProduct || targetProduct.deletedAt) {
+    throw new InvalidParentError(`target product '${targetProductId}' not found or deleted`);
+  }
   const clash = await prisma.service.count({ where: { productId: targetProductId, slug: svc.slug, deletedAt: null, NOT: { id: serviceId } } });
   if (clash > 0) throw new SlugConflictError(`a service '${svc.slug}' already exists in the target product`);
   return prisma.service.update({ where: { id: serviceId }, data: { productId: targetProductId } });
@@ -227,6 +248,10 @@ export async function moveService(serviceId: string, targetProductId: string) {
 export async function moveProduct(productId: string, targetCompanyId: string) {
   const prod = await prisma.product.findUnique({ where: { id: productId } });
   if (!prod) return null;
+  const targetCompany = await prisma.company.findUnique({ where: { id: targetCompanyId }, select: { deletedAt: true } });
+  if (!targetCompany || targetCompany.deletedAt) {
+    throw new InvalidParentError(`target company '${targetCompanyId}' not found or deleted`);
+  }
   const clash = await prisma.product.count({ where: { companyId: targetCompanyId, slug: prod.slug, deletedAt: null, NOT: { id: productId } } });
   if (clash > 0) throw new SlugConflictError(`a product '${prod.slug}' already exists in the target company`);
   return prisma.product.update({ where: { id: productId }, data: { companyId: targetCompanyId } });

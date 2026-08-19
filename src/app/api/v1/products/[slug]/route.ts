@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
 import { auditRequest } from "@/lib/audit";
-import { getProductBySlug, updateProduct, moveProduct, SlugConflictError } from "@/lib/hierarchy";
+import { getProductBySlug, updateProduct, moveProduct, SlugConflictError, InvalidParentError } from "@/lib/hierarchy";
 import { deleteProduct, HierarchyNotFoundError, HierarchyStateConflictError } from "@/lib/hierarchyDelete";
 import { getActiveEnvSlugs } from "@/lib/environment";
 import { prisma } from "@/lib/db";
@@ -51,6 +51,9 @@ export async function PUT(
       return Response.json(moved, { status: 200 });
     } catch (e) {
       if (e instanceof SlugConflictError) {
+        return Response.json({ error: e.message }, { status: 409 });
+      }
+      if (e instanceof InvalidParentError) {
         return Response.json({ error: e.message }, { status: 409 });
       }
       throw e;

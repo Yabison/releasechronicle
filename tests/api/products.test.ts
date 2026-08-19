@@ -58,6 +58,16 @@ describe("POST /api/v1/products", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 when companyId belongs to a soft-deleted company", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await DELETE_COMPANY(
+      new Request("http://x/api/v1/companies/acme", { method: "DELETE", headers: AUTH }),
+      { params: Promise.resolve({ slug: "acme" }) },
+    );
+    const res = await POST(post({ companyId: c.id, name: "Checkout" }, AUTH));
+    expect(res.status).toBe(400);
+  });
+
   it("returns 400 on blank name", async () => {
     const c = await createCompany({ name: "Acme" });
     const res = await POST(post({ companyId: c.id, name: "   " }, AUTH));
@@ -160,6 +170,27 @@ describe("PUT /api/v1/products/[slug]", () => {
     const listed = await listGET(new Request("http://x/api/v1/products?company=bravo", { headers: AUTH }));
     const listedJson = await listed.json();
     expect(listedJson.map((p: { slug: string }) => p.slug)).toContain("checkout");
+  });
+
+  it("returns 409 (not 500) when the target company is soft-deleted", async () => {
+    const a = await createCompany({ name: "Acme" });
+    const b = await createCompany({ name: "Bravo" });
+    await createProduct({ companyId: a.id, name: "Checkout" });
+    await DELETE_COMPANY(
+      new Request("http://x/api/v1/companies/bravo", { method: "DELETE", headers: AUTH }),
+      { params: Promise.resolve({ slug: "bravo" }) },
+    );
+    const res = await PUT(
+      put("checkout", "acme", { companyId: b.id }, AUTH),
+      ctx("checkout"),
+    );
+    expect(res.status).toBe(409);
+    // control: the product never moved
+    const check = await detailGET(
+      new Request("http://x/api/v1/products/checkout?company=acme"),
+      ctx("checkout"),
+    );
+    expect(check.status).toBe(200);
   });
 
   it("returns 409 when the target company already has a product with the same slug", async () => {

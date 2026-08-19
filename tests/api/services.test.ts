@@ -69,6 +69,16 @@ describe("POST /api/v1/services", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 400 when productId belongs to a soft-deleted product", async () => {
+    const p = await seedProduct();
+    await DELETE_PRODUCT(
+      new Request("http://x/api/v1/products/checkout?company=acme", { method: "DELETE", headers: AUTH }),
+      { params: Promise.resolve({ slug: "checkout" }) },
+    );
+    const res = await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    expect(res.status).toBe(400);
+  });
+
   it("returns 400 on blank name", async () => {
     const p = await seedProduct();
     const res = await POST(post({ productId: p.id, name: "   ", type: "API" }, AUTH));
@@ -174,6 +184,27 @@ describe("PUT /api/v1/services/[slug] (move to another product)", () => {
       ctx("nope"),
     );
     expect(res.status).toBe(404);
+  });
+
+  it("returns 409 (not 500) when the target product is soft-deleted", async () => {
+    const p = await seedProduct();
+    const other = await createProduct({ companyId: p.companyId, name: "Billing" });
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    await DELETE_PRODUCT(
+      new Request("http://x/api/v1/products/billing?company=acme", { method: "DELETE", headers: AUTH }),
+      { params: Promise.resolve({ slug: "billing" }) },
+    );
+    const res = await PUT(
+      put("payment-api", "acme", "checkout", { productId: other.id }, AUTH),
+      ctx("payment-api"),
+    );
+    expect(res.status).toBe(409);
+    // control: the service never moved
+    const check = await detailGET(
+      new Request("http://x/api/v1/services/payment-api?company=acme&product=checkout"),
+      ctx("payment-api"),
+    );
+    expect(check.status).toBe(200);
   });
 
   it("ignores a non-string productId and still applies other fields", async () => {

@@ -9,8 +9,10 @@ import {
   createService,
   getServiceBySlug,
   moveService,
+  moveProduct,
+  InvalidParentError,
 } from "@/lib/hierarchy";
-import { deleteCompany } from "@/lib/hierarchyDelete";
+import { deleteCompany, deleteProduct } from "@/lib/hierarchyDelete";
 
 beforeEach(async () => {
   await resetDb();
@@ -105,5 +107,60 @@ describe("products and services", () => {
     await prisma.service.update({ where: { id: blocker.id }, data: { deletedAt: new Date() } });
     const moved = await moveService(moving.id, to.id); // used to throw a raw P2002
     expect(moved?.productId).toBe(to.id);
+  });
+});
+
+describe("the live-parent invariant on writes into/under a deleted row", () => {
+  it("refuses to move a service into a soft-deleted product", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const from = await createProduct({ companyId: c.id, name: "From" });
+    const to = await createProduct({ companyId: c.id, name: "To" });
+    const svc = await createService({ productId: from.id, name: "API", type: "API" });
+    await deleteProduct(to.id);
+    await expect(moveService(svc.id, to.id)).rejects.toThrow(InvalidParentError);
+    // control: the service never actually moved
+    const unchanged = await getServiceBySlug("acme", "from", "api");
+    expect(unchanged?.productId).toBe(from.id);
+  });
+
+  it("refuses to move a product into a soft-deleted company", async () => {
+    const a = await createCompany({ name: "Acme" });
+    const b = await createCompany({ name: "Bravo" });
+    const prod = await createProduct({ companyId: a.id, name: "Checkout" });
+    await deleteCompany(b.id);
+    await expect(moveProduct(prod.id, b.id)).rejects.toThrow(InvalidParentError);
+    const unchanged = await getProductBySlug("acme", "checkout");
+    expect(unchanged?.companyId).toBe(a.id);
+  });
+
+  it("refuses to create a product under a soft-deleted company", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await deleteCompany(c.id);
+    await expect(createProduct({ companyId: c.id, name: "Checkout" })).rejects.toThrow(InvalidParentError);
+  });
+
+  it("refuses to create a service under a soft-deleted product", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    await deleteProduct(p.id);
+    await expect(createService({ productId: p.id, name: "API", type: "API" })).rejects.toThrow(InvalidParentError);
+  });
+
+  it("control: moving and creating under a LIVE parent still works", async () => {
+    const a = await createCompany({ name: "Acme" });
+    const b = await createCompany({ name: "Bravo" });
+    const p1 = await createProduct({ companyId: a.id, name: "Checkout" });
+    const p2 = await createProduct({ companyId: a.id, name: "Billing" });
+    const moved = await moveProduct(p1.id, b.id);
+    expect(moved?.companyId).toBe(b.id);
+
+    const svc = await createService({ productId: p2.id, name: "API", type: "API" });
+    const movedSvc = await moveService(svc.id, moved!.id);
+    expect(movedSvc?.productId).toBe(moved!.id);
+
+    const newProduct = await createProduct({ companyId: b.id, name: "Support" });
+    expect(newProduct.companyId).toBe(b.id);
+    const newService = await createService({ productId: newProduct.id, name: "Web", type: "APP" });
+    expect(newService.productId).toBe(newProduct.id);
   });
 });
