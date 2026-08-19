@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { sessionCookie } from "../setup/session";
-import { createCompany, createProduct } from "@/lib/hierarchy";
+import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { GET as listGET, POST } from "@/app/api/v1/products/route";
-import { GET as detailGET, PUT } from "@/app/api/v1/products/[slug]/route";
+import { GET as detailGET, PUT, DELETE } from "@/app/api/v1/products/[slug]/route";
+import { POST as RESTORE } from "@/app/api/v1/products/[slug]/restore/route";
+import { DELETE as DELETE_COMPANY } from "@/app/api/v1/companies/[slug]/route";
 
 let AUTH: { cookie: string };
 
@@ -194,5 +196,126 @@ describe("PUT /api/v1/products/[slug]", () => {
       ctx("checkout"),
     );
     expect(res.status).toBe(200);
+  });
+});
+
+function del(slug: string, company: string, headers: Record<string, string> = {}) {
+  return new Request(`http://x/api/v1/products/${slug}?company=${company}`, { method: "DELETE", headers });
+}
+function restore(slug: string, company: string, headers: Record<string, string> = {}) {
+  return new Request(`http://x/api/v1/products/${slug}/restore?company=${company}`, { method: "POST", headers });
+}
+
+describe("DELETE /api/v1/products/[slug]", () => {
+  it("rejects without a session", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+    const res = await DELETE(del("checkout", "acme"), ctx("checkout"));
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 without the company query param", async () => {
+    const res = await DELETE(
+      new Request("http://x/api/v1/products/checkout", { method: "DELETE", headers: AUTH }),
+      ctx("checkout"),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("soft-deletes a product, returns cascade counts, and it drops out of the listing", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    await createService({ productId: p.id, name: "Payment API", type: "API" });
+
+    const res = await DELETE(del("checkout", "acme", AUTH), ctx("checkout"));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.services).toBe(1);
+
+    const listed = await listGET(new Request("http://x/api/v1/products?company=acme", { headers: AUTH }));
+    expect(await listed.json()).toEqual([]);
+  });
+
+  it("returns 404 deleting an unknown product", async () => {
+    await createCompany({ name: "Acme" });
+    const res = await DELETE(del("nope", "acme", AUTH), ctx("nope"));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns a sane non-500 status deleting an already-deleted product", async () => {
+    // Same resolution-level 404 as companies: getProductBySlug filters deletedAt.
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+    await DELETE(del("checkout", "acme", AUTH), ctx("checkout"));
+    const res = await DELETE(del("checkout", "acme", AUTH), ctx("checkout"));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /api/v1/products?includeDeleted=1", () => {
+  it("shows deleted products to an admin, ignores it for a non-admin", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+    await DELETE(del("checkout", "acme", AUTH), ctx("checkout"));
+
+    const admin = await listGET(new Request("http://x/api/v1/products?company=acme&includeDeleted=1", { headers: AUTH }));
+    expect(await admin.json()).toHaveLength(1);
+
+    const nonAdmin = await sessionCookie(["viewer"]);
+    const viewer = await listGET(new Request("http://x/api/v1/products?company=acme&includeDeleted=1", { headers: nonAdmin }));
+    expect(await viewer.json()).toEqual([]);
+
+    const anon = await listGET(new Request("http://x/api/v1/products?company=acme&includeDeleted=1"));
+    expect(await anon.json()).toEqual([]);
+  });
+});
+
+describe("POST /api/v1/products/[slug]/restore", () => {
+  it("rejects without a session", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+    const res = await RESTORE(restore("checkout", "acme"), ctx("checkout"));
+    expect(res.status).toBe(401);
+  });
+
+  it("restores a deleted product", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+    await DELETE(del("checkout", "acme", AUTH), ctx("checkout"));
+    const res = await RESTORE(restore("checkout", "acme", AUTH), ctx("checkout"));
+    expect(res.status).toBe(200);
+    const check = await detailGET(new Request("http://x/api/v1/products/checkout?company=acme"), ctx("checkout"));
+    expect(check.status).toBe(200);
+  });
+
+  it("returns 409 when the deleted product's company is also deleted", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+    // Deleting the company cascades to the product (same batch).
+    await DELETE_COMPANY(
+      new Request("http://x/api/v1/companies/acme", { method: "DELETE", headers: AUTH }),
+      { params: Promise.resolve({ slug: "acme" }) },
+    );
+    const res = await RESTORE(restore("checkout", "acme", AUTH), ctx("checkout"));
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toMatch(/company/i);
+  });
+
+  it("returns 409 when a live product already holds the slug", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+    await DELETE(del("checkout", "acme", AUTH), ctx("checkout"));
+    await createProduct({ companyId: c.id, name: "Checkout" });
+    const res = await RESTORE(restore("checkout", "acme", AUTH), ctx("checkout"));
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toMatch(/slug/i);
+  });
+
+  it("returns 404 restoring an unknown product", async () => {
+    await createCompany({ name: "Acme" });
+    const res = await RESTORE(restore("nope", "acme", AUTH), ctx("nope"));
+    expect(res.status).toBe(404);
   });
 });

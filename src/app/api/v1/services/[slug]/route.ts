@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
+import { auditRequest } from "@/lib/audit";
 import { getServiceBySlug, moveService, updateService, SlugConflictError } from "@/lib/hierarchy";
+import { deleteService, HierarchyNotFoundError, HierarchyStateConflictError } from "@/lib/hierarchyDelete";
+import { prisma } from "@/lib/db";
 import { optionalStr, ignoredIfInvalid } from "@/lib/schemas/common";
 import { parseBody } from "@/lib/schemas/parse";
 
@@ -91,4 +94,38 @@ export async function PUT(
   }
   const updated = await updateService(service.id, data);
   return Response.json(updated, { status: 200 });
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ slug: string }> },
+) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
+  const { slug } = await params;
+  const url = new URL(req.url);
+  const companySlug = url.searchParams.get("company");
+  const productSlug = url.searchParams.get("product");
+  if (!companySlug || !productSlug) {
+    return Response.json(
+      { error: "company and product query params are required" },
+      { status: 400 },
+    );
+  }
+  const service = await getServiceBySlug(companySlug, productSlug, slug);
+  if (!service) return Response.json({ error: "not found" }, { status: 404 });
+  try {
+    await deleteService(service.id);
+    const row = await prisma.service.findUnique({ where: { id: service.id }, select: { deletedBatch: true } });
+    await auditRequest(req, {
+      action: "service.deleted",
+      target: service.id,
+      detail: { slug: service.slug, batch: row?.deletedBatch ?? null },
+    });
+    return Response.json({}, { status: 200 });
+  } catch (e) {
+    if (e instanceof HierarchyNotFoundError) return Response.json({ error: e.message }, { status: 404 });
+    if (e instanceof HierarchyStateConflictError) return Response.json({ error: e.message }, { status: 409 });
+    throw e;
+  }
 }

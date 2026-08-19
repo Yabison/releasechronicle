@@ -21,10 +21,14 @@ export async function createCompany(input: { name: string }) {
   return prisma.company.create({ data: { name: input.name, slug, sortOrder: (max._max.sortOrder ?? -1) + 1 } });
 }
 
-/** `publicOnly` narrows the listing to public rows for anonymous API callers. */
-export function listCompanies(publicOnly: boolean = false) {
+/**
+ * `publicOnly` narrows the listing to public rows for anonymous API callers.
+ * `includeDeleted` drops the deletedAt filter entirely (admin-only restore UI);
+ * it defaults to false so every existing caller keeps seeing only live rows.
+ */
+export function listCompanies(publicOnly: boolean = false, includeDeleted: boolean = false) {
   return prisma.company.findMany({
-    where: { deletedAt: null, ...(publicOnly ? { public: true } : {}) },
+    where: { ...(includeDeleted ? {} : { deletedAt: null }), ...(publicOnly ? { public: true } : {}) },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 }
@@ -46,9 +50,15 @@ export function getCompanyBySlug(slug: string) {
  * A partial unique index only enforces uniqueness among LIVE rows, so several
  * deleted companies can share a slug. Ordering by deletedAt desc picks the most
  * recently deleted one — the useful default for "restore the thing I just deleted".
+ *
+ * `nulls: "last"` is required, not cosmetic: Postgres sorts NULL first under a
+ * plain DESC order, so a plain `{ deletedAt: "desc" }` would put a LIVE row
+ * (deletedAt: null) ahead of every deleted one whenever a new row has since
+ * reclaimed the slug — exactly the case the restore path must detect (a live
+ * row already holds the slug) rather than paper over by resolving to it.
  */
 export function getCompanyBySlugIncludingDeleted(slug: string) {
-  return prisma.company.findFirst({ where: { slug }, orderBy: { deletedAt: "desc" } });
+  return prisma.company.findFirst({ where: { slug }, orderBy: { deletedAt: { sort: "desc", nulls: "last" } } });
 }
 
 export async function createProduct(input: { companyId: string; name: string }) {
@@ -61,10 +71,11 @@ export async function createProduct(input: { companyId: string; name: string }) 
   });
 }
 
-export function listProducts(companyId: string, publicOnly: boolean = false) {
+export function listProducts(companyId: string, publicOnly: boolean = false, includeDeleted: boolean = false) {
   return prisma.product.findMany({
     where: {
-      companyId, deletedAt: null,
+      companyId,
+      ...(includeDeleted ? {} : { deletedAt: null }),
       ...(publicOnly ? { public: true, company: { public: true } } : {}),
     },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -85,16 +96,18 @@ export async function getProductBySlug(companySlug: string, productSlug: string)
  * found even while its company is also soft-deleted. The normal `getProductBySlug`
  * above must keep filtering deletedAt: null.
  *
- * Ordered by deletedAt desc for the same reason as the company variant: several
- * deleted products can share a slug under a partial unique index, and "restore the
- * thing I just deleted" is the useful default.
+ * Ordered by deletedAt desc (nulls last, see the company variant above) for the
+ * same reason: several deleted products can share a slug under a partial unique
+ * index, and "restore the thing I just deleted" is the useful default — but a
+ * live row that has since reclaimed the slug must still win the lookup so the
+ * restore path can report the collision instead of silently resolving to it.
  */
 export async function getProductBySlugIncludingDeleted(companySlug: string, productSlug: string) {
   const company = await getCompanyBySlugIncludingDeleted(companySlug);
   if (!company) return null;
   return prisma.product.findFirst({
     where: { companyId: company.id, slug: productSlug },
-    orderBy: { deletedAt: "desc" },
+    orderBy: { deletedAt: { sort: "desc", nulls: "last" } },
   });
 }
 
@@ -141,10 +154,11 @@ export async function createService(input: {
   });
 }
 
-export function listServices(productId: string, publicOnly: boolean = false) {
+export function listServices(productId: string, publicOnly: boolean = false, includeDeleted: boolean = false) {
   return prisma.service.findMany({
     where: {
-      productId, deletedAt: null,
+      productId,
+      ...(includeDeleted ? {} : { deletedAt: null }),
       ...(publicOnly ? { public: true, product: { public: true, company: { public: true } } } : {}),
     },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -169,9 +183,11 @@ export async function getServiceBySlug(
  * found even while its product and/or company are also soft-deleted. The normal
  * `getServiceBySlug` above must keep filtering deletedAt: null.
  *
- * Ordered by deletedAt desc for the same reason as the company/product variants:
- * several deleted services can share a slug under a partial unique index, and
- * "restore the thing I just deleted" is the useful default.
+ * Ordered by deletedAt desc (nulls last, see the company variant above) for the
+ * same reason as the company/product variants: several deleted services can
+ * share a slug under a partial unique index, and "restore the thing I just
+ * deleted" is the useful default — but a live row that has since reclaimed the
+ * slug must still win the lookup so the restore path can report the collision.
  */
 export async function getServiceBySlugIncludingDeleted(
   companySlug: string,
@@ -182,7 +198,7 @@ export async function getServiceBySlugIncludingDeleted(
   if (!product) return null;
   return prisma.service.findFirst({
     where: { productId: product.id, slug: serviceSlug },
-    orderBy: { deletedAt: "desc" },
+    orderBy: { deletedAt: { sort: "desc", nulls: "last" } },
   });
 }
 

@@ -3,7 +3,9 @@ import { resetDb, prisma } from "../setup/db";
 import { sessionCookie } from "../setup/session";
 import { createCompany, createProduct } from "@/lib/hierarchy";
 import { GET as listGET, POST } from "@/app/api/v1/services/route";
-import { GET as detailGET, PUT } from "@/app/api/v1/services/[slug]/route";
+import { GET as detailGET, PUT, DELETE } from "@/app/api/v1/services/[slug]/route";
+import { POST as RESTORE } from "@/app/api/v1/services/[slug]/restore/route";
+import { DELETE as DELETE_PRODUCT } from "@/app/api/v1/products/[slug]/route";
 
 let AUTH: { cookie: string };
 
@@ -278,5 +280,134 @@ describe("PUT /api/v1/services/[slug] (build URL + master flag)", () => {
     const json = await res.json();
     expect(json.isMaster).toBe(true);
     expect(json.buildUrlTemplate).toBeNull();
+  });
+});
+
+function del(slug: string, company: string, product: string, headers: Record<string, string> = {}) {
+  return new Request(`http://x/api/v1/services/${slug}?company=${company}&product=${product}`, { method: "DELETE", headers });
+}
+function restore(slug: string, company: string, product: string, headers: Record<string, string> = {}) {
+  return new Request(`http://x/api/v1/services/${slug}/restore?company=${company}&product=${product}`, { method: "POST", headers });
+}
+
+describe("DELETE /api/v1/services/[slug]", () => {
+  it("rejects without a session", async () => {
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    const res = await DELETE(del("payment-api", "acme", "checkout"), ctx("payment-api"));
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 without company/product query params", async () => {
+    const res = await DELETE(
+      new Request("http://x/api/v1/services/payment-api", { method: "DELETE", headers: AUTH }),
+      ctx("payment-api"),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("soft-deletes a service and it drops out of the listing", async () => {
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+
+    const res = await DELETE(del("payment-api", "acme", "checkout", AUTH), ctx("payment-api"));
+    expect(res.status).toBe(200);
+
+    const listed = await listGET(
+      new Request("http://x/api/v1/services?company=acme&product=checkout", { headers: AUTH }),
+    );
+    expect(await listed.json()).toEqual([]);
+  });
+
+  it("returns 404 deleting an unknown service", async () => {
+    await seedProduct();
+    const res = await DELETE(del("nope", "acme", "checkout", AUTH), ctx("nope"));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns a sane non-500 status deleting an already-deleted service", async () => {
+    // Same resolution-level 404 as companies/products: getServiceBySlug filters deletedAt.
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    await DELETE(del("payment-api", "acme", "checkout", AUTH), ctx("payment-api"));
+    const res = await DELETE(del("payment-api", "acme", "checkout", AUTH), ctx("payment-api"));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /api/v1/services?includeDeleted=1", () => {
+  it("shows deleted services to an admin, ignores it for a non-admin", async () => {
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    await DELETE(del("payment-api", "acme", "checkout", AUTH), ctx("payment-api"));
+
+    const admin = await listGET(
+      new Request("http://x/api/v1/services?company=acme&product=checkout&includeDeleted=1", { headers: AUTH }),
+    );
+    expect(await admin.json()).toHaveLength(1);
+
+    const nonAdmin = await sessionCookie(["viewer"]);
+    const viewer = await listGET(
+      new Request("http://x/api/v1/services?company=acme&product=checkout&includeDeleted=1", { headers: nonAdmin }),
+    );
+    expect(await viewer.json()).toEqual([]);
+
+    const anon = await listGET(
+      new Request("http://x/api/v1/services?company=acme&product=checkout&includeDeleted=1"),
+    );
+    expect(await anon.json()).toEqual([]);
+  });
+});
+
+describe("POST /api/v1/services/[slug]/restore", () => {
+  it("rejects without a session", async () => {
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    const res = await RESTORE(restore("payment-api", "acme", "checkout"), ctx("payment-api"));
+    expect(res.status).toBe(401);
+  });
+
+  it("restores a deleted service", async () => {
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    await DELETE(del("payment-api", "acme", "checkout", AUTH), ctx("payment-api"));
+    const res = await RESTORE(restore("payment-api", "acme", "checkout", AUTH), ctx("payment-api"));
+    expect(res.status).toBe(200);
+    const check = await detailGET(
+      new Request("http://x/api/v1/services/payment-api?company=acme&product=checkout"),
+      ctx("payment-api"),
+    );
+    expect(check.status).toBe(200);
+  });
+
+  it("returns 409 when the deleted service's product is also deleted", async () => {
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    // Deleting the product cascades to the service (same batch).
+    await DELETE_PRODUCT(
+      new Request("http://x/api/v1/products/checkout?company=acme", { method: "DELETE", headers: AUTH }),
+      { params: Promise.resolve({ slug: "checkout" }) },
+    );
+    const res = await RESTORE(restore("payment-api", "acme", "checkout", AUTH), ctx("payment-api"));
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toMatch(/product/i);
+  });
+
+  it("returns 409 when a live service already holds the slug", async () => {
+    const p = await seedProduct();
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    await DELETE(del("payment-api", "acme", "checkout", AUTH), ctx("payment-api"));
+    await POST(post({ productId: p.id, name: "Payment API", type: "API" }, AUTH));
+    const res = await RESTORE(restore("payment-api", "acme", "checkout", AUTH), ctx("payment-api"));
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toMatch(/slug/i);
+  });
+
+  it("returns 404 restoring an unknown service", async () => {
+    await seedProduct();
+    const res = await RESTORE(restore("nope", "acme", "checkout", AUTH), ctx("nope"));
+    expect(res.status).toBe(404);
   });
 });
