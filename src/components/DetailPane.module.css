@@ -140,10 +140,34 @@
 
 .empty { color: var(--muted); }
 
-.search { display: flex; align-items: center; gap: var(--space); flex-wrap: wrap; margin-bottom: calc(var(--space) * 2); }
-.search input, .search select { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
-.search input[type="date"] { color: var(--muted); }
-.search button { font: inherit; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: var(--radius); padding: 4px 10px; cursor: pointer; }
+/* A row of labelled fields. Each label sits above its control and stays there
+   once the field is filled, which a placeholder cannot do. */
+.search {
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+  margin-bottom: calc(var(--space) * 2);
+}
+.field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.field > span {
+  font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); white-space: nowrap;
+}
+.search input, .search select {
+  font: inherit; font-size: 0.9em; padding: 5px 9px;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--surface); color: var(--text);
+}
+.search input:focus-visible, .search select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The two dates are one control: the arrow between them says so. */
+.range { display: flex; align-items: flex-end; gap: 6px; }
+.rangeArrow { color: var(--muted); padding-bottom: 6px; }
+
+.reset {
+  font: inherit; font-size: 0.82em; background: transparent;
+  border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.reset:hover { border-color: var(--muted); color: var(--text); }
 
 /* Narrow screens: rows and filter bars wrap instead of overflowing the viewport. */
 @media (max-width: 640px) {

@@ -265,58 +265,87 @@ export function DetailPane({
       </div>
       <CategoryFilter active={active} onToggle={toggle} />
 
+      {/* Labelled fields, not bare placeholders: a placeholder is the label
+          until you type, and then the field has no label at all. */}
       <div className={styles.search}>
-        <input placeholder={t("common.version")} value={q.version} onChange={(e) => setQ({ ...q, version: e.target.value })} aria-label={t("common.version")} />
-        <input placeholder={t("detail.requester")} value={q.requester} onChange={(e) => setQ({ ...q, requester: e.target.value })} aria-label={t("detail.requester")} />
-        <span className={styles.tagFilter}>
-          {q.tags.map((tg) => (
-            <button
-              key={tg}
-              type="button"
-              className={styles.tagFilterChip}
-              data-active
-              style={tagColors[tg] ? { background: tagColors[tg], color: "#fff", borderColor: tagColors[tg] } : undefined}
-              onClick={() => setQ((s) => ({ ...s, tags: s.tags.filter((x) => x !== tg) }))}
-              title={t("form.addTag")}
-            >
-              {tg} ×
-            </button>
-          ))}
-          {allTags.length > 0 && (
-            <>
-              <input
-                list="tagFilterOptions"
-                placeholder={t("form.tags")}
-                aria-label={t("form.tags")}
-                value={tagInput}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  // Picking a value from the datalist fires change with the full option.
-                  if (allTags.includes(v)) addTag(v);
-                  else setTagInput(v);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); }
-                }}
-              />
-              <datalist id="tagFilterOptions">
-                {allTags.filter((tg) => !q.tags.includes(tg)).map((tg) => (
-                  <option key={tg} value={tg} />
-                ))}
-              </datalist>
-            </>
-          )}
-        </span>
-        <select value={q.hourType} onChange={(e) => setQ({ ...q, hourType: e.target.value })} aria-label={t("form.hourType")}>
-          <option value="">{t("form.hourType")}</option>
-          <option value="HO">{t("form.hoLong")}</option>
-          <option value="HNO">{t("form.hnoLong")}</option>
-        </select>
-        <input type="date" value={q.from} onChange={(e) => setDateWindow({ from: e.target.value })} aria-label={t("filter.from")} />
-        <input type="date" value={q.to} onChange={(e) => setDateWindow({ to: e.target.value })} aria-label={t("filter.to")} />
+        <label className={styles.field}>
+          <span>{t("common.version")}</span>
+          <input value={q.version} onChange={(e) => setQ({ ...q, version: e.target.value })} />
+        </label>
+
+        <label className={styles.field}>
+          <span>{t("detail.requester")}</span>
+          <input value={q.requester} onChange={(e) => setQ({ ...q, requester: e.target.value })} />
+        </label>
+
+        <div className={styles.field}>
+          <span>{t("form.tags")}</span>
+          <span className={styles.tagFilter}>
+            {q.tags.map((tg) => (
+              <button
+                key={tg}
+                type="button"
+                className={styles.tagFilterChip}
+                data-active
+                style={tagColors[tg] ? { background: tagColors[tg], color: "#fff", borderColor: tagColors[tg] } : undefined}
+                onClick={() => setQ((s) => ({ ...s, tags: s.tags.filter((x) => x !== tg) }))}
+                title={t("form.addTag")}
+              >
+                {tg} ×
+              </button>
+            ))}
+            {allTags.length > 0 && (
+              <>
+                <input
+                  list="tagFilterOptions"
+                  aria-label={t("form.tags")}
+                  value={tagInput}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // Picking a value from the datalist fires change with the full option.
+                    if (allTags.includes(v)) addTag(v);
+                    else setTagInput(v);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); }
+                  }}
+                />
+                <datalist id="tagFilterOptions">
+                  {allTags.filter((tg) => !q.tags.includes(tg)).map((tg) => (
+                    <option key={tg} value={tg} />
+                  ))}
+                </datalist>
+              </>
+            )}
+          </span>
+        </div>
+
+        <label className={styles.field}>
+          <span>{t("form.hourType")}</span>
+          <select value={q.hourType} onChange={(e) => setQ({ ...q, hourType: e.target.value })}>
+            <option value="">{t("detail.allEnvs")}</option>
+            <option value="HO">{t("form.hoLong")}</option>
+            <option value="HNO">{t("form.hnoLong")}</option>
+          </select>
+        </label>
+
+        {/* One range, not two loose dates: the arrow says they belong together. */}
+        <div className={styles.range}>
+          <label className={styles.field}>
+            <span>{t("filter.from")}</span>
+            <input type="date" value={q.from} onChange={(e) => setDateWindow({ from: e.target.value })} />
+          </label>
+          <span className={styles.rangeArrow} aria-hidden>→</span>
+          <label className={styles.field}>
+            <span>{t("filter.to")}</span>
+            <input type="date" value={q.to} onChange={(e) => setDateWindow({ to: e.target.value })} />
+          </label>
+        </div>
+
         {(q.version || q.requester || q.tags.length > 0 || q.hourType || q.from !== defaultFrom || q.to) && (
           <button
             type="button"
+            className={styles.reset}
             onClick={() => {
               setTagInput("");
               setQ((s) => ({ ...s, version: "", requester: "", tags: [], hourType: "" }));
