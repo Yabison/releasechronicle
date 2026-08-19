@@ -4,6 +4,7 @@ import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import {
   deleteCompany, deleteProduct, deleteService,
   restoreCompany, restoreProduct, restoreService, RestoreBlockedError,
+  HierarchyStateConflictError,
 } from "@/lib/hierarchyDelete";
 
 async function tree() {
@@ -65,6 +66,25 @@ describe("cascading delete", () => {
     await deleteService(t.s1.id);
     await expect(deleteService(t.s1.id)).rejects.toThrow();
   });
+
+  it("under concurrent deletes of the same service, exactly one wins", async () => {
+    const t = await tree();
+    const results = await Promise.allSettled([deleteService(t.s1.id), deleteService(t.s1.id)]);
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    // Exactly one call's defensive updateMany (or its earlier findUnique guard) can
+    // observe a live row and win; the other must be refused, never silently
+    // clobber the winner's stamp (see the concurrency note atop hierarchyDelete.ts).
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    for (const r of rejected) expect(r.reason).toBeInstanceOf(HierarchyStateConflictError);
+    // Both calls are literally identical (same id, no distinguishing input), so
+    // there is no independent way to name "which JS call" won beyond the fact that
+    // the row now carries exactly one winner's stamp, not a mix and not null.
+    const row1 = await row("service", t.s1.id);
+    expect(row1.deletedAt).toBeInstanceOf(Date);
+    expect(row1.deletedBatch).toEqual(expect.any(String));
+  });
 });
 
 describe("restore", () => {
@@ -96,6 +116,14 @@ describe("restore", () => {
     await expect(restoreProduct(t.p1.id)).rejects.toThrow(/acme/i);
   });
 
+  it("restoring a service directly after a company-wide delete names the company, not the product", async () => {
+    const t = await tree();
+    await deleteCompany(t.c.id); // cascades to p1 ("checkout") and s1, one shared batch
+    await expect(restoreService(t.s1.id)).rejects.toThrow(RestoreBlockedError);
+    await expect(restoreService(t.s1.id)).rejects.toThrow(/acme/i);
+    await expect(restoreService(t.s1.id)).rejects.not.toThrow(/checkout/i);
+  });
+
   it("refuses when a live row has taken the slug", async () => {
     const c = await createCompany({ name: "Acme" });
     await deleteCompany(c.id);
@@ -106,7 +134,12 @@ describe("restore", () => {
   it("restores a service on its own without touching its siblings", async () => {
     const t = await tree();
     await deleteService(t.s1.id);
+    await deleteService(t.s2.id); // sibling under the same product, its own batch
+    const siblingBefore = await row("service", t.s2.id);
     await restoreService(t.s1.id);
     expect((await row("service", t.s1.id)).deletedAt).toBeNull();
+    const siblingAfter = await row("service", t.s2.id);
+    expect(siblingAfter.deletedAt).toEqual(siblingBefore.deletedAt);
+    expect(siblingAfter.deletedBatch).toEqual(siblingBefore.deletedBatch);
   });
 });
