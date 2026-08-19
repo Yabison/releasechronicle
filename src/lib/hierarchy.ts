@@ -38,8 +38,17 @@ export function getCompanyBySlug(slug: string) {
   return prisma.company.findFirst({ where: { slug, deletedAt: null } });
 }
 
-export async function softDeleteCompany(id: string) {
-  return prisma.company.update({ where: { id }, data: { deletedAt: new Date() } });
+/**
+ * Restore-path only: resolves a company by slug WITHOUT filtering deletedAt, so a
+ * soft-deleted row can still be found and offered for restoration. The normal
+ * `getCompanyBySlug` above must keep filtering deletedAt: null.
+ *
+ * A partial unique index only enforces uniqueness among LIVE rows, so several
+ * deleted companies can share a slug. Ordering by deletedAt desc picks the most
+ * recently deleted one — the useful default for "restore the thing I just deleted".
+ */
+export function getCompanyBySlugIncludingDeleted(slug: string) {
+  return prisma.company.findFirst({ where: { slug }, orderBy: { deletedAt: "desc" } });
 }
 
 export async function createProduct(input: { companyId: string; name: string }) {
@@ -70,8 +79,23 @@ export async function getProductBySlug(companySlug: string, productSlug: string)
   });
 }
 
-export async function softDeleteProduct(id: string) {
-  return prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
+/**
+ * Restore-path only: resolves a product by slug WITHOUT filtering deletedAt,
+ * chaining through the deleted-inclusive company resolver so a product can be
+ * found even while its company is also soft-deleted. The normal `getProductBySlug`
+ * above must keep filtering deletedAt: null.
+ *
+ * Ordered by deletedAt desc for the same reason as the company variant: several
+ * deleted products can share a slug under a partial unique index, and "restore the
+ * thing I just deleted" is the useful default.
+ */
+export async function getProductBySlugIncludingDeleted(companySlug: string, productSlug: string) {
+  const company = await getCompanyBySlugIncludingDeleted(companySlug);
+  if (!company) return null;
+  return prisma.product.findFirst({
+    where: { companyId: company.id, slug: productSlug },
+    orderBy: { deletedAt: "desc" },
+  });
 }
 
 /** Update a product's editable fields (env workflow, display order). */
@@ -139,8 +163,27 @@ export async function getServiceBySlug(
   });
 }
 
-export async function softDeleteService(id: string) {
-  return prisma.service.update({ where: { id }, data: { deletedAt: new Date() } });
+/**
+ * Restore-path only: resolves a service by slug WITHOUT filtering deletedAt,
+ * chaining through the deleted-inclusive product resolver so a service can be
+ * found even while its product and/or company are also soft-deleted. The normal
+ * `getServiceBySlug` above must keep filtering deletedAt: null.
+ *
+ * Ordered by deletedAt desc for the same reason as the company/product variants:
+ * several deleted services can share a slug under a partial unique index, and
+ * "restore the thing I just deleted" is the useful default.
+ */
+export async function getServiceBySlugIncludingDeleted(
+  companySlug: string,
+  productSlug: string,
+  serviceSlug: string,
+) {
+  const product = await getProductBySlugIncludingDeleted(companySlug, productSlug);
+  if (!product) return null;
+  return prisma.service.findFirst({
+    where: { productId: product.id, slug: serviceSlug },
+    orderBy: { deletedAt: "desc" },
+  });
 }
 
 /** A service's effective env workflow: its own when overriding, else the product's (inherited). */

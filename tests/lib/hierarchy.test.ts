@@ -8,9 +8,9 @@ import {
   getProductBySlug,
   createService,
   getServiceBySlug,
-  softDeleteCompany,
   moveService,
 } from "@/lib/hierarchy";
+import { deleteCompany } from "@/lib/hierarchyDelete";
 
 beforeEach(async () => {
   await resetDb();
@@ -32,7 +32,7 @@ describe("companies", () => {
   it("lists only non-deleted companies", async () => {
     const c = await createCompany({ name: "Acme" });
     await createCompany({ name: "Globex" });
-    await softDeleteCompany(c.id);
+    await deleteCompany(c.id);
     const all = await listCompanies();
     expect(all.map((x) => x.name)).toEqual(["Globex"]);
   });
