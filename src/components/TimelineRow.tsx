@@ -26,6 +26,7 @@ export function TimelineRow({
   lotWarning = [],
   envColor = null,
   tagColors = {},
+  context = null,
 }: {
   entry: TimelineEntry;
   onClick: () => void;
@@ -33,6 +34,9 @@ export function TimelineRow({
   lotWarning?: string[];
   envColor?: string | null;
   tagColors?: Record<string, string>;
+  /** "product / service", shown on the dashboards where one list spans many
+   *  services and the row would otherwise not say what it belongs to. */
+  context?: string | null;
 }) {
   const { t } = useI18n();
   const { stampDay, stampTime, dayKey } = useTimeFormat();
@@ -151,7 +155,10 @@ export function TimelineRow({
             )}
           </span>
         )}
-        <span className={styles.title}>{entry.title}</span>
+        <span className={styles.title}>
+          {context && <span className={styles.rowCtx}>{context} · </span>}
+          {entry.title}
+        </span>
       </span>
 
       <span className={styles.meta}>

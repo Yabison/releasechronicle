@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { FEED_INCLUDE, deriveFor } from "@/lib/events";
+import { toClientEvents, type ClientEvent } from "@/lib/timeline";
 import { getPublicEventTypes } from "@/lib/visibility";
 import { getPublicEnvSlugs } from "@/lib/environment";
 
@@ -13,22 +15,13 @@ import { getPublicEnvSlugs } from "@/lib/environment";
  */
 export type OverviewScope = { company?: string; product?: string };
 
-export type OverviewEventRow = {
-  id: string;
-  type: string;
-  environment: string;
-  occurredAt: string;
-  version: string | null;
-  deployStatus: string | null;
-  changeType: string | null;
-  incidentType: string | null;
-  requester: string | null;
-  resolvedAt: string | null;
-  startedAt: string | null;
-  windowStart: string | null;
-  windowEnd: string | null;
-  scheduledAt: string | null;
-  comment: string | null;
+/**
+ * A dashboard row is a full ClientEvent plus where it lives. Same shape as a
+ * service feed, so the dashboards can run buildServiceTimeline and render the
+ * very same TimelineRow instead of keeping a thinner second row model that
+ * silently lacked rollbacks, lots, tags and durations.
+ */
+export type OverviewEventRow = ClientEvent & {
   company: { slug: string; name: string };
   product: { slug: string; name: string };
   service: { slug: string; name: string };
@@ -45,6 +38,7 @@ const WINDOW_MS = 90 * 86_400_000;
 const FEED_CAP = 300;
 
 const INCLUDE = {
+  ...FEED_INCLUDE,
   service: {
     select: {
       slug: true, name: true,
@@ -55,25 +49,10 @@ const INCLUDE = {
 
 type Row = Prisma.EventGetPayload<{ include: typeof INCLUDE }>;
 
-const iso = (d: Date | null) => (d ? d.toISOString() : null);
-
-function toRow(e: Row): OverviewEventRow {
+function toRow(e: Row, now: Date): OverviewEventRow {
+  const [event] = toClientEvents([{ ...e, derived: deriveFor(e, now) } as unknown as Record<string, unknown>]);
   return {
-    id: e.id,
-    type: e.type,
-    environment: e.environment,
-    occurredAt: e.occurredAt.toISOString(),
-    version: e.version,
-    deployStatus: e.deployStatus,
-    changeType: e.changeType,
-    incidentType: e.incidentType,
-    requester: e.requester,
-    resolvedAt: iso(e.resolvedAt),
-    startedAt: iso(e.startedAt),
-    windowStart: iso(e.windowStart),
-    windowEnd: iso(e.windowEnd),
-    scheduledAt: iso(e.scheduledAt),
-    comment: e.comment,
+    ...event,
     company: e.service.product.company,
     product: { slug: e.service.product.slug, name: e.service.product.name },
     service: { slug: e.service.slug, name: e.service.name },
@@ -128,7 +107,7 @@ export async function getOverview(scope: OverviewScope, anonymous: boolean): Pro
 
   return {
     counters: { services, deploys30d, openIncidents: openIncidentCount, upcomingMaintenances: upcomingCount },
-    events: feed.map(toRow),
+    events: feed.map((e) => toRow(e, now)),
   };
 }
 
@@ -147,4 +126,20 @@ export async function findVisibleProduct(companySlug: string, productSlug: strin
     where: { slug: productSlug, deletedAt: null, ...pub, company: { slug: companySlug, deletedAt: null, ...pub } },
     select: { slug: true, name: true, company: { select: { slug: true, name: true } } },
   });
+}
+
+/**
+ * The per-row extras a dashboard needs to render the same TimelineRow as the
+ * service page: environment colours, and the lot membership behind the lot
+ * badge and the "incomplete lot rollback" alert.
+ *
+ * Kept here rather than repeated in the three dashboard pages, which differ
+ * only by their scope.
+ */
+export async function getOverviewExtras(events: OverviewEventRow[]) {
+  const { resolveEnvColorMap } = await import("@/lib/environment");
+  const { getLotMembers, lotRollbackWarnings } = await import("@/lib/deployLot");
+  const lots = [...new Set(events.map((e) => e.lot).filter((l): l is string => !!l))];
+  const [envColors, lotMembers] = await Promise.all([resolveEnvColorMap(), getLotMembers(lots)]);
+  return { envColors, lotMembers, lotWarnings: lotRollbackWarnings(lotMembers) };
 }

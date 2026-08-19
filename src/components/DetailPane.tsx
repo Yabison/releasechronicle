@@ -7,8 +7,10 @@ import { EventModal } from "./EventModal";
 import { LotModal } from "./LotModal";
 import { ExcelBar } from "./ExcelBar";
 import { TimelineRow } from "./TimelineRow";
-import { buildServiceTimeline, groupByMonth, type EntryCategory, type TimelineEntry } from "@/lib/eventTimeline";
+import { buildServiceTimeline, groupByMonth, type EntryCategory } from "@/lib/eventTimeline";
 import { categoryLabel, changeTypeLabel } from "@/i18n/labels";
+import { CategoryFilter } from "./CategoryFilter";
+import { FILTER_KEYS, entryFilterKey, isFilterKey, type FilterKey } from "@/lib/timelineFilter";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { useI18n } from "@/i18n/useI18n";
 import { useTimeFormat } from "@/lib/useTimeFormat";
@@ -18,16 +20,8 @@ import styles from "./DetailPane.module.css";
 
 const FILTERS: EntryCategory[] = ["DEPLOY", "HOTFIX", "INCIDENT", "MAINTENANCE"];
 // Visibility filters split DEPLOY into plain MEP + its PRE/POST phases.
-type FilterKey = EntryCategory | "PRE" | "POST";
-const FILTER_KEYS: FilterKey[] = ["DEPLOY", "PRE", "POST", "HOTFIX", "INCIDENT", "MAINTENANCE"];
+
 /** Filter button label: the phase filters reuse the PRE/POST MEP change-type labels. */
-function filterLabel(t: (key: string) => string, key: FilterKey): string {
-  return key === "PRE" || key === "POST" ? changeTypeLabel(t, `${key}_MEP`) : categoryLabel(t, key);
-}
-function entryFilterKey(e: TimelineEntry): FilterKey {
-  if (e.category === "DEPLOY") return e.phase === "PRE" ? "PRE" : e.phase === "POST" ? "POST" : "DEPLOY";
-  return e.category;
-}
 const ALL_ENV = "ALL";
 
 export function DetailPane({
@@ -103,8 +97,8 @@ export function DetailPane({
   // Filters are visibility toggles, all enabled by default.
   const [active, setActive] = useState<Set<FilterKey>>(() => {
     const c = sp("cat");
-    const keys = c ? c.split(",").filter((k): k is FilterKey => (FILTER_KEYS as string[]).includes(k)) : [];
-    return keys.length ? new Set(keys) : new Set(FILTER_KEYS);
+    const keys = c ? c.split(",").filter(isFilterKey) : [];
+    return keys.length ? new Set(keys) : new Set<FilterKey>(FILTER_KEYS);
   });
   const [selected, setSelected] = useState<string | null>(null);
   // Open a specific MEP when linked with ?event=<id> (e.g. from the build trace in another tab).
@@ -277,21 +271,7 @@ export function DetailPane({
           </span>
         ))}
       </div>
-      <div className={styles.filters}>
-        <span className={styles.filtersLabel}>{t("detail.filter")}</span>
-        {FILTER_KEYS.map((c) => (
-          <button
-            key={c}
-            data-active={active.has(c)}
-            data-cat={c}
-            aria-pressed={active.has(c)}
-            onClick={() => toggle(c)}
-          >
-            {active.has(c) && <span className={styles.filterCheck} aria-hidden>✓</span>}
-            {filterLabel(t, c)}
-          </button>
-        ))}
-      </div>
+      <CategoryFilter active={active} onToggle={toggle} />
 
       <div className={styles.search}>
         <input placeholder={t("common.version")} value={q.version} onChange={(e) => setQ({ ...q, version: e.target.value })} aria-label={t("common.version")} />

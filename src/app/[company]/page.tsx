@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
-import { getOverview, findVisibleCompany } from "@/lib/overview";
+import { getOverviewExtras, getOverview, findVisibleCompany } from "@/lib/overview";
 import { OverviewDashboard } from "@/components/OverviewDashboard";
 
 export const dynamic = "force-dynamic";
@@ -13,5 +13,6 @@ export default async function CompanyPage({ params }: { params: Promise<{ compan
   const found = await findVisibleCompany(company, anon);
   if (!found) notFound();
   const overview = await getOverview({ company }, anon);
-  return <OverviewDashboard overview={overview} companyName={found.name} />;
+  const extras = await getOverviewExtras(overview.events);
+  return <OverviewDashboard overview={overview} {...extras} companyName={found.name} />;
 }

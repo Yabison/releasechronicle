@@ -168,3 +168,7 @@
 /* No nowrap: the long wording ("Programmé - En attente du GO/NOGO") is a
    sentence, and the status track is the elastic one, so it may wrap. */
 .statusText { font-size: 0.82em; font-weight: 600; }
+
+/* Dashboard rows only: which service the entry belongs to, since one list there
+   spans a whole company. */
+.rowCtx { color: var(--text-soft); font-weight: 600; }
