@@ -4,7 +4,6 @@ import { auditRequest } from "@/lib/audit";
 import { getProductBySlug, updateProduct, moveProduct, SlugConflictError, InvalidParentError } from "@/lib/hierarchy";
 import { deleteProduct, HierarchyNotFoundError, HierarchyStateConflictError } from "@/lib/hierarchyDelete";
 import { getActiveEnvSlugs } from "@/lib/environment";
-import { prisma } from "@/lib/db";
 import { optionalStr, ignoredIfInvalid } from "@/lib/schemas/common";
 import { parseBody } from "@/lib/schemas/parse";
 
@@ -91,13 +90,12 @@ export async function DELETE(
   if (!product) return Response.json({ error: "not found" }, { status: 404 });
   try {
     const counts = await deleteProduct(product.id);
-    const row = await prisma.product.findUnique({ where: { id: product.id }, select: { deletedBatch: true } });
     await auditRequest(req, {
       action: "product.deleted",
       target: product.id,
-      detail: { slug: product.slug, services: counts.services, batch: row?.deletedBatch ?? null },
+      detail: { slug: product.slug, services: counts.services, batch: counts.batch },
     });
-    return Response.json(counts, { status: 200 });
+    return Response.json({ services: counts.services }, { status: 200 });
   } catch (e) {
     if (e instanceof HierarchyNotFoundError) return Response.json({ error: e.message }, { status: 404 });
     if (e instanceof HierarchyStateConflictError) return Response.json({ error: e.message }, { status: 409 });

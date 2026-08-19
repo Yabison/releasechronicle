@@ -3,7 +3,6 @@ import { requireAdmin } from "@/lib/auth/guard";
 import { auditRequest } from "@/lib/audit";
 import { getServiceBySlug, moveService, updateService, SlugConflictError, InvalidParentError } from "@/lib/hierarchy";
 import { deleteService, HierarchyNotFoundError, HierarchyStateConflictError } from "@/lib/hierarchyDelete";
-import { prisma } from "@/lib/db";
 import { optionalStr, ignoredIfInvalid } from "@/lib/schemas/common";
 import { parseBody } from "@/lib/schemas/parse";
 
@@ -118,12 +117,11 @@ export async function DELETE(
   const service = await getServiceBySlug(companySlug, productSlug, slug);
   if (!service) return Response.json({ error: "not found" }, { status: 404 });
   try {
-    await deleteService(service.id);
-    const row = await prisma.service.findUnique({ where: { id: service.id }, select: { deletedBatch: true } });
+    const { batch } = await deleteService(service.id);
     await auditRequest(req, {
       action: "service.deleted",
       target: service.id,
-      detail: { slug: service.slug, batch: row?.deletedBatch ?? null },
+      detail: { slug: service.slug, batch },
     });
     return Response.json({}, { status: 200 });
   } catch (e) {

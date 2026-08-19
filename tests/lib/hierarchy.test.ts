@@ -164,3 +164,23 @@ describe("the live-parent invariant on writes into/under a deleted row", () => {
     expect(newService.productId).toBe(newProduct.id);
   });
 });
+
+describe("the slug uniqueness backstop is a PARTIAL index, not a full one", () => {
+  // The slug-freeing tests above pin the "squatting" direction (a soft-deleted row
+  // no longer blocks its slug) — that fails loudly under a full index. They do NOT
+  // pin the "uniqueness" direction: if a migration ever dropped these indexes
+  // outright, every test above would still pass, because app-level uniqueSlug()
+  // keeps generating distinct slugs on its own regardless of any DB constraint.
+  // Assert the constraint itself exists and is scoped to live rows.
+  it("keeps Company_slug_key, Product_companyId_slug_key and Service_productId_slug_key partial on deletedAt IS NULL", async () => {
+    const rows = await prisma.$queryRaw<{ indexname: string; indexdef: string }[]>`
+      SELECT indexname, indexdef FROM pg_indexes
+      WHERE indexname IN ('Company_slug_key', 'Product_companyId_slug_key', 'Service_productId_slug_key')
+    `;
+    expect(rows).toHaveLength(3);
+    for (const r of rows) {
+      expect(r.indexdef).toMatch(/UNIQUE/i);
+      expect(r.indexdef).toMatch(/WHERE \("?deletedAt"? IS NULL\)/i);
+    }
+  });
+});

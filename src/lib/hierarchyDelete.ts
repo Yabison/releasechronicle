@@ -53,8 +53,19 @@ export class RestoreBlockedError extends Error {
 
 export type RestoreCounts = { products?: number; services?: number };
 
-export async function deleteCompany(id: string): Promise<{ products: number; services: number }> {
+export async function deleteCompany(id: string): Promise<{ products: number; services: number; batch: string }> {
   return prisma.$transaction(async (tx) => {
+    // Lock the company row before snapshotting its live products, not after: this
+    // is the mirror of restoreProduct's/restoreService's ancestor lock above. Without
+    // it, a restore that locks this same row could commit strictly between the
+    // snapshot below and this transaction's own commit — invisible to the snapshot,
+    // which already captured its list of product ids — leaving a just-restored
+    // product (or, through it, a service) live under a company this call is about
+    // to mark deleted. Locking first forces the restore to either finish entirely
+    // before this snapshot runs (so the snapshot sees it) or wait for this whole
+    // transaction to commit (so the restore's own ancestor check then sees the
+    // company deleted and refuses).
+    await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${id} FOR UPDATE`;
     const company = await tx.company.findUnique({ where: { id }, select: { id: true, deletedAt: true } });
     if (!company) throw new HierarchyNotFoundError("company not found");
     if (company.deletedAt) throw new HierarchyStateConflictError("company is already deleted");
@@ -76,12 +87,18 @@ export async function deleteCompany(id: string): Promise<{ products: number; ser
       : { count: 0 };
     const updated = await tx.company.updateMany({ where: { id, deletedAt: null }, data: stamp });
     if (updated.count === 0) throw new HierarchyStateConflictError("company is already deleted");
-    return { products: products.count, services: services.count };
+    return { products: products.count, services: services.count, batch: stamp.deletedBatch };
   });
 }
 
-export async function deleteProduct(id: string): Promise<{ services: number }> {
+export async function deleteProduct(id: string): Promise<{ services: number; batch: string }> {
   return prisma.$transaction(async (tx) => {
+    // Lock the product row before its own services sweep, for the same reason
+    // deleteCompany locks its company row first (see the note there): restoreService
+    // takes this exact row lock as one of its two ancestor checks, so without this a
+    // concurrently-committing restore could slip a service past this sweep and leave
+    // it live under a product this call is about to mark deleted.
+    await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
     const product = await tx.product.findUnique({ where: { id }, select: { id: true, deletedAt: true } });
     if (!product) throw new HierarchyNotFoundError("product not found");
     if (product.deletedAt) throw new HierarchyStateConflictError("product is already deleted");
@@ -89,20 +106,19 @@ export async function deleteProduct(id: string): Promise<{ services: number }> {
     const services = await tx.service.updateMany({ where: { productId: id, deletedAt: null }, data: stamp });
     const updated = await tx.product.updateMany({ where: { id, deletedAt: null }, data: stamp });
     if (updated.count === 0) throw new HierarchyStateConflictError("product is already deleted");
-    return { services: services.count };
+    return { services: services.count, batch: stamp.deletedBatch };
   });
 }
 
-export async function deleteService(id: string): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+export async function deleteService(id: string): Promise<{ batch: string }> {
+  return prisma.$transaction(async (tx) => {
     const service = await tx.service.findUnique({ where: { id }, select: { id: true, deletedAt: true } });
     if (!service) throw new HierarchyNotFoundError("service not found");
     if (service.deletedAt) throw new HierarchyStateConflictError("service is already deleted");
-    const updated = await tx.service.updateMany({
-      where: { id, deletedAt: null },
-      data: { deletedAt: new Date(), deletedBatch: randomUUID() },
-    });
+    const stamp = { deletedAt: new Date(), deletedBatch: randomUUID() };
+    const updated = await tx.service.updateMany({ where: { id, deletedAt: null }, data: stamp });
     if (updated.count === 0) throw new HierarchyStateConflictError("service is already deleted");
+    return { batch: stamp.deletedBatch };
   });
 }
 
@@ -134,6 +150,12 @@ export async function restoreProduct(id: string): Promise<RestoreCounts> {
     const product = await tx.product.findUnique({ where: { id } });
     if (!product) throw new HierarchyNotFoundError("product not found");
     if (!product.deletedAt) throw new HierarchyStateConflictError("product is not deleted");
+    // Lock the ancestor before trusting its deletedAt: a plain read here is a
+    // TOCTOU — nothing re-asserts it when this restore's write finally lands, so a
+    // concurrent deleteCompany could commit in between and leave a live product
+    // under a deleted company. The lock serialises against deleteCompany, which
+    // takes this same row lock before it snapshots its live products.
+    await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${product.companyId} FOR UPDATE`;
     const company = await tx.company.findUniqueOrThrow({ where: { id: product.companyId } });
     if (company.deletedAt) {
       throw new RestoreBlockedError("ancestorDeleted", `the company "${company.slug}" is deleted; restore it first`);
@@ -157,6 +179,15 @@ export async function restoreService(id: string): Promise<RestoreCounts> {
     const service = await tx.service.findUnique({ where: { id } });
     if (!service) throw new HierarchyNotFoundError("service not found");
     if (!service.deletedAt) throw new HierarchyStateConflictError("service is not deleted");
+    const productRef = await tx.product.findUniqueOrThrow({
+      where: { id: service.productId }, select: { companyId: true },
+    });
+    // Lock both ancestors before trusting their deletedAt, company first — the same
+    // TOCTOU as restoreProduct, one level deeper. Locking company before product
+    // matches the order deleteCompany and deleteProduct take these same locks in
+    // (see the notes above them), so the two sides can never deadlock on each other.
+    await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${productRef.companyId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${service.productId} FOR UPDATE`;
     const product = await tx.product.findUniqueOrThrow({ where: { id: service.productId } });
     const company = await tx.company.findUniqueOrThrow({ where: { id: product.companyId } });
     // Name the outermost deleted ancestor: the company, if it too is deleted, is

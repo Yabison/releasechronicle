@@ -27,10 +27,11 @@ describe("cascading delete", () => {
   it("stamps a company, its products and its services with one shared batch", async () => {
     const t = await tree();
     const counts = await deleteCompany(t.c.id);
-    expect(counts).toEqual({ products: 2, services: 3 });
+    expect(counts).toEqual({ products: 2, services: 3, batch: expect.any(String) });
     const c = await row("company", t.c.id);
     expect(c.deletedAt).toBeInstanceOf(Date);
     expect(c.deletedBatch).toEqual(expect.any(String));
+    expect(counts.batch).toBe(c.deletedBatch); // the minted batch, not a follow-up read that could race
     for (const id of [t.p1.id, t.p2.id]) {
       const p = await row("product", id);
       expect(p.deletedBatch).toBe(c.deletedBatch);
@@ -43,7 +44,9 @@ describe("cascading delete", () => {
 
   it("deleting a product leaves its siblings and their services alone", async () => {
     const t = await tree();
-    expect(await deleteProduct(t.p1.id)).toEqual({ services: 2 });
+    const counts = await deleteProduct(t.p1.id);
+    expect(counts).toEqual({ services: 2, batch: expect.any(String) });
+    expect(counts.batch).toBe((await row("product", t.p1.id)).deletedBatch);
     expect((await row("product", t.p2.id)).deletedAt).toBeNull();
     expect((await row("service", t.s3.id)).deletedAt).toBeNull();
     expect((await row("service", t.s1.id)).deletedAt).toBeInstanceOf(Date);
@@ -59,6 +62,27 @@ describe("cascading delete", () => {
     await deleteCompany(t.c.id);
     const still = await prisma.event.findUniqueOrThrow({ where: { id: ev.id } });
     expect(still.deletedAt).toBeNull();
+  });
+
+  it("an event drops out of the export read path on delete and reappears after restore", async () => {
+    const t = await tree();
+    const { createEvent } = await import("@/lib/events");
+    const { queryEventsForExport } = await import("@/lib/eventExport");
+    await createEvent({
+      serviceId: t.s1.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+      fields: { version: "1.0.0", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "1.0.0" },
+    } as never);
+
+    const before = await queryEventsForExport({ serviceId: t.s1.id });
+    expect(before).toHaveLength(1);
+
+    await deleteCompany(t.c.id);
+    const whileDeleted = await queryEventsForExport({ serviceId: t.s1.id });
+    expect(whileDeleted).toHaveLength(0); // events untouched, but the read side filters on the (now-deleted) service
+
+    await restoreCompany(t.c.id);
+    const afterRestore = await queryEventsForExport({ serviceId: t.s1.id });
+    expect(afterRestore).toHaveLength(1); // the half users actually care about: it comes back
   });
 
   it("refuses to delete something already deleted", async () => {
@@ -141,5 +165,106 @@ describe("restore", () => {
     const siblingAfter = await row("service", t.s2.id);
     expect(siblingAfter.deletedAt).toEqual(siblingBefore.deletedAt);
     expect(siblingAfter.deletedBatch).toEqual(siblingBefore.deletedBatch);
+  });
+});
+
+describe("restore's ancestor check is serialised, not a plain read (Fix 2)", () => {
+  // These hold the exact row lock deleteCompany/deleteProduct now take as their
+  // very first statement, standing in for "some other transaction is mid-delete on
+  // this ancestor". That makes the assertion below deterministic: it rests on
+  // Postgres's guaranteed blocking behaviour for a second FOR UPDATE (or a write)
+  // against a row already locked by an open transaction, not on any timing race.
+  // The 50ms/100ms waits only give the driver time to land the lock request and
+  // then to prove nothing resolved meanwhile — they don't decide the outcome.
+  function holdLock(table: "Company" | "Product", id: string) {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const holder = prisma.$transaction(async (tx) => {
+      if (table === "Company") await tx.$queryRaw`SELECT id FROM "Company" WHERE id = ${id} FOR UPDATE`;
+      else await tx.$queryRaw`SELECT id FROM "Product" WHERE id = ${id} FOR UPDATE`;
+      await held;
+    });
+    return { release, holder };
+  }
+  async function settleFlag(p: Promise<unknown>) {
+    let settled = false;
+    p.catch(() => {}).finally(() => { settled = true; });
+    return () => settled;
+  }
+
+  it("restoreProduct waits for a concurrent holder of its company's lock, then re-reads fresh", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    await deleteProduct(p.id); // product deleted; company still live
+
+    const { release, holder } = holdLock("Company", c.id);
+    await new Promise((r) => setTimeout(r, 50)); // let the lock land
+
+    const restorePromise = restoreProduct(p.id);
+    const isSettled = await settleFlag(restorePromise);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(isSettled()).toBe(false); // blocked behind the held lock, not racing past it
+
+    release();
+    await holder;
+    await restorePromise; // unblocks once the holder commits
+    expect((await row("product", p.id)).deletedAt).toBeNull();
+  });
+
+  it("deleteCompany waits for a concurrent holder of the same company lock before snapshotting", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Checkout" });
+
+    const { release, holder } = holdLock("Company", c.id);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const deletePromise = deleteCompany(c.id);
+    const isSettled = await settleFlag(deletePromise);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(isSettled()).toBe(false); // its own lock statement is blocked, not past it
+
+    release();
+    await holder;
+    await deletePromise;
+    expect((await row("company", c.id)).deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("restoreService waits for a concurrent holder of its product's lock", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    await deleteService(s.id); // service deleted; product/company still live
+
+    const { release, holder } = holdLock("Product", p.id);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const restorePromise = restoreService(s.id);
+    const isSettled = await settleFlag(restorePromise);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(isSettled()).toBe(false);
+
+    release();
+    await holder;
+    await restorePromise;
+    expect((await row("service", s.id)).deletedAt).toBeNull();
+  });
+
+  it("deleteProduct waits for a concurrent holder of its own product lock before sweeping services", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    await createService({ productId: p.id, name: "API", type: "API" });
+
+    const { release, holder } = holdLock("Product", p.id);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const deletePromise = deleteProduct(p.id);
+    const isSettled = await settleFlag(deletePromise);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(isSettled()).toBe(false);
+
+    release();
+    await holder;
+    await deletePromise;
+    expect((await row("product", p.id)).deletedAt).toBeInstanceOf(Date);
   });
 });

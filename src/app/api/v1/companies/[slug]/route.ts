@@ -56,13 +56,12 @@ export async function DELETE(
   if (!company) return Response.json({ error: "not found" }, { status: 404 });
   try {
     const counts = await deleteCompany(company.id);
-    const row = await prisma.company.findUnique({ where: { id: company.id }, select: { deletedBatch: true } });
     await auditRequest(req, {
       action: "company.deleted",
       target: company.id,
-      detail: { slug: company.slug, products: counts.products, services: counts.services, batch: row?.deletedBatch ?? null },
+      detail: { slug: company.slug, products: counts.products, services: counts.services, batch: counts.batch },
     });
-    return Response.json(counts, { status: 200 });
+    return Response.json({ products: counts.products, services: counts.services }, { status: 200 });
   } catch (e) {
     if (e instanceof HierarchyNotFoundError) return Response.json({ error: e.message }, { status: 404 });
     if (e instanceof HierarchyStateConflictError) return Response.json({ error: e.message }, { status: 409 });
