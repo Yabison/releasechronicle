@@ -14,6 +14,7 @@ import { FILTER_KEYS, entryFilterKey, isFilterKey, type FilterKey } from "@/lib/
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { useI18n } from "@/i18n/useI18n";
 import { useTimeFormat } from "@/lib/useTimeFormat";
+import { useTagColors } from "@/lib/useTagColors";
 import type { ClientEvent } from "@/lib/timeline";
 import { siblings, lotKey } from "@/lib/deployLot";
 import styles from "./DetailPane.module.css";
@@ -173,16 +174,7 @@ export function DetailPane({
     [events, t],
   );
   const [phaseDefaults, setPhaseDefaults] = useState<{ changeType: string; parentId: string; environment: string; parentOccurredAt: string } | null>(null);
-  // Tag colours for the timeline chips.
-  const [tagColors, setTagColors] = useState<Record<string, string>>({});
-  useEffect(() => {
-    fetch("/api/v1/tags").then((r) => r.json()).then((rows: { name: string; slug: string; color: string | null }[]) => {
-      const m: Record<string, string> = {};
-      for (const t of rows) if (t.color) { m[t.name] = t.color; m[t.slug] = t.color; }
-      setTagColors(m);
-      // Cosmetic on purpose: a failure here only means uncoloured tag chips.
-    }).catch(() => {});
-  }, []);
+  const tagColors = useTagColors();
 
   const scopedEvents = useMemo(() => {
     const ver = q.version.trim().toLowerCase();

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import type { Overview } from "@/lib/overview";
 import { useI18n } from "@/i18n/useI18n";
 import { useTimeFormat } from "@/lib/useTimeFormat";
+import { useTagColors } from "@/lib/useTagColors";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { buildServiceTimeline, groupByMonth } from "@/lib/eventTimeline";
 import { FILTER_KEYS, DEPLOY_KEYS, entryFilterKey, isFilterKey, type FilterKey } from "@/lib/timelineFilter";
@@ -29,7 +30,6 @@ export function OverviewDashboard({
   companyName,
   productName,
   envColors = {},
-  tagColors = {},
   lotMembers = {},
   lotWarnings = {},
 }: {
@@ -37,12 +37,12 @@ export function OverviewDashboard({
   companyName?: string;
   productName?: string;
   envColors?: Record<string, string>;
-  tagColors?: Record<string, string>;
   lotMembers?: Record<string, LotMember[]>;
   lotWarnings?: Record<string, string[]>;
 }) {
   const { t, locale } = useI18n();
   const { mode: timeMode } = useTimeFormat();
+  const tagColors = useTagColors();
   useAutoRefresh();
   const searchParams = useSearchParams();
   const scoped = Boolean(companyName);
