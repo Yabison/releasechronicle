@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { EventDrawer } from "./EventDrawer";
+import { EventDrawer, type CausalInfo } from "./EventDrawer";
 import { EventModal } from "./EventModal";
 import { LotModal } from "./LotModal";
 import { ExcelBar } from "./ExcelBar";
@@ -47,6 +47,7 @@ export function DetailPane({
   canWrite = true,
   defaultFrom,
   olderCount,
+  causal = {},
 }: {
   company: string;
   product: string;
@@ -67,6 +68,9 @@ export function DetailPane({
   defaultFrom: string;
   /** Events that exist before the loaded window — powers "show older". */
   olderCount: number;
+  /** eventId → resolved product-wide causal summary, computed server-side
+   *  (getCausalSummaries in @/lib/causal) with visibility already applied. */
+  causal?: Record<string, CausalInfo>;
 }) {
   const { t, locale } = useI18n();
   const { mode: timeMode } = useTimeFormat();
@@ -406,6 +410,7 @@ export function DetailPane({
           envWorkflow={envWorkflow}
           envColors={envColors}
           canWrite={canWrite}
+          causal={causal[selectedEvent.id] ?? { led: [] }}
           onNewPhase={(changeType, parentId) => {
             const parent = events.find((e) => e.id === parentId);
             setPhaseDefaults({ changeType, parentId, environment: parent?.environment ?? "", parentOccurredAt: parent?.occurredAt ?? "" });

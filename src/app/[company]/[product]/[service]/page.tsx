@@ -3,6 +3,9 @@ import { getServiceBySlug, getProductBySlug, effectiveEnvWorkflow } from "@/lib/
 import { listServiceEvents, countServiceEventsBefore } from "@/lib/events";
 import { toClientEvents } from "@/lib/timeline";
 import { DetailPane } from "@/components/DetailPane";
+import type { CausalInfo } from "@/components/EventDrawer";
+import { getCausalSummaries } from "@/lib/causal";
+import { publicEventScopeWhere, type Scope } from "@/lib/apiVisibility";
 import { resolveEnvColorMap, getPublicEnvSlugs } from "@/lib/environment";
 import { getSession } from "@/lib/auth/session";
 import { canWrite, isAnonymous, isServicePublic, getPublicEventTypes } from "@/lib/visibility";
@@ -46,16 +49,35 @@ export default async function ServicePage({
     from ? countServiceEventsBefore(svc.id, from) : Promise.resolve(0),
   ]);
   let events = toClientEvents(rows as unknown as Array<Record<string, unknown>>);
+  let scope: Scope = { anonymous: false };
   if (anon) {
     const [publicTypes, publicEnvs] = await Promise.all([getPublicEventTypes(), getPublicEnvSlugs()]);
     const envSet = new Set(publicEnvs);
     events = events.filter((e) => publicTypes.includes(e.type) && envSet.has(e.environment));
+    scope = { anonymous: true, types: publicTypes, envs: publicEnvs };
   }
 
   const lots = [...new Set(events.map((e) => e.lot).filter((l): l is string => !!l))];
   const { getLotMembers, lotRollbackWarnings } = await import("@/lib/deployLot");
   const lotMembers = await getLotMembers(lots);
   const lotWarnings = lotRollbackWarnings(lotMembers);
+
+  // Causal links are deliberately product-wide (a cause may live on a sibling
+  // service), so they're resolved against the DB here — not from `events`, which
+  // is this service only — and gated by the same public/anonymous visibility rules
+  // as the rest of this page, not by session (read-only visitors need this too).
+  // Two batched queries cover every event on the page; see getCausalSummaries.
+  const causalSummaries = await getCausalSummaries(
+    events.map((e) => ({ id: e.id, causedById: e.causedById })),
+    publicEventScopeWhere(scope),
+  );
+  const causal: Record<string, CausalInfo> = {};
+  for (const [id, s] of causalSummaries) {
+    causal[id] = {
+      causedBy: s.causedBy ? { ...s.causedBy, occurredAt: s.causedBy.occurredAt.toISOString() } : undefined,
+      led: s.led.map((l) => ({ ...l, occurredAt: l.occurredAt.toISOString() })),
+    };
+  }
 
   return (
     <DetailPane
@@ -75,6 +97,7 @@ export default async function ServicePage({
       canWrite={canWrite(session)}
       defaultFrom={defaultFrom}
       olderCount={olderCount}
+      causal={causal}
     />
   );
 }

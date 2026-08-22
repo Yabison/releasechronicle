@@ -21,7 +21,7 @@ export async function reportRuntimeBuild(input: { serviceId: string; environment
       deployStatus: "DEPLOYED", deletedAt: null,
     },
     orderBy: { occurredAt: "desc" },
-    select: { version: true },
+    select: { id: true, version: true },
   });
   const expected = last?.version ?? null;
   const drift = expected !== null && expected !== input.build;
@@ -43,6 +43,8 @@ export async function reportRuntimeBuild(input: { serviceId: string; environment
           incidentType: "BUILD_DRIFT", incidentStatus: "INVESTIGATING",
           comment: `Dérive de build : tourne ${input.build}, attendu ${expected}`,
           source: "API",
+          // The drift is caused by the deployment whose version was expected.
+          causedById: last?.id ?? null,
         },
         select: { id: true },
       });

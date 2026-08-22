@@ -9,8 +9,10 @@ import {
   addRollback,
   addQaValidation,
   addObservation,
+  setEventCausedBy,
   setEventChangeType,
   AnnotationTargetError,
+  CausalLinkError,
   PhaseTransitionError,
 } from "@/lib/events";
 
@@ -177,6 +179,114 @@ describe("addObservation", () => {
     const obs = await addObservation(dep.id, { who: "sre", durationMinutes: 15, comment: null });
     expect(obs).not.toBeNull();
     expect(await prisma.observation.count()).toBe(1);
+  });
+});
+
+describe("setEventCausedBy", () => {
+  it("accepts a cause from the same product (a different service) and persists it", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const s1 = await createService({ productId: p.id, name: "Incidents Svc", type: "API" });
+    const s2 = await createService({ productId: p.id, name: "Deploys Svc", type: "API" });
+    const cause = await createEvent(deployData(s2.id));
+    const target = await createEvent({
+      serviceId: s1.id, environment: "PROD", type: "INCIDENT",
+      occurredAt: new Date(), fields: { incidentType: "x", startedAt: new Date(), resolvedAt: null, comment: null },
+    });
+    const updated = await setEventCausedBy(target.id, cause.id);
+    expect(updated?.causedById).toBe(cause.id);
+    expect((await prisma.event.findUnique({ where: { id: target.id } }))?.causedById).toBe(cause.id);
+  });
+
+  it("rejects a cause from a different product", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p1 = await createProduct({ companyId: c.id, name: "Checkout" });
+    const p2 = await createProduct({ companyId: c.id, name: "Billing" });
+    const s1 = await createService({ productId: p1.id, name: "A", type: "API" });
+    const s2 = await createService({ productId: p2.id, name: "B", type: "API" });
+    const cause = await createEvent(deployData(s2.id));
+    const target = await createEvent({
+      serviceId: s1.id, environment: "PROD", type: "INCIDENT",
+      occurredAt: new Date(), fields: { incidentType: "x", startedAt: new Date(), resolvedAt: null, comment: null },
+    });
+    await expect(setEventCausedBy(target.id, cause.id)).rejects.toBeInstanceOf(CausalLinkError);
+  });
+
+  it("rejects a self-link", async () => {
+    const s = await seedService();
+    const ev = await createEvent(deployData(s.id));
+    await expect(setEventCausedBy(ev.id, ev.id)).rejects.toBeInstanceOf(CausalLinkError);
+  });
+
+  it("rejects a cycle", async () => {
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T09:00:00Z") }));
+    const b = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T10:00:00Z") }));
+    await setEventCausedBy(a.id, b.id); // A is caused by B
+    await expect(setEventCausedBy(b.id, a.id)).rejects.toBeInstanceOf(CausalLinkError); // B <- A would cycle
+  });
+
+  it("clears the link with null", async () => {
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id));
+    const b = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-26T09:00:00Z") }));
+    await setEventCausedBy(a.id, b.id);
+    const cleared = await setEventCausedBy(a.id, null);
+    expect(cleared?.causedById).toBeNull();
+  });
+
+  it("clearing with null is always allowed, even when there was no link", async () => {
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id));
+    const cleared = await setEventCausedBy(a.id, null);
+    expect(cleared?.causedById).toBeNull();
+  });
+
+  it("rejects a non-existent cause", async () => {
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id));
+    await expect(setEventCausedBy(a.id, "nonexistent-id")).rejects.toBeInstanceOf(CausalLinkError);
+  });
+
+  it("returns null for a non-existent target", async () => {
+    const result = await setEventCausedBy("nonexistent-id", null);
+    expect(result).toBeNull();
+  });
+
+  it("never lets two concurrent, mutually-conflicting writes create a 2-node cycle", async () => {
+    // A and B start with no cause. Fire "A caused by B" and "B caused by A" at the
+    // same time: each read-then-check-then-write races the other. Sequentially,
+    // the second call would correctly see the first link and refuse (a real
+    // cycle check working as intended); the point of this test is that even
+    // when both checks run concurrently -- each passing before the other's
+    // write lands -- the guard (a single SERIALIZABLE transaction per call,
+    // re-checked against its own transaction client) still holds: Postgres's
+    // serializable-snapshot-isolation detects the write-skew pattern and aborts
+    // one of the two transactions, so the outcome is deterministic regardless
+    // of how the two calls interleave -- never both succeeding, never a cycle.
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T09:00:00Z") }));
+    const b = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T10:00:00Z") }));
+
+    const results = await Promise.allSettled([
+      setEventCausedBy(a.id, b.id), // A <- B
+      setEventCausedBy(b.id, a.id), // B <- A
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    expect(fulfilled.length).toBeLessThanOrEqual(1);
+    // Every rejection must be the guard doing its job (a refused cycle / a detected
+    // write conflict), never some unrelated failure.
+    for (const r of results) {
+      if (r.status === "rejected") expect(r.reason).toBeInstanceOf(CausalLinkError);
+    }
+
+    const [freshA, freshB] = await Promise.all([
+      prisma.event.findUnique({ where: { id: a.id } }),
+      prisma.event.findUnique({ where: { id: b.id } }),
+    ]);
+    // The cycle itself must never exist in the data, however the race resolved.
+    expect(freshA?.causedById === b.id && freshB?.causedById === a.id).toBe(false);
   });
 });
 
