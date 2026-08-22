@@ -20,27 +20,67 @@
 .legend { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 2); margin: var(--space) 0; }
 .legendItem { display: inline-flex; align-items: center; gap: 6px; }
 
-.filters { display: flex; align-items: center; gap: calc(var(--space) * 2); margin: var(--space) 0 calc(var(--space) * 3); }
+.filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: var(--space) 0 calc(var(--space) * 3); }
 .filtersLabel { color: var(--muted); }
-.filters button { font: inherit; background: none; border: none; cursor: pointer; color: var(--muted); padding: 2px 6px; border-radius: var(--radius); }
-.filters button[data-active="true"] { color: var(--text); background: var(--cat-deploy-bg); }
+
+/* Outlined pills. The selected one inverts to a solid fill so "on" is a
+   different shape of contrast, not a slightly different shade — the previous
+   pale-green background was easy to miss on a screen full of pale green. */
+.filters button {
+  font: inherit; font-size: 0.82em; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 14px;
+}
+.filters button:hover { border-color: var(--muted); color: var(--text); }
+/* Selected is the check plus a heavier outline, not a fill. The weight comes
+   from a box-shadow rather than a 2px border: changing border-width would
+   resize the pill and shuffle the whole row on every click. */
+.filters button[data-active="true"] {
+  color: var(--text-soft); border-color: var(--text-soft); font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--text-soft);
+}
+/* The same two categories the type column colours: incident and maintenance,
+   where the category is itself the information. The release family — including
+   hotfix — stays neutral, so the chips and the rows tell the same story. */
+.filters button[data-cat="INCIDENT"]:not([data-active="true"]) { color: var(--cat-incident); border-color: var(--cat-incident); }
+.filters button[data-cat="MAINTENANCE"]:not([data-active="true"]) { color: var(--cat-maint); border-color: var(--cat-maint); }
+.filters button[data-cat="INCIDENT"][data-active="true"] { color: var(--cat-incident); border-color: var(--cat-incident); box-shadow: inset 0 0 0 1px var(--cat-incident); }
+.filters button[data-cat="MAINTENANCE"][data-active="true"] { color: var(--cat-maint); border-color: var(--cat-maint); box-shadow: inset 0 0 0 1px var(--cat-maint); }
+.filterCheck { font-size: 0.85em; line-height: 1; }
 
 .month { margin-bottom: calc(var(--space) * 3); }
 .monthLabel { color: var(--muted); font-size: 0.8em; letter-spacing: 0.08em; margin: calc(var(--space) * 2) 0 var(--space); }
 
-.row { display: flex; align-items: center; gap: calc(var(--space) * 2); width: 100%; background: none; border: none; font: inherit; text-align: left; padding: 8px 4px; cursor: pointer; border-radius: var(--radius); }
+/* A grid, not a flex line: every cell keeps its track whatever its neighbour
+   holds, so version, status and tags stay in one vertical line down a long
+   list. A flex row let each cell breathe with its content and the columns
+   drifted apart between rows. The status track is the only elastic one. */
+.row {
+  display: grid;
+  grid-template-columns: 30px 150px 80px 76px 120px minmax(0, 1fr) 200px;
+  align-items: center;
+  gap: var(--space);
+  width: 100%;
+  background: none; border: none; font: inherit; text-align: left;
+  padding: 8px 4px; cursor: pointer; border-radius: var(--radius);
+}
 .row:hover { background: var(--cat-deploy-bg); }
-.stamp { color: var(--text); width: 104px; flex: none; white-space: nowrap; display: flex; flex-direction: column; }
+
+/* Lead icon track. Fixed width and flex:none so the icons line up vertically
+   down a long list whatever the row beside them contains — the row is a flex
+   line, so without this the column would breathe with its neighbours. */
+.lead { width: 30px; flex: none; display: flex; align-items: center; justify-content: center; }
+.stamp { color: var(--text); white-space: nowrap; display: flex; flex-direction: column; }
 .stampLine { display: flex; gap: 8px; }
 .stampDay { width: 40px; flex: none; }
-.version { color: var(--muted); width: 64px; flex: none; }
-.hnoBadge {
-  flex: none; cursor: default; line-height: 1;
-  display: inline-grid; place-items: center;
-  width: 20px; height: 20px; font-size: 14px; font-weight: 700;
-  background: var(--accent); color: #fff;
-  border-radius: 6px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
-}
+.version { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+/* Out-of-hours marker, beside the time it qualifies. A plain grey glyph: it
+   annotates the timestamp rather than competing with the status, which is the
+   only thing in the row that earns a filled badge. */
+.hnoBadge { flex: none; cursor: default; display: inline-flex; align-items: center; color: var(--text-soft); }
+.hnoBadge svg { width: 12px; height: 12px; }
 .sevIcon {
   flex: none; cursor: default; line-height: 1;
   font-size: 14px; font-weight: 700;
@@ -48,13 +88,48 @@
 .sevIcon[data-sev="red"] { color: var(--cat-incident); }
 .sevIcon[data-sev="orange"] { color: var(--warning); }
 /* Fixed width so the status column stays aligned whatever the env name length (SECURE vs RUN). */
+.envCell, .typeCell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+
+/* Type wording. Its own class rather than the global .catBadge: the row wants
+   the release family in plain text, and fighting that rule's specificity from a
+   module would also have repainted the counters, which still use it.
+
+   Colour is kept only where the category is itself the alert. RELEASE,
+   PRE-RELEASE, POST-RELEASE and HOTFIX are the ordinary case — three quarters
+   of a list painted in category colours spends the reader's attention on what
+   never varies, and leaves none for the incident. */
+.typeBadge { font-size: 0.78em; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; color: var(--text-soft); }
+.typeBadge[data-cat="INCIDENT"] { color: var(--cat-incident); }
+.typeBadge[data-cat="MAINTENANCE"] { color: var(--cat-maint); }
 .envBadge { composes: envChip from global; flex: none; box-sizing: border-box; width: 72px; text-align: center; padding: 2px 6px; }
-.tags { display: inline-flex; gap: 4px; flex: none; }
+
+/* Status column. Alerts live here, next to the status they qualify, instead of
+   trailing off to the right past the version where a scan down the list misses
+   them. */
+.statusCell { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.statusLine { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* Status is a dot plus its label, never the colour alone. */
+.statusBadge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.8em; font-weight: 600; white-space: nowrap; }
+.statusDot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+.alert {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.72em; font-weight: 600; white-space: nowrap;
+  border-radius: 6px; padding: 1px 7px;
+}
+.alert[data-level="danger"] { color: var(--danger); background: var(--danger-bg); border: 1px solid var(--danger-line); }
+.alert[data-level="warning"] { color: var(--warning-text); background: var(--warning-bg); border: 1px solid var(--warning-line); }
+
+/* Tags and the artefact/night markers, right-aligned so the ragged edge of the
+   descriptions never pushes them out of line. */
+.meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.tags { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 .tag { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
 .tagFilter { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .tagFilterChip { font: inherit; font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; cursor: pointer; }
 .tagFilterChip[data-active="true"] { color: var(--text); border-color: var(--muted); }
-.title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9em; color: var(--muted); }
 .endAt { color: var(--muted); font-size: 0.8em; flex: none; }
 /* Finished incidents & maintenances, and rolled-back deployments, are struck through. */
 .row[data-done="true"] .stamp,
@@ -65,17 +140,44 @@
 
 .empty { color: var(--muted); }
 
-.search { display: flex; align-items: center; gap: var(--space); flex-wrap: wrap; margin-bottom: calc(var(--space) * 2); }
-.search input, .search select { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
-.search input[type="date"] { color: var(--muted); }
-.search button { font: inherit; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: var(--radius); padding: 4px 10px; cursor: pointer; }
+/* A row of labelled fields. Each label sits above its control and stays there
+   once the field is filled, which a placeholder cannot do. */
+.search {
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+  margin-bottom: calc(var(--space) * 2);
+}
+.field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.field > span {
+  font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); white-space: nowrap;
+}
+.search input, .search select {
+  font: inherit; font-size: 0.9em; padding: 5px 9px;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--surface); color: var(--text);
+}
+.search input:focus-visible, .search select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The two dates are one control: the arrow between them says so. */
+.range { display: flex; align-items: flex-end; gap: 6px; }
+.rangeArrow { color: var(--muted); padding-bottom: 6px; }
+
+.reset {
+  font: inherit; font-size: 0.82em; background: transparent;
+  border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.reset:hover { border-color: var(--muted); color: var(--text); }
 
 /* Narrow screens: rows and filter bars wrap instead of overflowing the viewport. */
 @media (max-width: 640px) {
   .filters { flex-wrap: wrap; row-gap: 4px; }
-  .row { flex-wrap: wrap; row-gap: 2px; }
-  .stamp { width: auto; flex-direction: row; gap: 6px; }
-  .title { flex-basis: 100%; order: 10; white-space: normal; }
+  /* Seven fixed tracks do not fit a phone: fall back to the wrapping line. */
+  .row { display: flex; flex-wrap: wrap; row-gap: 2px; align-items: center; }
+  .stamp { flex-direction: row; gap: 6px; }
+  .statusCell { flex-basis: 100%; order: 10; }
+  .meta { justify-content: flex-start; }
+  .title { white-space: normal; }
 }
 
 .showOlder {
@@ -84,3 +186,13 @@
   color: var(--muted); padding: 6px 14px; cursor: pointer;
 }
 .showOlder:hover { color: var(--text); background: var(--cat-deploy-bg); }
+
+/* Status wording. The colour is carried by the text itself, so it needs the
+   text-safe --st-* tokens, not the pill fills. */
+/* No nowrap: the long wording ("Programmé - En attente du GO/NOGO") is a
+   sentence, and the status track is the elastic one, so it may wrap. */
+.statusText { font-size: 0.82em; font-weight: 600; }
+
+/* Dashboard rows only: which service the entry belongs to, since one list there
+   spans a whole company. */
+.rowCtx { color: var(--text-soft); font-weight: 600; }

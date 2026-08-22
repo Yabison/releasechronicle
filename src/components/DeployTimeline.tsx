@@ -11,13 +11,11 @@ import { RollbackModal } from "./RollbackModal";
 import { UndoModal } from "./UndoModal";
 import styles from "./DeployTimeline.module.css";
 import { useI18n } from "@/i18n/useI18n";
-import { rollbackText } from "@/i18n/labels";
+import { rollbackText, deployStatusLabel } from "@/i18n/labels";
 import { useTimeFormat } from "@/lib/useTimeFormat";
 
 /** Human-friendly stepper label for a status (STATUS_META keeps the raw enum names). */
-function statusLabel(t: (key: string) => string, status: DeployStatus): string {
-  return t(`deploy.status.${status}`);
-}
+const statusLabel = deployStatusLabel;
 
 type HistItem =
   | { id: string; at: string; kind: "transition"; from: string | null; to: string; who: string | null; comment: string | null }

@@ -7,27 +7,23 @@ import { EventModal } from "./EventModal";
 import { LotModal } from "./LotModal";
 import { ExcelBar } from "./ExcelBar";
 import { TimelineRow } from "./TimelineRow";
-import { buildServiceTimeline, groupByMonth, type EntryCategory, type TimelineEntry } from "@/lib/eventTimeline";
+import { buildServiceTimeline, groupByMonth, type EntryCategory } from "@/lib/eventTimeline";
 import { categoryLabel, changeTypeLabel } from "@/i18n/labels";
+import { CategoryFilter } from "./CategoryFilter";
+import { TimelineFilters } from "./TimelineFilters";
+import { FILTER_KEYS, entryFilterKey, isFilterKey, type FilterKey } from "@/lib/timelineFilter";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { useI18n } from "@/i18n/useI18n";
 import { useTimeFormat } from "@/lib/useTimeFormat";
+import { useTagColors } from "@/lib/useTagColors";
 import type { ClientEvent } from "@/lib/timeline";
 import { siblings, lotKey } from "@/lib/deployLot";
 import styles from "./DetailPane.module.css";
 
 const FILTERS: EntryCategory[] = ["DEPLOY", "HOTFIX", "INCIDENT", "MAINTENANCE"];
 // Visibility filters split DEPLOY into plain MEP + its PRE/POST phases.
-type FilterKey = EntryCategory | "PRE" | "POST";
-const FILTER_KEYS: FilterKey[] = ["DEPLOY", "PRE", "POST", "HOTFIX", "INCIDENT", "MAINTENANCE"];
+
 /** Filter button label: the phase filters reuse the PRE/POST MEP change-type labels. */
-function filterLabel(t: (key: string) => string, key: FilterKey): string {
-  return key === "PRE" || key === "POST" ? changeTypeLabel(t, `${key}_MEP`) : categoryLabel(t, key);
-}
-function entryFilterKey(e: TimelineEntry): FilterKey {
-  if (e.category === "DEPLOY") return e.phase === "PRE" ? "PRE" : e.phase === "POST" ? "POST" : "DEPLOY";
-  return e.category;
-}
 const ALL_ENV = "ALL";
 
 export function DetailPane({
@@ -103,8 +99,8 @@ export function DetailPane({
   // Filters are visibility toggles, all enabled by default.
   const [active, setActive] = useState<Set<FilterKey>>(() => {
     const c = sp("cat");
-    const keys = c ? c.split(",").filter((k): k is FilterKey => (FILTER_KEYS as string[]).includes(k)) : [];
-    return keys.length ? new Set(keys) : new Set(FILTER_KEYS);
+    const keys = c ? c.split(",").filter(isFilterKey) : [];
+    return keys.length ? new Set(keys) : new Set<FilterKey>(FILTER_KEYS);
   });
   const [selected, setSelected] = useState<string | null>(null);
   // Open a specific MEP when linked with ?event=<id> (e.g. from the build trace in another tab).
@@ -158,14 +154,9 @@ export function DetailPane({
       window.history.replaceState(null, "", next);
     }
   }, [env, active, q, selected]);
-  // Tag filter: free-text input with autocomplete suggestions; picked tags become chips.
+  // Tag filter: free-text input with autocomplete suggestions; picked tags become
+  // chips. TimelineFilters owns the adding now.
   const [tagInput, setTagInput] = useState("");
-  function addTag(v: string) {
-    const tag = v.trim();
-    if (!tag) return;
-    setQ((s) => (s.tags.includes(tag) ? s : { ...s, tags: [...s.tags, tag] }));
-    setTagInput("");
-  }
 
   // Near-real-time: pick up other users' changes without a manual reload.
   useAutoRefresh();
@@ -179,16 +170,7 @@ export function DetailPane({
     [events, t],
   );
   const [phaseDefaults, setPhaseDefaults] = useState<{ changeType: string; parentId: string; environment: string; parentOccurredAt: string } | null>(null);
-  // Tag colours for the timeline chips.
-  const [tagColors, setTagColors] = useState<Record<string, string>>({});
-  useEffect(() => {
-    fetch("/api/v1/tags").then((r) => r.json()).then((rows: { name: string; slug: string; color: string | null }[]) => {
-      const m: Record<string, string> = {};
-      for (const t of rows) if (t.color) { m[t.name] = t.color; m[t.slug] = t.color; }
-      setTagColors(m);
-      // Cosmetic on purpose: a failure here only means uncoloured tag chips.
-    }).catch(() => {});
-  }, []);
+  const tagColors = useTagColors();
 
   const scopedEvents = useMemo(() => {
     const ver = q.version.trim().toLowerCase();
@@ -277,76 +259,27 @@ export function DetailPane({
           </span>
         ))}
       </div>
-      <div className={styles.filters}>
-        <span className={styles.filtersLabel}>{t("detail.filter")}</span>
-        {FILTER_KEYS.map((c) => (
-          <button key={c} data-active={active.has(c)} onClick={() => toggle(c)}>
-            {filterLabel(t, c)}
-          </button>
-        ))}
-      </div>
+      <CategoryFilter active={active} onToggle={toggle} />
 
-      <div className={styles.search}>
-        <input placeholder={t("common.version")} value={q.version} onChange={(e) => setQ({ ...q, version: e.target.value })} aria-label={t("common.version")} />
-        <input placeholder={t("detail.requester")} value={q.requester} onChange={(e) => setQ({ ...q, requester: e.target.value })} aria-label={t("detail.requester")} />
-        <span className={styles.tagFilter}>
-          {q.tags.map((tg) => (
-            <button
-              key={tg}
-              type="button"
-              className={styles.tagFilterChip}
-              data-active
-              style={tagColors[tg] ? { background: tagColors[tg], color: "#fff", borderColor: tagColors[tg] } : undefined}
-              onClick={() => setQ((s) => ({ ...s, tags: s.tags.filter((x) => x !== tg) }))}
-              title={t("form.addTag")}
-            >
-              {tg} ×
-            </button>
-          ))}
-          {allTags.length > 0 && (
-            <>
-              <input
-                list="tagFilterOptions"
-                placeholder={t("form.tags")}
-                aria-label={t("form.tags")}
-                value={tagInput}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  // Picking a value from the datalist fires change with the full option.
-                  if (allTags.includes(v)) addTag(v);
-                  else setTagInput(v);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); }
-                }}
-              />
-              <datalist id="tagFilterOptions">
-                {allTags.filter((tg) => !q.tags.includes(tg)).map((tg) => (
-                  <option key={tg} value={tg} />
-                ))}
-              </datalist>
-            </>
-          )}
-        </span>
-        <select value={q.hourType} onChange={(e) => setQ({ ...q, hourType: e.target.value })} aria-label={t("form.hourType")}>
-          <option value="">{t("form.hourType")}</option>
-          <option value="HO">{t("form.hoLong")}</option>
-          <option value="HNO">{t("form.hnoLong")}</option>
-        </select>
-        <input type="date" value={q.from} onChange={(e) => setDateWindow({ from: e.target.value })} aria-label={t("filter.from")} />
-        <input type="date" value={q.to} onChange={(e) => setDateWindow({ to: e.target.value })} aria-label={t("filter.to")} />
-        {(q.version || q.requester || q.tags.length > 0 || q.hourType || q.from !== defaultFrom || q.to) && (
-          <button
-            type="button"
-            onClick={() => {
-              setTagInput("");
-              setQ((s) => ({ ...s, version: "", requester: "", tags: [], hourType: "" }));
-              // Dates go through the navigation path: they re-window the server query.
-              setDateWindow({ from: defaultFrom, to: "" });
-            }}
-          >{t("detail.reset")}</button>
-        )}
-      </div>
+      <TimelineFilters
+        value={q}
+        onChange={(patch) => setQ((prev) => ({ ...prev, ...patch }))}
+        onDates={setDateWindow}
+        onReset={
+          q.version || q.requester || q.tags.length > 0 || q.hourType || q.from !== defaultFrom || q.to
+            ? () => {
+                setTagInput("");
+                setQ((prev) => ({ ...prev, version: "", requester: "", tags: [], hourType: "" }));
+                // Dates go through the navigation path: they re-window the server query.
+                setDateWindow({ from: defaultFrom, to: "" });
+              }
+            : null
+        }
+        allTags={allTags}
+        tagInput={tagInput}
+        onTagInput={setTagInput}
+        tagColors={tagColors}
+      />
 
       {nothing ? (
         <p className={styles.empty}>{t("detail.empty")}</p>

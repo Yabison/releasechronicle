@@ -1,0 +1,29 @@
+/* Fixed width, so the icons stay in one vertical line whatever the row beside
+   them contains. The column is sized here rather than in the grid template so
+   the badge and its track cannot drift apart. */
+.icon {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon svg { width: 14px; height: 14px; }
+.icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Neutral while nothing is due, violet while in flight, green when it closes.
+   In flight is deliberately not a warm colour: at 14px an amber glyph sat 26°
+   from the red danger circle on the hue wheel and the two blurred together.
+   Violet is 97° from red, and its glyphs — clock, circling arrow — share
+   nothing with the maintenance wrench 50° away. */
+.icon[data-icon="scheduled"] { background: var(--lead-idle-bg); color: var(--lead-idle-fg); }
+.icon[data-icon="waiting"],
+.icon[data-icon="running"] { background: var(--lead-busy-bg); color: var(--lead-busy-fg); }
+.icon[data-icon="validated"],
+.icon[data-icon="release"],
+.icon[data-icon="hotfix"] { background: var(--lead-release-bg); color: var(--lead-release-fg); }
+.icon[data-icon="incident"] { background: var(--lead-incident-bg); color: var(--lead-incident-fg); }
+.icon[data-icon="maintenance"] { background: var(--lead-maint-bg); color: var(--lead-maint-fg); }
+.icon[data-icon="danger"] { background: var(--lead-danger-bg); color: var(--lead-danger-fg); }

@@ -18,7 +18,24 @@ export function phaseLabel(t: Translate, phase: "PRE" | "POST"): string {
   return t(`phase.${phase}`);
 }
 
-/** Timeline category badge (MEP / HOTFIX / Incident / Maintenance). */
+/** Localized wording of a deploy status ("Déployé", "En test", …). The raw enum
+ *  names live in STATUS_META for the places that still show them. */
+export function deployStatusLabel(t: Translate, status: string): string {
+  const key = `deploy.status.${status}`;
+  const label = t(key);
+  return label === key ? status : label;
+}
+
+/** The same status, spelled out for the timeline row, where there is room for
+ *  a sentence: "Déployé - Test en attente" rather than "Déployé". The short form
+ *  above stays for the seven-step stepper, which has one column per status. */
+export function deployStatusLongLabel(t: Translate, status: string): string {
+  const key = `deploy.statusLong.${status}`;
+  const label = t(key);
+  return label === key ? deployStatusLabel(t, status) : label;
+}
+
+/** Timeline category badge (RELEASE / HOTFIX / Incident / Maintenance). */
 export function categoryLabel(t: Translate, category: string): string {
   const key = `category.${category}`;
   const label = t(key);

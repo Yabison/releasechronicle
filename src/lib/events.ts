@@ -79,7 +79,7 @@ type ListFilter = {
   scope?: Prisma.EventWhereInput;
 };
 
-function deriveFor(
+export function deriveFor(
   e: { type: EventType; windowStart: Date | null; windowEnd: Date | null; startedAt: Date | null; resolvedAt: Date | null },
   now: Date,
 ) {
@@ -109,7 +109,9 @@ function serviceEventsWhere(serviceId: string, filter: ListFilter): Prisma.Event
 // cursor can cut between them without skipping or repeating rows.
 const FEED_ORDER = [{ occurredAt: "desc" }, { id: "desc" }] satisfies Prisma.EventOrderByWithRelationInput[];
 
-const FEED_INCLUDE = {
+/** Exported so the dashboards can load events in the same shape as a service
+ *  feed, and reuse buildServiceTimeline instead of a second row model. */
+export const FEED_INCLUDE = {
   rollbacks: true,
   qaValidations: true,
   observations: true,
