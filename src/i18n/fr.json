@@ -430,6 +430,7 @@
   "settings.passwordLocal": "Défini dans config/auth-users.yml — à changer par un administrateur.",
   "settings.language": "Langue",
   "settings.theme": "Thème",
+  "settings.time": "Affichage des heures",
   "settings.home": "Page d'accueil",
   "settings.homeHint": "La page ouverte à la connexion, avec sa recherche si vous l'épinglez.",
   "settings.homeDefault": "Vue d'ensemble (défaut)",

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth/session";
 import { LOCALE_COOKIE } from "@/i18n";
 import { THEME_COOKIE, THEME_COOKIE_MAX_AGE } from "@/lib/theme";
+import { TIME_COOKIE } from "@/lib/timeMode";
 import { saveUserPreferences, type UserPreferences } from "@/lib/userPreferences";
 
 /**
@@ -27,6 +28,7 @@ export async function savePreferencesAction(
   const opts = { path: "/", maxAge: THEME_COOKIE_MAX_AGE, sameSite: "lax" as const };
   if (preferences.locale) jar.set(LOCALE_COOKIE, preferences.locale, opts);
   if (preferences.theme) jar.set(THEME_COOKIE, preferences.theme, opts);
+  if (preferences.timeMode) jar.set(TIME_COOKIE, preferences.timeMode, opts);
 
   return { ok: true, preferences };
 }

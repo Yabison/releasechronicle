@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 import { LOCALES } from "@/i18n";
 import { THEMES, type Theme } from "@/lib/theme";
 import type { UserPreferences } from "@/lib/userPreferences";
@@ -35,6 +36,7 @@ export function SettingsModal({
   onClose: () => void;
 }) {
   const { t, locale } = useI18n();
+  const { mode: timeMode } = useTimeFormat();
   const [draft, setDraft] = useState<UserPreferences>(preferences);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -103,6 +105,23 @@ export function SettingsModal({
                 onClick={() => set({ theme: value })}
               >
                 <span aria-hidden>{THEME_ICON[value]}</span> {t(`theme.${value}`)}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className={styles.section}>
+          <h3 className={styles.sectionTitle}>{t("settings.time")}</h3>
+          <div className={styles.choices}>
+            {(["local", "utc"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                data-active={(draft.timeMode ?? timeMode) === m}
+                aria-pressed={(draft.timeMode ?? timeMode) === m}
+                onClick={() => set({ timeMode: m })}
+              >
+                {m === "local" ? t("time.local") : "UTC"}
               </button>
             ))}
           </div>

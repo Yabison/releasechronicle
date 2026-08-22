@@ -41,8 +41,8 @@ describe("isSafeHomeQuery", () => {
 
 describe("sanitize", () => {
   it("keeps valid values", () => {
-    expect(sanitize({ locale: "en", theme: "dark", homePath: "/weda", homeQuery: "cat=INCIDENT" })).toEqual({
-      locale: "en", theme: "dark", homePath: "/weda", homeQuery: "cat=INCIDENT",
+    expect(sanitize({ locale: "en", theme: "dark", timeMode: "utc", homePath: "/weda", homeQuery: "cat=INCIDENT" })).toEqual({
+      locale: "en", theme: "dark", timeMode: "utc", homePath: "/weda", homeQuery: "cat=INCIDENT",
     });
   });
 
@@ -78,5 +78,14 @@ describe("homeTarget — the self-redirect", () => {
   it("treats a root path as no preference", () => {
     expect(homeTarget({ ...EMPTY_PREFERENCES, homePath: "/" })).toBeNull();
     expect(homeTarget({ ...EMPTY_PREFERENCES, homePath: "/", homeQuery: "cat=A" })).toBeNull();
+  });
+});
+
+describe("sanitize — time mode", () => {
+  it("keeps the two modes and drops the rest", () => {
+    expect(sanitize({ timeMode: "utc" }).timeMode).toBe("utc");
+    expect(sanitize({ timeMode: "local" }).timeMode).toBe("local");
+    expect(sanitize({ timeMode: "UTC" }).timeMode).toBeNull();
+    expect(sanitize({ timeMode: "" }).timeMode).toBeNull();
   });
 });

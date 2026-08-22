@@ -123,6 +123,8 @@ model UserPreference {
   username  String   @id
   locale    String?
   theme     String?
+  /// "local" or "utc" — how timestamps are displayed.
+  timeMode  String?
   /// Path to land on instead of "/", e.g. "/weda/weda".
   homePath  String?
   /// Query string pinned with it, e.g. "?cat=INCIDENT". Stored apart so a path

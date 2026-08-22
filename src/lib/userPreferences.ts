@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { isLocale, type Locale } from "@/i18n";
 import { isTheme, type Theme } from "@/lib/theme";
+import { isTimeMode } from "@/lib/timeMode";
+import type { TimeMode } from "@/lib/dateDisplay";
 
 /**
  * Per-user preferences.
@@ -15,11 +17,12 @@ import { isTheme, type Theme } from "@/lib/theme";
 export type UserPreferences = {
   locale: Locale | null;
   theme: Theme | null;
+  timeMode: TimeMode | null;
   homePath: string | null;
   homeQuery: string | null;
 };
 
-export const EMPTY_PREFERENCES: UserPreferences = { locale: null, theme: null, homePath: null, homeQuery: null };
+export const EMPTY_PREFERENCES: UserPreferences = { locale: null, theme: null, timeMode: null, homePath: null, homeQuery: null };
 
 /**
  * A landing path is user input that ends up in a redirect, so it may only ever
@@ -43,6 +46,7 @@ export function sanitize(input: Partial<Record<keyof UserPreferences, unknown>>)
   return {
     locale: isLocale(input.locale) ? input.locale : null,
     theme: isTheme(input.theme) ? input.theme : null,
+    timeMode: isTimeMode(input.timeMode) ? input.timeMode : null,
     homePath: path && isSafeHomePath(path) ? path : null,
     // A query without a path has nothing to pin itself to.
     homeQuery: path && isSafeHomePath(path) && query && isSafeHomeQuery(query) ? query : null,

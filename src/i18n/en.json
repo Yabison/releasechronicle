@@ -430,6 +430,7 @@
   "settings.passwordLocal": "Set in config/auth-users.yml — an administrator changes it.",
   "settings.language": "Language",
   "settings.theme": "Theme",
+  "settings.time": "Time display",
   "settings.home": "Home page",
   "settings.homeHint": "The page opened on sign-in, with its search if you pin it.",
   "settings.homeDefault": "Overview (default)",
