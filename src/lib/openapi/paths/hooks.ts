@@ -11,7 +11,7 @@ export const hookPaths = {
     },
     post: {
       summary: "Create a hook on a product",
-      security: [{ bearerAuth: [] }],
+      security: [{ adminSession: [] }],
       parameters: [
         { name: "slug", in: "path", required: true, schema: { type: "string" } },
         { name: "company", in: "query", required: true, schema: { type: "string" } },
@@ -27,7 +27,7 @@ export const hookPaths = {
   "/api/v1/products/{slug}/hooks/{hookId}": {
     delete: {
       summary: "Delete a hook",
-      security: [{ bearerAuth: [] }],
+      security: [{ adminSession: [] }],
       parameters: [
         { name: "slug", in: "path", required: true, schema: { type: "string" } },
         { name: "hookId", in: "path", required: true, schema: { type: "string" } },
