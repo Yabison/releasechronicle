@@ -12,6 +12,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { readSessionFromCookieHeader } from "@/lib/auth/session";
+import { log } from "@/lib/log";
 
 export type AuditEntry = {
   action: string;
@@ -35,7 +36,7 @@ export async function recordAudit(entry: AuditEntry): Promise<void> {
       },
     });
   } catch (e) {
-    console.error("[audit] failed to record", entry.action, e);
+    log.error("audit write failed", { action: entry.action, target: entry.target ?? null, err: e });
   }
 }
 
