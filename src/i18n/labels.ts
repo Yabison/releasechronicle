@@ -1,6 +1,10 @@
 /** Localized labels for enum-ish values shown in the UI (deployment change types, phases). */
 
-export const CHANGE_TYPES = ["NORMAL", "HOTFIX", "PRE_MEP", "POST_MEP", "POSTMEP_SQL"] as const;
+/** Selectable change types. POSTMEP_SQL is deliberately absent: it is retired
+ *  from the UI, but the Postgres enum keeps the value so events already carrying
+ *  it stay readable — dropping it from the enum would fail on any instance that
+ *  has one. */
+export const CHANGE_TYPES = ["NORMAL", "HOTFIX", "PRE_MEP", "POST_MEP"] as const;
 export type ChangeTypeValue = (typeof CHANGE_TYPES)[number];
 
 type Translate = (key: string) => string;

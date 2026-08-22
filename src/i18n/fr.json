@@ -420,5 +420,21 @@
   "go.already": "Cette action a déjà été effectuée (statut actuel : {status}).",
   "go.title": "Confirmer l'action",
   "go.question": "Passer {what} de {from} à {to} ?",
-  "timeline.failedRollback": "Échec - Rollback"
+  "timeline.failedRollback": "Échec - Rollback",
+  "settings.title": "Paramètres",
+  "settings.account": "Compte",
+  "settings.name": "Nom",
+  "settings.roles": "Rôles",
+  "settings.password": "Mot de passe",
+  "settings.passwordLdap": "Géré par l'annuaire LDAP/AD — à changer auprès de votre service informatique.",
+  "settings.passwordLocal": "Défini dans config/auth-users.yml — à changer par un administrateur.",
+  "settings.language": "Langue",
+  "settings.theme": "Thème",
+  "settings.home": "Page d'accueil",
+  "settings.homeHint": "La page ouverte à la connexion, avec sa recherche si vous l'épinglez.",
+  "settings.homeDefault": "Vue d'ensemble (défaut)",
+  "settings.useCurrentPage": "Utiliser cette page",
+  "settings.useCurrentSearch": "Épingler cette recherche",
+  "settings.noSearchHere": "Aucun filtre actif sur cette page",
+  "settings.resetHome": "Par défaut"
 }

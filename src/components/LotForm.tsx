@@ -8,7 +8,7 @@ import { useTimeFormat } from "@/lib/useTimeFormat";
 import { actionMessage, changeTypeLabel } from "@/i18n/labels";
 import styles from "./EventForm.module.css";
 
-const CHANGE_TYPES = ["NORMAL", "HOTFIX", "POSTMEP_SQL"];
+const CHANGE_TYPES = ["NORMAL", "HOTFIX"];
 const DEPLOY_STATUSES = [
   "SCHEDULED",
   "GO_CONFIRMED",
