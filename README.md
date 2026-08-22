@@ -174,6 +174,7 @@ development and test databases. Full walkthrough: [docs/dev-environment.md](docs
 | `RC_HOOK_DELIVERY_RETENTION_DAYS` | How long terminal hook-delivery rows are kept before the sweeper purges them | `90` |
 | `RC_DEMO_MODE` | Public demo instance: shows the demo accounts on the login page | `false` |
 | `RC_IP_ALLOWLIST` | Comma-separated CIDRs; anything else gets a 403 | *(unset — no restriction)* |
+| `RC_LOG_LEVEL` | Verbosity of the application log, one JSON object per line: `debug`, `info`, `warn`, `error` or `silent` | `info` |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Sending email (the `email` connector) | — |
 
 > In production you must set `AUTH_SECRET`, `RC_WRITE_TOKEN`, `APP_BASE_URL`, and the
@@ -280,7 +281,10 @@ SCHEDULED → PENDING → IN_PROGRESS → DEPLOYED → TESTING → VALIDATE
   deployment duration then ends at the rollback date.
 - **Scheduled release**: create it with the `SCHEDULED` status and a planned date;
   `POST /api/v1/deployments/promote-scheduled` (cron) promotes to `PENDING` the ones
-  that are close to due (`scheduledLeadMinutes`).
+  that are close to due (`scheduledLeadMinutes`). The response reports `promoted`
+  and `ids` for the deployments that moved, plus `notifyFailed` — the subset that
+  moved but whose hooks could not be enqueued, so nobody was told. A cron job that
+  reads only the status code cannot tell the two apart.
 
 ---
 

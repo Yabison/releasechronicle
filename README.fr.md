@@ -169,6 +169,7 @@ bases de dev et de test.
 | `APP_BASE_URL` | Origine des liens one-click dans les messages | `http://localhost:3000` |
 | `RC_WEBHOOK_BLOCK_PRIVATE` | Refuse aussi les webhooks vers des adresses privées/loopback | `false` |
 | `RC_HOOK_DELIVERY_RETENTION_DAYS` | Durée de conservation des lignes de livraison de hooks à l'état terminal avant purge par le sweeper | `90` |
+| `RC_LOG_LEVEL` | Verbosité du journal applicatif, un objet JSON par ligne : `debug`, `info`, `warn`, `error` ou `silent` | `info` |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Envoi des emails (connecteur `email`) | — |
 
 > En production, définir impérativement `AUTH_SECRET`, `RC_WRITE_TOKEN`, `APP_BASE_URL`
@@ -276,7 +277,10 @@ SCHEDULED → PENDING → IN_PROGRESS → DEPLOYED → TESTING → VALIDATE
   déploiement se termine alors à la date du rollback.
 - **MEP planifiée** : créer avec le statut `SCHEDULED` + une date planifiée ;
   `POST /api/v1/deployments/promote-scheduled` (cron) promeut en `PENDING` celles dont
-  l'échéance est proche (délai `scheduledLeadMinutes`).
+  l'échéance est proche (délai `scheduledLeadMinutes`). La réponse renvoie `promoted`
+  et `ids` pour les déploiements réellement promus, plus `notifyFailed` — ceux qui ont
+  bien été promus mais dont les hooks n'ont pu être mis en file, donc personne n'a été
+  prévenu. Un cron qui ne lit que le code de statut ne peut pas distinguer les deux.
 
 ---
 

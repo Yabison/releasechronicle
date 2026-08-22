@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { log } from "@/lib/log";
 import { deliverDeliveries } from "./dispatch";
 
 /** A PENDING row older than this had its immediate send die with the process —
@@ -46,7 +47,7 @@ export function startHookSweeper(intervalMs = 60_000, sweep: () => Promise<unkno
     if (running) return;
     running = true;
     void sweep()
-      .catch((e) => console.error("[hooks] sweep failed:", e))
+      .catch((e) => log.error("hook sweep failed", { mod: "hooks", err: e }))
       .finally(() => { running = false; });
   }, intervalMs);
   timer.unref?.();

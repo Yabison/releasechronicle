@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { parseAllowlist, ipAllowed } from "@/lib/ipAllow";
 import { securityHeaders, newNonce } from "@/lib/securityHeaders";
+// @/lib/log imports nothing, which is what makes it usable here: middleware
+// runs on the edge runtime, where a logger with Node dependencies fails to load.
+import { log } from "@/lib/log";
 
 /**
  * App-wide IP restriction. When RC_IP_ALLOWLIST is set to one or more CIDR
@@ -16,7 +19,7 @@ const rules = parseAllowlist(raw);
 
 if (raw && raw.trim() !== "" && rules.length === 0) {
   // Non-empty config that parsed to nothing would silently fail open — warn loudly.
-  console.warn("[ip-allowlist] RC_IP_ALLOWLIST is set but no valid rule parsed; restriction is INACTIVE");
+  log.warn("RC_IP_ALLOWLIST is set but no valid rule parsed; IP restriction is INACTIVE", { mod: "ip-allowlist" });
 }
 
 function clientIp(req: NextRequest): string | null {

@@ -2,6 +2,7 @@ import { getServiceBySlug } from "@/lib/hierarchy";
 import { createEvent, upsertEventByExternalId, type EventData } from "@/lib/events";
 import { isUniqueViolation } from "@/lib/http";
 import { emitHooks } from "@/lib/hooks/dispatch";
+import { log } from "@/lib/log";
 import "@/lib/hooks";
 import type { EventType } from "@prisma/client";
 import type { EventBodyShape } from "@/lib/schemas/event";
@@ -62,7 +63,7 @@ export async function persistValidatedEvent<F extends Record<string, unknown>>(
       // Enrichment only (lot grouping, rollback detection): the event itself is
       // saved, so don't fail the ingest — but a silent swallow made real bugs
       // here undiagnosable. Log with enough context to find the event again.
-      console.error(`ingest enrichment failed for event ${ev.id}:`, e);
+      log.error("ingest enrichment failed", { mod: "ingest", eventId: ev.id, err: e });
     }
   }
 

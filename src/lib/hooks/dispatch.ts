@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 // and instrumentation.ts, which otherwise never trigger that side effect and
 // would dead-letter every row with "unknown connector".
 import "@/lib/hooks";
+import { log } from "@/lib/log";
 import { getConnector } from "./registry";
 import { transitionMatches } from "./transitions";
 import type { HookEvent, HookEventKind } from "./types";
@@ -117,6 +118,27 @@ async function attemptDelivery(id: string, now: Date): Promise<void> {
   });
   if (claimed.count === 0) return;
 
+  try {
+    await sendClaimed(id, now);
+  } catch (e) {
+    // The claim committed — attempts incremented, lease held — but the attempt
+    // ended without recording an outcome. It may have failed before the send was
+    // even tried, or after a send that succeeded; from here the two are
+    // indistinguishable. Either way the row is not lost: it becomes due again once
+    // the lease expires, which also means a send that did go through will be
+    // repeated. Without this line the whole attempt left no trace anywhere, which
+    // is how a database problem here looked exactly like nothing happening at all.
+    log.error("hook delivery attempt recorded no outcome; row stays leased until it falls due again, so a send that did succeed will be repeated", {
+      mod: "hooks",
+      deliveryId: id,
+      dueAgainAt: new Date(now.getTime() + CLAIM_LEASE_MS).toISOString(),
+      err: e,
+    });
+  }
+}
+
+/** Send a delivery that this worker has already claimed, and record the outcome. */
+async function sendClaimed(id: string, now: Date): Promise<void> {
   const row = await prisma.hookDelivery.findUnique({
     where: { id },
     include: { hook: { include: { target: true } } },

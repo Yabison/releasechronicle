@@ -2,6 +2,7 @@ import type { Event, IngestSource } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { createEvent, type EventData } from "@/lib/events";
 import { getServiceBySlug } from "@/lib/hierarchy";
+import { log } from "@/lib/log";
 import { ciDeploymentBodySchema } from "@/lib/schemas/ciDeployment";
 import { zodErrorMessage } from "@/lib/schemas/parse";
 
@@ -81,7 +82,7 @@ export async function ingestDeployment(
     await detectRollbackOnIngest(event.id);
   } catch (e) {
     // Never break the ingest for enrichment — but never hide the failure either.
-    console.error(`ingest enrichment failed for event ${event.id}:`, e);
+    log.error("ingest enrichment failed", { mod: "ingest", eventId: event.id, err: e });
   }
   return { ok: true, event };
 }
