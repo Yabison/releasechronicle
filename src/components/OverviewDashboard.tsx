@@ -23,7 +23,6 @@ import styles from "./Overview.module.css";
  * maintenance boxes double as filters; every filter mirrors to the URL so a
  * view can be shared.
  */
-const ALL_ENV = "ALL";
 const lotKey = (env: string, lot: string) => `${env}::${lot}`;
 
 export function OverviewDashboard({
@@ -49,13 +48,11 @@ export function OverviewDashboard({
   const scoped = Boolean(companyName);
   const c = overview.counters;
 
-  const [env, setEnv] = useState<string>(() => searchParams.get("env") ?? ALL_ENV);
   const [cats, setCats] = useState<Set<FilterKey>>(() => {
     const p = searchParams.get("cat");
     const keys = p ? p.split(",").filter(isFilterKey) : [];
     return keys.length ? new Set(keys) : new Set<FilterKey>(FILTER_KEYS);
   });
-  const [text, setText] = useState(() => searchParams.get("q") ?? "");
   // The same query the service page runs, minus the server round-trip: a
   // dashboard narrows the feed it already holds.
   const [q, setQ] = useState<TimelineQuery>(() => ({
@@ -73,9 +70,7 @@ export function OverviewDashboard({
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const put = (k: string, v: string | null) => (v === null ? p.delete(k) : p.set(k, v));
-    put("env", env === ALL_ENV ? null : env);
     put("cat", cats.size === FILTER_KEYS.length ? null : [...cats].join(","));
-    put("q", text || null);
     put("v", q.version || null);
     put("r", q.requester || null);
     put("tags", q.tags.length ? q.tags.join(",") : null);
@@ -87,7 +82,7 @@ export function OverviewDashboard({
     if (next !== window.location.pathname + window.location.search) {
       window.history.replaceState(null, "", next);
     }
-  }, [env, cats, text, q]);
+  }, [cats, q]);
 
   /** serviceId -> where it lives, for the row label and the free-text search. */
   const context = useMemo(() => {
@@ -117,7 +112,6 @@ export function OverviewDashboard({
     [overview.events],
   );
 
-  const envs = useMemo(() => [...new Set(overview.events.map((e) => e.environment))].sort(), [overview.events]);
 
   /**
    * Events are narrowed first, then turned into timeline entries — the same
@@ -125,21 +119,11 @@ export function OverviewDashboard({
    * phases and durations that the old dashboard row silently dropped.
    */
   const months = useMemo(() => {
-    const needle = text.trim().toLowerCase();
-    const events = overview.events.filter((r) => {
-      if (env !== ALL_ENV && r.environment !== env) return false;
-      if (!matchesQuery(r, q)) return false;
-      if (needle) {
-        const ctx = context[r.serviceId];
-        const hay = `${ctx?.service.name ?? ""} ${ctx?.product.name ?? ""} ${r.version ?? ""} ${r.requester ?? ""} ${r.comment ?? ""}`.toLowerCase();
-        if (!hay.includes(needle)) return false;
-      }
-      return true;
-    });
+    const events = overview.events.filter((r) => matchesQuery(r, q));
     const { history, maintenances } = buildServiceTimeline(events);
     const entries = [...maintenances, ...history].filter((e) => cats.has(entryFilterKey(e)));
     return groupByMonth(entries, { mode: timeMode, locale });
-  }, [overview.events, context, env, cats, text, q, timeMode, locale]);
+  }, [overview.events, cats, q, timeMode, locale]);
 
   const total = useMemo(() => months.reduce((n, g) => n + g.entries.length, 0), [months]);
 
@@ -185,20 +169,6 @@ export function OverviewDashboard({
         onTagInput={setTagInput}
         tagColors={tagColors}
       />
-
-      <div className={styles.filters}>
-        <select value={env} onChange={(e) => setEnv(e.target.value)} aria-label={t("common.environment")}>
-          <option value={ALL_ENV}>{t("detail.allEnvs")}</option>
-          {envs.map((x) => <option key={x} value={x}>{x}</option>)}
-        </select>
-        <input
-          type="search"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={t("home.searchPh")}
-          aria-label={t("home.searchPh")}
-        />
-      </div>
 
       {total === 0 ? (
         <p className={styles.empty}>{t("home.none")}</p>
