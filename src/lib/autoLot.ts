@@ -22,7 +22,7 @@ export async function attachToAutoLot(eventId: string, _now: Date = new Date()):
     where: { id: eventId },
     include: { service: { include: { product: { include: { company: true } } } } },
   });
-  if (!ev || ev.type !== "DEPLOYMENT" || ev.deletedAt) return { lot: ev?.lot ?? null, members: 1 };
+  if (!ev || ev.type !== "DEPLOYMENT" || ev.deletedAt || ev.service.deletedAt) return { lot: ev?.lot ?? null, members: 1 };
   if (!ev.autoLot && (await isMultiMember(ev.lot, ev.environment))) return { lot: ev.lot, members: 1 };
 
   const W = autoLotWindowMinutes() * 60_000;
@@ -32,7 +32,7 @@ export async function attachToAutoLot(eventId: string, _now: Date = new Date()):
     where: {
       type: "DEPLOYMENT", deletedAt: null, environment: ev.environment,
       occurredAt: { gte: from, lte: to },
-      service: { product: { companyId: ev.service.product.companyId } },
+      service: { deletedAt: null, product: { companyId: ev.service.product.companyId } },
     },
     include: { service: { include: { product: true } } },
     orderBy: { occurredAt: "asc" },
@@ -62,7 +62,7 @@ export async function attachToAutoLot(eventId: string, _now: Date = new Date()):
 export async function sweepAutoLots(now: Date = new Date()): Promise<{ groups: number; assigned: number }> {
   const since = new Date(now.getTime() - 7 * 24 * 60 * 60_000);
   const rows = await prisma.event.findMany({
-    where: { type: "DEPLOYMENT", deletedAt: null, occurredAt: { gte: since } },
+    where: { type: "DEPLOYMENT", deletedAt: null, occurredAt: { gte: since }, service: { deletedAt: null } },
     orderBy: { occurredAt: "asc" }, select: { id: true },
   });
   let groups = 0, assigned = 0;

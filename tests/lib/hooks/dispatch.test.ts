@@ -4,6 +4,7 @@ import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
 import { register } from "@/lib/hooks/registry";
 import { emitHooks, enqueueHooks, deliverDeliveries, CLAIM_LEASE_MS } from "@/lib/hooks/dispatch";
+import { deleteProduct } from "@/lib/hierarchyDelete";
 import type { Connector, HookEvent, HookEventKind } from "@/lib/hooks/types";
 import type { DeployStatus } from "@prisma/client";
 
@@ -173,6 +174,15 @@ describe("hook dispatch", () => {
     expect(calls).toBe(1);
     const row = await prisma.hookDelivery.findUniqueOrThrow({ where: { id: ids[0] } });
     expect(row).toMatchObject({ status: "OK", attempts: 1 });
+  });
+
+  it("enqueues nothing for a hook whose product has been soft-deleted", async () => {
+    const ev = await setup([{ type: "t-ok", events: ["*"] }]);
+    const hook = await prisma.hook.findFirstOrThrow();
+    await deleteProduct(hook.productId);
+    const ids = await enqueueHooks(ev.id, "deploy.created");
+    expect(ids).toHaveLength(0);
+    expect(await prisma.hookDelivery.count()).toBe(0);
   });
 
   it("a claimed row is leased: not claimable again before the lease expires", async () => {

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth/guard";
-import { createProduct, listProducts, getCompanyBySlug } from "@/lib/hierarchy";
+import { requireAdmin, isAdminRequest } from "@/lib/auth/guard";
+import { createProduct, listProducts, getCompanyBySlug, InvalidParentError } from "@/lib/hierarchy";
 import { isUniqueViolation, isForeignKeyViolation } from "@/lib/http";
 import { requestScope } from "@/lib/apiVisibility";
 import { nonEmpty } from "@/lib/schemas/common";
@@ -16,7 +16,10 @@ export async function GET(req: Request) {
   const company = await getCompanyBySlug(companySlug);
   if (!company) return Response.json({ error: "company not found" }, { status: 404 });
   const scope = await requestScope(req);
-  return Response.json(await listProducts(company.id, scope.anonymous));
+  // includeDeleted is admin-only; ignored silently for anyone else (see companies/route.ts).
+  const includeDeleted =
+    new URL(req.url).searchParams.get("includeDeleted") === "1" && (await isAdminRequest(req));
+  return Response.json(await listProducts(company.id, scope.anonymous, includeDeleted));
 }
 
 export async function POST(req: Request) {
@@ -33,6 +36,9 @@ export async function POST(req: Request) {
       return Response.json({ error: "product already exists" }, { status: 409 });
     }
     if (isForeignKeyViolation(e)) {
+      return Response.json({ error: "company not found" }, { status: 400 });
+    }
+    if (e instanceof InvalidParentError) {
       return Response.json({ error: "company not found" }, { status: 400 });
     }
     throw e;

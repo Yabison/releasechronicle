@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ServiceType } from "@prisma/client";
-import { requireAdmin } from "@/lib/auth/guard";
-import { createService, listServices, getProductBySlug } from "@/lib/hierarchy";
+import { requireAdmin, isAdminRequest } from "@/lib/auth/guard";
+import { createService, listServices, getProductBySlug, InvalidParentError } from "@/lib/hierarchy";
 import { isUniqueViolation, isForeignKeyViolation } from "@/lib/http";
 import { requestScope } from "@/lib/apiVisibility";
 import { nonEmpty } from "@/lib/schemas/common";
@@ -26,7 +26,9 @@ export async function GET(req: Request) {
   const product = await getProductBySlug(companySlug, productSlug);
   if (!product) return Response.json({ error: "product not found" }, { status: 404 });
   const scope = await requestScope(req);
-  return Response.json(await listServices(product.id, scope.anonymous));
+  // includeDeleted is admin-only; ignored silently for anyone else (see companies/route.ts).
+  const includeDeleted = url.searchParams.get("includeDeleted") === "1" && (await isAdminRequest(req));
+  return Response.json(await listServices(product.id, scope.anonymous, includeDeleted));
 }
 
 export async function POST(req: Request) {
@@ -47,6 +49,9 @@ export async function POST(req: Request) {
       return Response.json({ error: "service already exists" }, { status: 409 });
     }
     if (isForeignKeyViolation(e)) {
+      return Response.json({ error: "product not found" }, { status: 400 });
+    }
+    if (e instanceof InvalidParentError) {
       return Response.json({ error: "product not found" }, { status: 400 });
     }
     throw e;

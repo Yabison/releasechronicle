@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
-import { getProductBySlug, updateProduct, moveProduct, SlugConflictError } from "@/lib/hierarchy";
+import { auditRequest } from "@/lib/audit";
+import { getProductBySlug, updateProduct, moveProduct, SlugConflictError, InvalidParentError } from "@/lib/hierarchy";
+import { deleteProduct, HierarchyNotFoundError, HierarchyStateConflictError } from "@/lib/hierarchyDelete";
 import { getActiveEnvSlugs } from "@/lib/environment";
 import { optionalStr, ignoredIfInvalid } from "@/lib/schemas/common";
 import { parseBody } from "@/lib/schemas/parse";
@@ -50,6 +52,9 @@ export async function PUT(
       if (e instanceof SlugConflictError) {
         return Response.json({ error: e.message }, { status: 409 });
       }
+      if (e instanceof InvalidParentError) {
+        return Response.json({ error: e.message }, { status: 409 });
+      }
       throw e;
     }
   }
@@ -68,4 +73,32 @@ export async function PUT(
   }
   const updated = await updateProduct(product.id, data);
   return Response.json(updated, { status: 200 });
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ slug: string }> },
+) {
+  const denied = await requireAdmin(req);
+  if (denied) return denied;
+  const { slug } = await params;
+  const companySlug = new URL(req.url).searchParams.get("company");
+  if (!companySlug) {
+    return Response.json({ error: "company query param is required" }, { status: 400 });
+  }
+  const product = await getProductBySlug(companySlug, slug);
+  if (!product) return Response.json({ error: "not found" }, { status: 404 });
+  try {
+    const counts = await deleteProduct(product.id);
+    await auditRequest(req, {
+      action: "product.deleted",
+      target: product.id,
+      detail: { slug: product.slug, services: counts.services, batch: counts.batch },
+    });
+    return Response.json({ services: counts.services }, { status: 200 });
+  } catch (e) {
+    if (e instanceof HierarchyNotFoundError) return Response.json({ error: e.message }, { status: 404 });
+    if (e instanceof HierarchyStateConflictError) return Response.json({ error: e.message }, { status: 409 });
+    throw e;
+  }
 }

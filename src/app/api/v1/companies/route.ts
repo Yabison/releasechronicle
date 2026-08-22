@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth/guard";
+import { requireAdmin, isAdminRequest } from "@/lib/auth/guard";
 import { createCompany, listCompanies } from "@/lib/hierarchy";
 import { isUniqueViolation } from "@/lib/http";
 import { requestScope } from "@/lib/apiVisibility";
@@ -10,7 +10,12 @@ const postSchema = z.object({ name: nonEmpty() });
 
 export async function GET(req: Request) {
   const scope = await requestScope(req);
-  return Response.json(await listCompanies(scope.anonymous));
+  // includeDeleted is admin-only: anyone else asking for it is silently given
+  // the normal live-rows listing rather than a 400/403, since the param is an
+  // enhancement to an otherwise-valid request, not a required input.
+  const includeDeleted =
+    new URL(req.url).searchParams.get("includeDeleted") === "1" && (await isAdminRequest(req));
+  return Response.json(await listCompanies(scope.anonymous, includeDeleted));
 }
 
 export async function POST(req: Request) {

@@ -9,7 +9,10 @@ import "@/lib/hooks";
 export async function promoteScheduledDeployments(now: Date = new Date()): Promise<{ promoted: number; ids: string[] }> {
   const cutoff = new Date(now.getTime() + scheduledLeadMinutes() * 60_000);
   const due = await prisma.event.findMany({
-    where: { type: "DEPLOYMENT", deployStatus: DeployStatus.GO_CONFIRMED, deletedAt: null, scheduledAt: { not: null, lte: cutoff } },
+    where: {
+      type: "DEPLOYMENT", deployStatus: DeployStatus.GO_CONFIRMED, deletedAt: null,
+      scheduledAt: { not: null, lte: cutoff }, service: { deletedAt: null },
+    },
     select: { id: true },
   });
   const ids: string[] = [];

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { resetDb, prisma } from "../setup/db";
-import { createCompany, createProduct, createService, softDeleteService, updateCompanyOrder } from "@/lib/hierarchy";
+import { createCompany, createProduct, createService, updateCompanyOrder } from "@/lib/hierarchy";
+import { deleteService } from "@/lib/hierarchyDelete";
 import { getSidebarTree } from "@/lib/tree";
 import type { SessionUser } from "@/lib/auth/session";
 
@@ -75,7 +76,7 @@ describe("getSidebarTree", () => {
 
   it("excludes soft-deleted services", async () => {
     const { s } = await seedOne();
-    await softDeleteService(s.id);
+    await deleteService(s.id);
     const tree = await getSidebarTree(AUTH);
     expect(tree[0].products[0].services).toHaveLength(0);
   });
