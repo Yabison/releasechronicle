@@ -219,6 +219,7 @@
   "timeline.sevWarning": "Warning: pending release or unvalidated PRE",
   "filter.from": "From",
   "filter.to": "To",
+  "filter.any": "All",
   "cal.prevMonth": "Previous month",
   "cal.nextMonth": "Next month",
   "login.title": "Sign in",

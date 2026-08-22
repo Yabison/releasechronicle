@@ -219,6 +219,7 @@
   "timeline.sevWarning": "Avertissement : release en attente ou PRE non validée",
   "filter.from": "Du",
   "filter.to": "Au",
+  "filter.any": "Tous",
   "cal.prevMonth": "Mois précédent",
   "cal.nextMonth": "Mois suivant",
   "login.title": "Connexion",

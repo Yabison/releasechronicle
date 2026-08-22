@@ -11,6 +11,7 @@ import { buildServiceTimeline, groupByMonth } from "@/lib/eventTimeline";
 import { FILTER_KEYS, DEPLOY_KEYS, entryFilterKey, isFilterKey, type FilterKey } from "@/lib/timelineFilter";
 import type { LotMember } from "@/lib/deployLot";
 import { CategoryFilter } from "./CategoryFilter";
+import { TimelineFilters, matchesQuery, type TimelineQuery } from "./TimelineFilters";
 import { TimelineRow } from "./TimelineRow";
 import detail from "./DetailPane.module.css";
 import styles from "./Overview.module.css";
@@ -55,6 +56,17 @@ export function OverviewDashboard({
     return keys.length ? new Set(keys) : new Set<FilterKey>(FILTER_KEYS);
   });
   const [text, setText] = useState(() => searchParams.get("q") ?? "");
+  // The same query the service page runs, minus the server round-trip: a
+  // dashboard narrows the feed it already holds.
+  const [q, setQ] = useState<TimelineQuery>(() => ({
+    version: searchParams.get("v") ?? "",
+    requester: searchParams.get("r") ?? "",
+    tags: (searchParams.get("tags") ?? "").split(",").filter(Boolean),
+    hourType: searchParams.get("h") ?? "",
+    from: searchParams.get("from") ?? "",
+    to: searchParams.get("to") ?? "",
+  }));
+  const [tagInput, setTagInput] = useState("");
 
   // Shareable filters, same mechanism as the service page: replaceState, no
   // server round-trip, defaults omitted.
@@ -64,12 +76,18 @@ export function OverviewDashboard({
     put("env", env === ALL_ENV ? null : env);
     put("cat", cats.size === FILTER_KEYS.length ? null : [...cats].join(","));
     put("q", text || null);
+    put("v", q.version || null);
+    put("r", q.requester || null);
+    put("tags", q.tags.length ? q.tags.join(",") : null);
+    put("h", q.hourType || null);
+    put("from", q.from || null);
+    put("to", q.to || null);
     const qs = p.toString();
     const next = window.location.pathname + (qs ? `?${qs}` : "");
     if (next !== window.location.pathname + window.location.search) {
       window.history.replaceState(null, "", next);
     }
-  }, [env, cats, text]);
+  }, [env, cats, text, q]);
 
   /** serviceId -> where it lives, for the row label and the free-text search. */
   const context = useMemo(() => {
@@ -94,6 +112,11 @@ export function OverviewDashboard({
     return productName ? c.service.name : `${c.product.name} / ${c.service.name}`;
   };
 
+  const allTags = useMemo(
+    () => [...new Set(overview.events.flatMap((e) => e.tags ?? []))].sort(),
+    [overview.events],
+  );
+
   const envs = useMemo(() => [...new Set(overview.events.map((e) => e.environment))].sort(), [overview.events]);
 
   /**
@@ -102,20 +125,21 @@ export function OverviewDashboard({
    * phases and durations that the old dashboard row silently dropped.
    */
   const months = useMemo(() => {
-    const q = text.trim().toLowerCase();
+    const needle = text.trim().toLowerCase();
     const events = overview.events.filter((r) => {
       if (env !== ALL_ENV && r.environment !== env) return false;
-      if (q) {
+      if (!matchesQuery(r, q)) return false;
+      if (needle) {
         const ctx = context[r.serviceId];
         const hay = `${ctx?.service.name ?? ""} ${ctx?.product.name ?? ""} ${r.version ?? ""} ${r.requester ?? ""} ${r.comment ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
+        if (!hay.includes(needle)) return false;
       }
       return true;
     });
     const { history, maintenances } = buildServiceTimeline(events);
     const entries = [...maintenances, ...history].filter((e) => cats.has(entryFilterKey(e)));
     return groupByMonth(entries, { mode: timeMode, locale });
-  }, [overview.events, context, env, cats, text, timeMode, locale]);
+  }, [overview.events, context, env, cats, text, q, timeMode, locale]);
 
   const total = useMemo(() => months.reduce((n, g) => n + g.entries.length, 0), [months]);
 
@@ -146,6 +170,21 @@ export function OverviewDashboard({
         if (next.has(k)) next.delete(k); else next.add(k);
         return next.size ? next : new Set<FilterKey>(FILTER_KEYS);
       })} />
+
+      <TimelineFilters
+        value={q}
+        onChange={(patch) => setQ((prev) => ({ ...prev, ...patch }))}
+        onDates={(patch) => setQ((prev) => ({ ...prev, ...patch }))}
+        onReset={
+          q.version || q.requester || q.tags.length > 0 || q.hourType || q.from || q.to
+            ? () => { setTagInput(""); setQ({ version: "", requester: "", tags: [], hourType: "", from: "", to: "" }); }
+            : null
+        }
+        allTags={allTags}
+        tagInput={tagInput}
+        onTagInput={setTagInput}
+        tagColors={tagColors}
+      />
 
       <div className={styles.filters}>
         <select value={env} onChange={(e) => setEnv(e.target.value)} aria-label={t("common.environment")}>

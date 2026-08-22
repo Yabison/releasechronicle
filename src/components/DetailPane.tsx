@@ -10,6 +10,7 @@ import { TimelineRow } from "./TimelineRow";
 import { buildServiceTimeline, groupByMonth, type EntryCategory } from "@/lib/eventTimeline";
 import { categoryLabel, changeTypeLabel } from "@/i18n/labels";
 import { CategoryFilter } from "./CategoryFilter";
+import { TimelineFilters } from "./TimelineFilters";
 import { FILTER_KEYS, entryFilterKey, isFilterKey, type FilterKey } from "@/lib/timelineFilter";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { useI18n } from "@/i18n/useI18n";
@@ -153,14 +154,9 @@ export function DetailPane({
       window.history.replaceState(null, "", next);
     }
   }, [env, active, q, selected]);
-  // Tag filter: free-text input with autocomplete suggestions; picked tags become chips.
+  // Tag filter: free-text input with autocomplete suggestions; picked tags become
+  // chips. TimelineFilters owns the adding now.
   const [tagInput, setTagInput] = useState("");
-  function addTag(v: string) {
-    const tag = v.trim();
-    if (!tag) return;
-    setQ((s) => (s.tags.includes(tag) ? s : { ...s, tags: [...s.tags, tag] }));
-    setTagInput("");
-  }
 
   // Near-real-time: pick up other users' changes without a manual reload.
   useAutoRefresh();
@@ -265,96 +261,25 @@ export function DetailPane({
       </div>
       <CategoryFilter active={active} onToggle={toggle} />
 
-      {/* Labelled fields, not bare placeholders: a placeholder is the label
-          until you type, and then the field has no label at all. */}
-      <div className={styles.search}>
-        <label className={styles.field}>
-          <span>{t("common.version")}</span>
-          <input value={q.version} onChange={(e) => setQ({ ...q, version: e.target.value })} />
-        </label>
-
-        <label className={styles.field}>
-          <span>{t("detail.requester")}</span>
-          <input value={q.requester} onChange={(e) => setQ({ ...q, requester: e.target.value })} />
-        </label>
-
-        <div className={styles.field}>
-          <span>{t("form.tags")}</span>
-          <span className={styles.tagFilter}>
-            {q.tags.map((tg) => (
-              <button
-                key={tg}
-                type="button"
-                className={styles.tagFilterChip}
-                data-active
-                style={tagColors[tg] ? { background: tagColors[tg], color: "#fff", borderColor: tagColors[tg] } : undefined}
-                onClick={() => setQ((s) => ({ ...s, tags: s.tags.filter((x) => x !== tg) }))}
-                title={t("form.addTag")}
-              >
-                {tg} ×
-              </button>
-            ))}
-            {allTags.length > 0 && (
-              <>
-                <input
-                  list="tagFilterOptions"
-                  aria-label={t("form.tags")}
-                  value={tagInput}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    // Picking a value from the datalist fires change with the full option.
-                    if (allTags.includes(v)) addTag(v);
-                    else setTagInput(v);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); }
-                  }}
-                />
-                <datalist id="tagFilterOptions">
-                  {allTags.filter((tg) => !q.tags.includes(tg)).map((tg) => (
-                    <option key={tg} value={tg} />
-                  ))}
-                </datalist>
-              </>
-            )}
-          </span>
-        </div>
-
-        <label className={styles.field}>
-          <span>{t("form.hourType")}</span>
-          <select value={q.hourType} onChange={(e) => setQ({ ...q, hourType: e.target.value })}>
-            <option value="">{t("detail.allEnvs")}</option>
-            <option value="HO">{t("form.hoLong")}</option>
-            <option value="HNO">{t("form.hnoLong")}</option>
-          </select>
-        </label>
-
-        {/* One range, not two loose dates: the arrow says they belong together. */}
-        <div className={styles.range}>
-          <label className={styles.field}>
-            <span>{t("filter.from")}</span>
-            <input type="date" value={q.from} onChange={(e) => setDateWindow({ from: e.target.value })} />
-          </label>
-          <span className={styles.rangeArrow} aria-hidden>→</span>
-          <label className={styles.field}>
-            <span>{t("filter.to")}</span>
-            <input type="date" value={q.to} onChange={(e) => setDateWindow({ to: e.target.value })} />
-          </label>
-        </div>
-
-        {(q.version || q.requester || q.tags.length > 0 || q.hourType || q.from !== defaultFrom || q.to) && (
-          <button
-            type="button"
-            className={styles.reset}
-            onClick={() => {
-              setTagInput("");
-              setQ((s) => ({ ...s, version: "", requester: "", tags: [], hourType: "" }));
-              // Dates go through the navigation path: they re-window the server query.
-              setDateWindow({ from: defaultFrom, to: "" });
-            }}
-          >{t("detail.reset")}</button>
-        )}
-      </div>
+      <TimelineFilters
+        value={q}
+        onChange={(patch) => setQ((prev) => ({ ...prev, ...patch }))}
+        onDates={setDateWindow}
+        onReset={
+          q.version || q.requester || q.tags.length > 0 || q.hourType || q.from !== defaultFrom || q.to
+            ? () => {
+                setTagInput("");
+                setQ((prev) => ({ ...prev, version: "", requester: "", tags: [], hourType: "" }));
+                // Dates go through the navigation path: they re-window the server query.
+                setDateWindow({ from: defaultFrom, to: "" });
+              }
+            : null
+        }
+        allTags={allTags}
+        tagInput={tagInput}
+        onTagInput={setTagInput}
+        tagColors={tagColors}
+      />
 
       {nothing ? (
         <p className={styles.empty}>{t("detail.empty")}</p>
