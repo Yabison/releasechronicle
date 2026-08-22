@@ -25,6 +25,27 @@ export const hookPaths = {
     },
   },
   "/api/v1/products/{slug}/hooks/{hookId}": {
+    put: {
+      summary: "Update a hook",
+      description:
+        "The {slug} segment is enforced, not decorative: a hook that does not belong to the resolved product is a 404. Config and target are mutually exclusive — sending a config while a target stays attached is refused rather than stored, and detaching re-validates the config that is about to take over delivery.",
+      security: [{ adminSession: [] }],
+      parameters: [
+        { name: "slug", in: "path", required: true, schema: { type: "string" } },
+        { name: "hookId", in: "path", required: true, schema: { type: "string" } },
+        { name: "company", in: "query", required: false, schema: { type: "string" } },
+      ],
+      requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/HookUpdate" } } } },
+      responses: {
+        "200": { description: "Updated", content: { "application/json": { schema: { $ref: "#/components/schemas/Hook" } } } },
+        "400": {
+          description: "Unknown target, target type mismatch, a config sent while a target is attached, a detach that would leave no config, or a URL the outbound policy refuses",
+          content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+        },
+        "401": { description: "No admin session", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        "404": { description: "No such hook on this product", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+      },
+    },
     delete: {
       summary: "Delete a hook",
       security: [{ adminSession: [] }],

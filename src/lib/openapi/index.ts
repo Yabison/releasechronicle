@@ -10,6 +10,9 @@ import { components } from "./schemas";
 import { hierarchyPaths } from "./paths/hierarchy";
 import { eventPaths } from "./paths/events";
 import { hookPaths } from "./paths/hooks";
+import { configPaths } from "./paths/config";
+import { ingestPaths } from "./paths/ingest";
+import { opsPaths } from "./paths/ops";
 
 export const openapiDocument = {
   openapi: "3.0.3",
@@ -24,5 +27,8 @@ export const openapiDocument = {
     ...hierarchyPaths,
     ...eventPaths,
     ...hookPaths,
+    ...configPaths,
+    ...ingestPaths,
+    ...opsPaths,
   },
 } as const;
