@@ -174,6 +174,7 @@ development and test databases. Full walkthrough: [docs/dev-environment.md](docs
 | `RC_HOOK_DELIVERY_RETENTION_DAYS` | How long terminal hook-delivery rows are kept before the sweeper purges them | `90` |
 | `RC_DEMO_MODE` | Public demo instance: shows the demo accounts on the login page | `false` |
 | `RC_IP_ALLOWLIST` | Comma-separated CIDRs; anything else gets a 403 | *(unset — no restriction)* |
+| `RC_LOG_LEVEL` | Verbosity of the application log, one JSON object per line: `debug`, `info`, `warn`, `error` or `silent` | `info` |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Sending email (the `email` connector) | — |
 
 > In production you must set `AUTH_SECRET`, `RC_WRITE_TOKEN`, `APP_BASE_URL`, and the
