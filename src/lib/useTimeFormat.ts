@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useContext, useSyncExternalStore } from "react";
+import { TIME_COOKIE, timeModeFromCookieValue } from "./timeMode";
+import { TimeModeContext } from "@/components/TimeModeProvider";
 import {
   stampDay, stampTime, stampShort, stampFull, dayKey, monthKey,
   toDatetimeInput, fromDatetimeInput, type TimeMode,
@@ -9,20 +11,18 @@ import {
 /**
  * The user's timestamp display mode: their own timezone (default) or UTC.
  *
- * Server-rendered HTML cannot know the visitor's timezone, so the server snapshot
- * is "utc" — deterministic on both sides of hydration — and the real preference
- * takes over right after mount. useSyncExternalStore makes that flip a normal
- * re-render instead of a hydration mismatch.
+ * Kept in a cookie so the server can read it and render the right mode from the
+ * first frame. It used to live in localStorage, which the server cannot see: the
+ * snapshot was always "utc" and every page flipped to local right after mount.
+ * The layout now seeds the mode it rendered with, so the two sides agree and
+ * there is nothing to flip.
  */
-const KEY = "rc_time_mode";
 const EVENT = "rc-time-mode";
 
 function read(): TimeMode {
-  try {
-    return window.localStorage.getItem(KEY) === "utc" ? "utc" : "local";
-  } catch {
-    return "local";
-  }
+  if (typeof document === "undefined") return "local";
+  const match = document.cookie.split("; ").find((c) => c.startsWith(`${TIME_COOKIE}=`));
+  return timeModeFromCookieValue(match ? decodeURIComponent(match.slice(TIME_COOKIE.length + 1)) : null);
 }
 
 function subscribe(cb: () => void): () => void {
@@ -34,17 +34,19 @@ function subscribe(cb: () => void): () => void {
   };
 }
 
+/** One year, matching the theme and locale cookies. */
+const MAX_AGE = 60 * 60 * 24 * 365;
+
 export function setTimeMode(mode: TimeMode): void {
-  try {
-    window.localStorage.setItem(KEY, mode);
-  } catch {
-    // Storage may be unavailable (private mode); the event still updates this tab.
-  }
+  document.cookie = `${TIME_COOKIE}=${mode}; path=/; max-age=${MAX_AGE}; samesite=lax`;
   window.dispatchEvent(new Event(EVENT));
 }
 
 export function useTimeFormat() {
-  const mode = useSyncExternalStore(subscribe, read, () => "utc" as TimeMode);
+  // What the server rendered with. Used as the server snapshot so hydration
+  // starts from the same mode the HTML was built in.
+  const rendered = useContext(TimeModeContext);
+  const mode = useSyncExternalStore(subscribe, read, () => rendered);
   const opts = { mode };
   return {
     mode,

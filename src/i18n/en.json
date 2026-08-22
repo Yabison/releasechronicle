@@ -420,5 +420,22 @@
   "go.already": "This action was already performed (current status: {status}).",
   "go.title": "Confirm the action",
   "go.question": "Move {what} from {from} to {to}?",
-  "timeline.failedRollback": "Failed - rolled back"
+  "timeline.failedRollback": "Failed - rolled back",
+  "settings.title": "Settings",
+  "settings.account": "Account",
+  "settings.name": "Name",
+  "settings.roles": "Roles",
+  "settings.password": "Password",
+  "settings.passwordLdap": "Managed by the LDAP/AD directory — change it with your IT department.",
+  "settings.passwordLocal": "Set in config/auth-users.yml — an administrator changes it.",
+  "settings.language": "Language",
+  "settings.theme": "Theme",
+  "settings.time": "Time display",
+  "settings.home": "Home page",
+  "settings.homeHint": "The page opened on sign-in, with its search if you pin it.",
+  "settings.homeDefault": "Overview (default)",
+  "settings.useCurrentPage": "Use this page",
+  "settings.useCurrentSearch": "Pin this search",
+  "settings.noSearchHere": "No filter active on this page",
+  "settings.resetHome": "Default"
 }

@@ -115,6 +115,24 @@ model PublicSetting {
   updatedAt  DateTime @updatedAt
 }
 
+/// Per-user preferences, keyed by the session subject (the LDAP uid or the local
+/// username). Cookies still carry theme and locale into the render — they have to,
+/// for an anonymous visitor and to avoid a flash — but for a signed-in user this
+/// table is the source of truth, and the cookies are rehydrated from it at login.
+model UserPreference {
+  username  String   @id
+  locale    String?
+  theme     String?
+  /// "local" or "utc" — how timestamps are displayed.
+  timeMode  String?
+  /// Path to land on instead of "/", e.g. "/weda/weda".
+  homePath  String?
+  /// Query string pinned with it, e.g. "?cat=INCIDENT". Stored apart so a path
+  /// can be kept while the pinned search is cleared.
+  homeQuery String?
+  updatedAt DateTime @updatedAt
+}
+
 model CalendarFeed {
   id          String   @id @default(cuid())
   name        String
