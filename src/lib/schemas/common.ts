@@ -37,8 +37,29 @@ export const hexColor = z
 
 export const tagsSchema = z.array(z.string().trim().min(1).max(100)).max(50);
 
+/**
+ * Change types no new event may carry.
+ *
+ * The value stays in the Postgres enum on purpose: events created before it was
+ * retired still hold it, and dropping it would fail on any instance that has one.
+ * So it remains readable, and reclassification may keep it — see
+ * `setEventChangeType`, which refuses it as a *target* unless the event already
+ * carries it. What is closed is creation: REST and CI ingest both refuse it.
+ */
+export const RETIRED_CHANGE_TYPES: readonly ChangeType[] = [ChangeType.POSTMEP_SQL];
+
+/**
+ * Derived rather than listed, so a value added to the Prisma enum is creatable by
+ * default instead of being silently dropped. tests/lib/schemas/common.test.ts
+ * pins that these two sets partition ChangeType exactly.
+ */
+export const CREATABLE_CHANGE_TYPES = Object.values(ChangeType).filter(
+  (c) => !RETIRED_CHANGE_TYPES.includes(c),
+);
+
 // zod v4 deprecates `z.nativeEnum()` in favor of `z.enum()`, which now accepts TS enums directly.
-export const changeTypeSchema = z.enum(ChangeType);
+/** For creating an event: retired values are refused. */
+export const changeTypeSchema = z.enum(CREATABLE_CHANGE_TYPES as [ChangeType, ...ChangeType[]]);
 export const deployStatusSchema = z.enum(DeployStatus);
 export const incidentStatusSchema = z.enum(IncidentStatus);
 

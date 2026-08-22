@@ -1,8 +1,22 @@
+import { ChangeType } from "@prisma/client";
+import { CREATABLE_CHANGE_TYPES } from "@/lib/schemas/common";
+
 /**
  * `components` for the OpenAPI document: the bearer scheme and every schema the
  * paths reference. Kept apart from the paths so neither file has to be read in
  * full to change the other.
  */
+
+/**
+ * changeType is deliberately asymmetric, and both halves are derived so neither
+ * can drift: a response may carry a retired value, because events created before
+ * it was retired still hold one, while a request body may not, because creation
+ * refuses it. Writing one list for both is what made an earlier edit remove
+ * POSTMEP_SQL from the response enum too — which would have made a generated
+ * client reject a perfectly valid historical event.
+ */
+const ALL_CHANGE_TYPES = Object.values(ChangeType);
+
 export const components = {
   /**
    * Three credentials, not one. The document used to declare only `bearerAuth`
@@ -76,7 +90,7 @@ export const components = {
         externalId: { type: "string", nullable: true },
         version: { type: "string", nullable: true },
         requester: { type: "string", nullable: true },
-        changeType: { type: "string", enum: ["POSTMEP_SQL", "HOTFIX", "NORMAL", "PRE_MEP", "POST_MEP"], nullable: true },
+        changeType: { type: "string", enum: ALL_CHANGE_TYPES, nullable: true, description: "May be a retired value on an event created before it was retired" },
         deployStatus: { type: "string", enum: ["SCHEDULED", "PENDING", "IN_PROGRESS", "DEPLOYED", "TESTING", "VALIDATE", "GO_CONFIRMED"], nullable: true },
         incidentType: { type: "string", nullable: true },
         incidentStatus: { type: "string", enum: ["INVESTIGATING", "IDENTIFIED", "MONITORING", "RESOLVED"], nullable: true },
@@ -114,7 +128,7 @@ export const components = {
         environment: { type: "string", description: "Slug of a configured environment — see GET /api/v1/environments. Deliberately not an enum: environments became configurable rows, so a generated client must not reject one this document has never heard of." },
         version: { type: "string", description: "Required unless changeType is PRE_MEP or POST_MEP" },
         requester: { type: "string" },
-        changeType: { type: "string", enum: ["POSTMEP_SQL", "HOTFIX", "NORMAL", "PRE_MEP", "POST_MEP"] },
+        changeType: { type: "string", enum: CREATABLE_CHANGE_TYPES, description: "Retired values are refused on creation; see Event.changeType for what a response may carry" },
         deployStatus: { type: "string", enum: ["SCHEDULED", "PENDING", "IN_PROGRESS", "DEPLOYED", "TESTING", "VALIDATE", "GO_CONFIRMED"], default: "PENDING" },
         occurredAt: { type: "string", format: "date-time", description: "Defaults to now" },
         scheduledAt: { type: "string", format: "date-time", nullable: true, description: "Planned date; required when deployStatus is SCHEDULED" },
@@ -300,7 +314,7 @@ export const components = {
         company: { type: "string" }, product: { type: "string" }, service: { type: "string" },
         environment: { type: "string", description: "Falls back to the source's defaultEnvironment; must be an active environment either way" },
         requester: { type: "string", default: "ci" },
-        changeType: { type: "string", enum: ["POSTMEP_SQL", "HOTFIX", "NORMAL", "PRE_MEP", "POST_MEP"], default: "NORMAL" },
+        changeType: { type: "string", enum: CREATABLE_CHANGE_TYPES, default: "NORMAL", description: "Retired values are refused on creation" },
         deployStatus: { type: "string", enum: ["SCHEDULED", "PENDING", "IN_PROGRESS", "DEPLOYED", "TESTING", "VALIDATE", "GO_CONFIRMED"], default: "DEPLOYED" },
         lot: { type: "string", description: "Defaults to `version`" },
         comment: { type: "string" },
