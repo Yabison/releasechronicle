@@ -361,6 +361,7 @@
   "err.badChangeType": "type invalide",
   "err.changeTypeDeployOnly": "le type ne s'applique qu'aux déploiements",
   "err.phaseTransitionNotAllowed": "PRE MEP / POST MEP n'est accessible qu'en reclassifiant un événement déjà en phase (PRE MEP ↔ POST MEP)",
+  "err.retiredChangeType": "ce type est retiré : il ne peut être conservé que sur un événement qui le porte déjà",
   "err.badDate": "date invalide",
   "err.eventNotFound": "événement introuvable",
   "err.badHourType": "HO/HNO invalide",

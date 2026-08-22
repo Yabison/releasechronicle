@@ -5,6 +5,7 @@ import { incidentDuration, maintenanceStatus, currentByEnvironment } from "@/lib
 import { canTransition, previousStatus } from "@/lib/deployWorkflow";
 import { encodeEventCursor, type EventCursor } from "@/lib/eventCursor";
 import { wouldCreateCycle } from "@/lib/causal";
+import { RETIRED_CHANGE_TYPES } from "@/lib/schemas/common";
 
 /** Normalized event data produced by the validation layer + service resolution. */
 export type EventData = {
@@ -190,6 +191,9 @@ export async function setEventLot(eventId: string, lot: string | null) {
 
 export class PhaseTransitionError extends Error {}
 
+/** A retired change type was offered as a reclassification target. */
+export class RetiredChangeTypeError extends Error {}
+
 /**
  * Change a deployment's changeType (e.g. MEP → MEP HOTFIX). Returns null if not a
  * deployment. Leaving a phase (PRE_MEP/POST_MEP → anything else) is always allowed;
@@ -216,6 +220,13 @@ export async function setEventChangeType(eventId: string, changeType: ChangeType
   const alreadyPhase = event.changeType === "PRE_MEP" || event.changeType === "POST_MEP";
   if (enteringPhase && !alreadyPhase) {
     throw new PhaseTransitionError("PRE_MEP/POST_MEP can only be entered by reclassifying an event that is already a phase");
+  }
+  // Same shape of rule for a retired type: keeping the one an event already has is
+  // fine — the drawer offers it precisely in that case — but nothing may acquire
+  // it. Creation refuses it outright (see CREATABLE_CHANGE_TYPES); without this,
+  // reclassification stayed a way to put a retired value on any deployment.
+  if (RETIRED_CHANGE_TYPES.includes(changeType) && event.changeType !== changeType) {
+    throw new RetiredChangeTypeError(`${changeType} is retired: it can only be kept on an event that already carries it`);
   }
   return prisma.event.update({ where: { id: eventId }, data: { changeType } });
 }
