@@ -34,6 +34,7 @@ import {
   DeployTransitionError,
   CausalLinkError,
   PhaseTransitionError,
+  RetiredChangeTypeError,
 } from "@/lib/events";
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { prisma } from "@/lib/db";
@@ -279,6 +280,12 @@ export async function updateEventLotAction(input: {
 }
 
 // The allowlist is just every ChangeType value — no hand-maintained copy to drift.
+// It stays the full enum on purpose: this only rejects a value that is not a
+// ChangeType at all. Which values may be *entered* is policy, and policy lives in
+// `setEventChangeType` — phases can only be reached from a phase, and a retired
+// type can only be kept on an event that already carries it. Narrowing this list
+// to the creatable set would break reclassifying a retired event, which the
+// drawer offers.
 const CHANGE_TYPES: ChangeType[] = Object.values(ChangeTypeEnum);
 
 /**
@@ -305,6 +312,9 @@ export async function updateEventChangeTypeAction(input: {
     }
     if (e instanceof PhaseTransitionError) {
       return fail("err.phaseTransitionNotAllowed");
+    }
+    if (e instanceof RetiredChangeTypeError) {
+      return fail("err.retiredChangeType");
     }
     throw e;
   }

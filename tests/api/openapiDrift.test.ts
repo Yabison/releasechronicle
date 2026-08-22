@@ -11,6 +11,7 @@
 import { describe, it, expect } from "vitest";
 import { ChangeType, DeployStatus, IncidentStatus, EventType, ServiceType, EventSource } from "@prisma/client";
 import { openapiDocument } from "@/lib/openapi";
+import { CREATABLE_CHANGE_TYPES, RETIRED_CHANGE_TYPES } from "@/lib/schemas/common";
 
 const doc = openapiDocument as unknown as {
   components: { schemas: Record<string, Record<string, unknown>> };
@@ -36,11 +37,33 @@ function prop(schema: string, name: string): Record<string, unknown> {
 }
 
 describe("enums stay in step with Prisma", () => {
-  it.each([
-    ["Event", "changeType"],
-    ["DeploymentInput", "changeType"],
-  ])("%s.%s lists every ChangeType", (schema, name) => {
-    expect(prop(schema, name).enum).toEqual(Object.values(ChangeType));
+  /**
+   * changeType is the one asymmetric enum: a response may carry a retired value,
+   * a request body may not. An earlier edit removed POSTMEP_SQL from both, which
+   * would have made a generated client reject a valid historical event.
+   */
+  it("Event.changeType lists every ChangeType, retired ones included", () => {
+    expect(prop("Event", "changeType").enum).toEqual(Object.values(ChangeType));
+    for (const retired of RETIRED_CHANGE_TYPES) {
+      expect(prop("Event", "changeType").enum).toContain(retired);
+    }
+  });
+
+  it.each([["DeploymentInput"], ["CiDeploymentInput"]])(
+    "%s.changeType offers only the creatable types",
+    (schema) => {
+      expect(prop(schema, "changeType").enum).toEqual(CREATABLE_CHANGE_TYPES);
+      for (const retired of RETIRED_CHANGE_TYPES) {
+        expect(prop(schema, "changeType").enum).not.toContain(retired);
+      }
+    },
+  );
+
+  it("partitions ChangeType exactly — nothing creatable is retired, nothing is neither", () => {
+    expect([...CREATABLE_CHANGE_TYPES, ...RETIRED_CHANGE_TYPES].sort()).toEqual(
+      [...Object.values(ChangeType)].sort(),
+    );
+    expect(CREATABLE_CHANGE_TYPES.filter((c) => RETIRED_CHANGE_TYPES.includes(c))).toEqual([]);
   });
 
   it.each([
