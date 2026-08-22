@@ -23,12 +23,12 @@ Stop the containers with `npm run dev:down`.
 | app      | http://localhost:3000         | `npm run dev` (host)                           |
 | db       | localhost:5432                | `releasechronicle` (dev data)                 |
 | db_test  | localhost:5433                | `releasechronicle_test` (vitest)              |
-| ldap     | localhost:1389                | osixia/openldap, seeded from `test/ldap`      |
+| ldap     | localhost:1389                | osixia/openldap, seeded from `tests/fixtures/ldap` |
 | mailpit  | http://localhost:8025 (UI)    | SMTP on 1025; catches all outgoing mail       |
 
 ## Login (LDAP)
 
-`.env` sets `AUTH_PROVIDER=ldap`. Users come from `test/ldap/fixture.ldif`, roles from
+`.env` sets `AUTH_PROVIDER=ldap`. Users come from `tests/fixtures/ldap/fixture.ldif`, roles from
 the group map in `config/ldap.yml`:
 
 | user  | password | roles          |

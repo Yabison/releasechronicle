@@ -30,7 +30,7 @@ services:
       LDAP_ADMIN_PASSWORD: adminpassword
       LDAP_REMOVE_CONFIG_AFTER_SETUP: "false"
     volumes:
-      - ./test/ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom
+      - ./tests/fixtures/ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom
     ports:
       - "1389:389"
   # Catches all outgoing email; web UI on http://localhost:8025, SMTP on 1025.
