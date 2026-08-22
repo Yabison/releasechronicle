@@ -277,7 +277,10 @@ SCHEDULED → PENDING → IN_PROGRESS → DEPLOYED → TESTING → VALIDATE
   déploiement se termine alors à la date du rollback.
 - **MEP planifiée** : créer avec le statut `SCHEDULED` + une date planifiée ;
   `POST /api/v1/deployments/promote-scheduled` (cron) promeut en `PENDING` celles dont
-  l'échéance est proche (délai `scheduledLeadMinutes`).
+  l'échéance est proche (délai `scheduledLeadMinutes`). La réponse renvoie `promoted`
+  et `ids` pour les déploiements réellement promus, plus `notifyFailed` — ceux qui ont
+  bien été promus mais dont les hooks n'ont pu être mis en file, donc personne n'a été
+  prévenu. Un cron qui ne lit que le code de statut ne peut pas distinguer les deux.
 
 ---
 

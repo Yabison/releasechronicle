@@ -121,12 +121,15 @@ async function attemptDelivery(id: string, now: Date): Promise<void> {
   try {
     await sendClaimed(id, now);
   } catch (e) {
-    // The claim committed — attempts incremented, lease held — but recording the
-    // outcome did not. The row is not lost: it becomes due again once the lease
-    // expires and a later pass re-claims it. Without this line, though, the whole
-    // attempt left no trace anywhere, which is how a database problem here looked
-    // exactly like nothing happening at all.
-    log.error("hook delivery outcome not recorded; row stays leased until it falls due again", {
+    // The claim committed — attempts incremented, lease held — but the attempt
+    // ended without recording an outcome. It may have failed before the send was
+    // even tried, or after a send that succeeded; from here the two are
+    // indistinguishable. Either way the row is not lost: it becomes due again once
+    // the lease expires, which also means a send that did go through will be
+    // repeated. Without this line the whole attempt left no trace anywhere, which
+    // is how a database problem here looked exactly like nothing happening at all.
+    log.error("hook delivery attempt recorded no outcome; row stays leased until it falls due again, so a send that did succeed will be repeated", {
+      mod: "hooks",
       deliveryId: id,
       dueAgainAt: new Date(now.getTime() + CLAIM_LEASE_MS).toISOString(),
       err: e,

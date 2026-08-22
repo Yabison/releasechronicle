@@ -82,7 +82,7 @@ export async function ingestDeployment(
     await detectRollbackOnIngest(event.id);
   } catch (e) {
     // Never break the ingest for enrichment — but never hide the failure either.
-    log.error("ingest enrichment failed", { eventId: event.id, err: e });
+    log.error("ingest enrichment failed", { mod: "ingest", eventId: event.id, err: e });
   }
   return { ok: true, event };
 }

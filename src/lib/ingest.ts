@@ -63,7 +63,7 @@ export async function persistValidatedEvent<F extends Record<string, unknown>>(
       // Enrichment only (lot grouping, rollback detection): the event itself is
       // saved, so don't fail the ingest — but a silent swallow made real bugs
       // here undiagnosable. Log with enough context to find the event again.
-      log.error("ingest enrichment failed", { eventId: ev.id, err: e });
+      log.error("ingest enrichment failed", { mod: "ingest", eventId: ev.id, err: e });
     }
   }
 

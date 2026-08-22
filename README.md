@@ -281,7 +281,10 @@ SCHEDULED → PENDING → IN_PROGRESS → DEPLOYED → TESTING → VALIDATE
   deployment duration then ends at the rollback date.
 - **Scheduled release**: create it with the `SCHEDULED` status and a planned date;
   `POST /api/v1/deployments/promote-scheduled` (cron) promotes to `PENDING` the ones
-  that are close to due (`scheduledLeadMinutes`).
+  that are close to due (`scheduledLeadMinutes`). The response reports `promoted`
+  and `ids` for the deployments that moved, plus `notifyFailed` — the subset that
+  moved but whose hooks could not be enqueued, so nobody was told. A cron job that
+  reads only the status code cannot tell the two apart.
 
 ---
 

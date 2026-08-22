@@ -32,6 +32,17 @@ const config = [
       ],
     },
   },
+  {
+    // Application code logs through @/lib/log, which emits one JSON object per
+    // line. A bare console call breaks that contract silently — the line still
+    // shows up, just unparseable — so the rule is what keeps the migration from
+    // being undone one convenient console.log at a time. Scripts and tests are
+    // out of scope: prisma/ seeds and demo drivers are meant to talk to a human
+    // terminal, and tests capture console to assert on it.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/log.ts"],
+    rules: { "no-console": "error" },
+  },
 ];
 
 export default config;

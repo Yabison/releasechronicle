@@ -23,6 +23,11 @@ async function duePending() {
   });
 }
 
+/** One stray non-JSON line on the stream must not turn an assertion into a SyntaxError. */
+function records(lines: string[]): Record<string, unknown>[] {
+  return lines.flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
+}
+
 let err: string[];
 beforeEach(async () => {
   await resetDb();
@@ -49,11 +54,12 @@ describe("a delivery whose outcome cannot be written", () => {
     await deliverDeliveries([d.id]);
 
     expect(sends).toBe(1); // the send itself succeeded: we are past the claim
-    const rec = err.map((l) => JSON.parse(l)).find((r) => r.deliveryId === d.id);
+    const rec = records(err).find((r) => r.deliveryId === d.id);
     expect(rec).toBeDefined();
-    expect(rec.level).toBe("error");
-    expect(rec.err.message).toBe("db went away");
-    expect(Date.parse(rec.dueAgainAt)).toBeGreaterThan(Date.now());
+    expect(rec?.level).toBe("error");
+    expect(rec?.mod).toBe("hooks");
+    expect((rec?.err as { message: string }).message).toBe("db went away");
+    expect(Date.parse(rec?.dueAgainAt as string)).toBeGreaterThan(Date.now());
   });
 
   it("leaves the row claimed so the lease can hand it to a later pass", async () => {

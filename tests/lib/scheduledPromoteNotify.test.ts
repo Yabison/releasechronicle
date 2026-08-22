@@ -6,14 +6,13 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 
 // The enqueue is the only step that can fail without the promotion itself
-// failing, so it gets faked. Every export the module graph might reach is
-// stubbed, not just emitHooks.
-vi.mock("@/lib/hooks/dispatch", () => ({
-  emitHooks: vi.fn(async () => { throw new Error("enqueue exploded"); }),
-  enqueueHooks: vi.fn(async () => []),
-  deliverDeliveries: vi.fn(async () => {}),
-  CLAIM_LEASE_MS: 600_000,
-}));
+// failing, so it gets faked. Spread over importOriginal rather than listing the
+// module's exports by hand: a hand-written factory keeps satisfying the import
+// even after the real signature changes underneath it.
+vi.mock("@/lib/hooks/dispatch", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hooks/dispatch")>();
+  return { ...actual, emitHooks: vi.fn(async () => { throw new Error("enqueue exploded"); }) };
+});
 
 import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
@@ -31,6 +30,11 @@ async function dueDeployment() {
       scheduledAt: new Date(Date.now() + 5 * 60_000),
     },
   });
+}
+
+/** One stray non-JSON line on the stream must not turn an assertion into a SyntaxError. */
+function records(lines: string[]): Record<string, unknown>[] {
+  return lines.flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
 }
 
 let err: string[];
@@ -60,13 +64,21 @@ describe("promoteScheduledDeployments when the hook enqueue fails", () => {
     expect(row.deployStatus).toBe("PENDING");
   });
 
+  /** A cron job reading only the status code cannot tell this from a clean run. */
+  it("reports the event in notifyFailed so the caller can tell the difference", async () => {
+    const ev = await dueDeployment();
+    const res = await promoteScheduledDeployments(new Date());
+    expect(res.notifyFailed).toEqual([ev.id]);
+  });
+
   it("says nobody was notified, naming the event", async () => {
     const ev = await dueDeployment();
     await promoteScheduledDeployments(new Date());
-    const rec = err.map((l) => JSON.parse(l)).find((r) => r.eventId === ev.id);
+    const rec = records(err).find((r) => r.eventId === ev.id);
     expect(rec).toBeDefined();
-    expect(rec.level).toBe("error");
-    expect(rec.msg).toContain("hook enqueue failed");
-    expect(rec.err.message).toBe("enqueue exploded");
+    expect(rec?.level).toBe("error");
+    expect(rec?.msg).toContain("hook enqueue failed");
+    expect((rec?.err as { message: string }).message).toBe("enqueue exploded");
+    expect(rec?.mod).toBe("scheduler");
   });
 });

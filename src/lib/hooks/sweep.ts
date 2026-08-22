@@ -47,7 +47,7 @@ export function startHookSweeper(intervalMs = 60_000, sweep: () => Promise<unkno
     if (running) return;
     running = true;
     void sweep()
-      .catch((e) => log.error("hook sweep failed", { err: e }))
+      .catch((e) => log.error("hook sweep failed", { mod: "hooks", err: e }))
       .finally(() => { running = false; });
   }, intervalMs);
   timer.unref?.();

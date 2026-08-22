@@ -19,7 +19,7 @@ const rules = parseAllowlist(raw);
 
 if (raw && raw.trim() !== "" && rules.length === 0) {
   // Non-empty config that parsed to nothing would silently fail open — warn loudly.
-  log.warn("RC_IP_ALLOWLIST is set but no valid rule parsed; IP restriction is INACTIVE");
+  log.warn("RC_IP_ALLOWLIST is set but no valid rule parsed; IP restriction is INACTIVE", { mod: "ip-allowlist" });
 }
 
 function clientIp(req: NextRequest): string | null {

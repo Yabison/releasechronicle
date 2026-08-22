@@ -36,7 +36,10 @@ export async function recordAudit(entry: AuditEntry): Promise<void> {
       },
     });
   } catch (e) {
-    log.error("audit write failed", { action: entry.action, target: entry.target ?? null, err: e });
+    // Deliberately no `target`: on a failed login it is the attempted username,
+    // i.e. unauthenticated input and a real person's name. The audit row is where
+    // that belongs; the action and the error are enough to diagnose this failure.
+    log.error("audit write failed", { mod: "audit", action: entry.action, err: e });
   }
 }
 
