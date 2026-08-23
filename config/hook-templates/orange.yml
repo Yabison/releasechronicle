@@ -35,4 +35,3 @@ teams:
     **{version}** {transition}
     Statut {status} · par {actor} · {when}
     {comment}
-    {actionUrl}

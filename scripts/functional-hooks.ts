@@ -81,12 +81,8 @@ async function createHooks(productId: string) {
     { type: "webhook", config: { url: `http://localhost:${RECEIVER_PORT}/hook` } },
     { type: "email", config: { to: ["functional-test@example.org"], locale: "fr" } },
     { type: "email", config: { to: ["functional-test-en@example.org"], locale: "en" } },
-    // Both shapes: the legacy Office 365 card and the Adaptive Card a Power
-    // Automate flow expects. Teams answers 200 to either, so only reading them
-    // tells you which one you actually built.
     { type: "teams", config: { url: `http://localhost:${RECEIVER_PORT}/teams`, locale: "fr" } },
     { type: "teams", config: { url: `http://localhost:${RECEIVER_PORT}/teams`, locale: "en" } },
-    { type: "teams", config: { url: `http://localhost:${RECEIVER_PORT}/teams-adaptive`, locale: "fr", format: "adaptive" } },
   ];
   const created = [];
   for (const spec of specs) {
@@ -100,15 +96,20 @@ async function createHooks(productId: string) {
 }
 
 
-type MessageCard = { "@type"?: string; "@context"?: string; summary?: string; title?: string; text?: string };
+type AdaptiveEnvelope = {
+  type?: string;
+  attachments?: {
+    contentType?: string;
+    content?: { type?: string; version?: string; body?: { text?: string }[]; actions?: { url?: string }[] };
+  }[];
+};
 
 /**
  * What a Teams channel would actually show.
  *
- * Teams renders a legacy MessageCard: a title line and a body. A card whose
- * title or text came out empty still posts and still returns 200 — it simply
- * appears blank in the channel — so the transport being OK says nothing about
- * the message being readable. That is what this checks.
+ * Teams answers 200 to a card whose text blocks came out empty and posts a
+ * blank message, so the transport succeeding is exactly when this fails
+ * silently. Reading the card is the check; the status code is not.
  */
 function reportTeams(cards: Received[]): void {
   if (cards.length === 0) {
@@ -121,43 +122,36 @@ function reportTeams(cards: Received[]): void {
   console.log("\nTeams cards, as a channel would render them");
 
   for (const { body } of cards) {
-    const card = body as MessageCard;
-    const key = `${card.title}||${card.text}`;
-    if (card["@type"] !== "MessageCard") problems.push(`@type is ${card["@type"] ?? "missing"}, expected MessageCard`);
-    if (!card.summary?.trim()) problems.push("summary is empty (Teams uses it for the notification toast)");
-    if (!card.title?.trim()) problems.push("title is empty — the card renders blank");
-    if (!card.text?.trim()) problems.push("text is empty");
+    const envelope = body as AdaptiveEnvelope;
+    const attachment = envelope.attachments?.[0];
+    const content = attachment?.content;
+    const blocks = content?.body ?? [];
+    const heading = blocks[0]?.text ?? "";
+    const text = blocks[1]?.text ?? "";
+
+    if (envelope.type !== "message") problems.push(`envelope type is ${envelope.type ?? "missing"}, expected message`);
+    if (attachment?.contentType !== "application/vnd.microsoft.card.adaptive") {
+      problems.push(`contentType is ${attachment?.contentType ?? "missing"}`);
+    }
+    if (content?.type !== "AdaptiveCard") problems.push(`content type is ${content?.type ?? "missing"}`);
+    if (!heading.trim()) problems.push("heading is empty — the card renders blank");
+    if (!text.trim()) problems.push("body is empty");
+
+    const key = `${heading}||${text}`;
     if (shown.has(key)) continue;
     shown.add(key);
-    console.log(`\n  ${card.title}`);
-    console.log(`  ${card.text}`);
+    console.log(`\n  ${heading}`);
+    console.log(`  ${text.split("\n").join("\n  ")}`);
+    if (content?.actions?.[0]?.url) console.log("  [button]");
   }
 
   const unique = [...new Set(problems)];
   console.log(
     unique.length
       ? `\nTeams card problems:\n  ${unique.join("\n  ")}`
-      : `\nevery Teams card carries a type, a summary, a title and a body (${cards.length} cards, ${shown.size} distinct)`,
+      : `\nevery Teams card is a well-formed Adaptive Card with a heading and a body ` +
+        `(${cards.length} cards, ${shown.size} distinct)`,
   );
-}
-
-
-/** The Adaptive Card path: what a Power Automate flow would hand to a channel. */
-function reportAdaptive(cards: Received[]): void {
-  if (cards.length === 0) {
-    console.log("\nno Adaptive Card received");
-    return;
-  }
-  const first = cards[0].body as {
-    type?: string;
-    attachments?: { contentType?: string; content?: { body?: { text?: string }[]; actions?: { url?: string }[] } }[];
-  };
-  const content = first.attachments?.[0]?.content;
-  console.log(`\nAdaptive Cards: ${cards.length} received`);
-  console.log(`  envelope    ${first.type} / ${first.attachments?.[0]?.contentType}`);
-  console.log(`  heading     ${content?.body?.[0]?.text ?? "(none)"}`);
-  console.log(`  body        ${(content?.body?.[1]?.text ?? "").split("\n")[0]}`);
-  console.log(`  action      ${content?.actions?.[0]?.url ? "button present" : "no button"}`);
 }
 
 type Step = { label: string; kind: string };
@@ -291,15 +285,10 @@ async function run() {
 
   const webhookBodies = received.filter((r) => r.path.startsWith("/hook"));
   const teamsCards = received.filter((r) => r.path === "/teams");
-  const adaptiveCards = received.filter((r) => r.path === "/teams-adaptive");
-  console.log(
-    `\nreceived by the local receiver: ${webhookBodies.length} webhook, ` +
-      `${teamsCards.length} teams (legacy), ${adaptiveCards.length} teams (adaptive)`,
-  );
+  console.log(`\nreceived by the local receiver: ${webhookBodies.length} webhook, ${teamsCards.length} teams`);
   if (webhookBodies[0]) console.log(`  webhook, first: ${JSON.stringify(webhookBodies[0].body).slice(0, 200)}…`);
 
   reportTeams(teamsCards);
-  reportAdaptive(adaptiveCards);
 
   console.log(`
 where to look now

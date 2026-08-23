@@ -445,5 +445,6 @@
   "hookKind.deploy.rolled_back": "Rollback",
   "hookKind.incident.created": "Incident ouvert",
   "hookKind.maintenance.created": "Maintenance planifiée",
-  "logs.mailbox": "Boîte de réception (dev)"
+  "logs.mailbox": "Boîte de réception (dev)",
+  "hook.openAction": "Ouvrir"
 }

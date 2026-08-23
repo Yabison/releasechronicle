@@ -2,7 +2,7 @@ import type { Connector, ConnectorResult, HookEvent } from "../types";
 import { renderTemplate, templateValues } from "../renderTemplate";
 import { teamsTemplate, templateLocale } from "../templates";
 import { checkConfiguredOutboundUrl } from "@/lib/outboundUrl";
-import { teamsPayload } from "./teamsCard";
+import { adaptiveCard } from "./teamsCard";
 
 const TIMEOUT_MS = 5000;
 
@@ -10,12 +10,12 @@ function cardFor(event: HookEvent, config: Record<string, unknown>) {
   const locale = templateLocale(config);
   const values = templateValues(event, locale);
   const tpl = teamsTemplate(event, locale);
-  return teamsPayload(
-    event,
-    config,
+  return adaptiveCard(
     renderTemplate(tpl.title, values),
     renderTemplate(tpl.text, values),
+    event.kind,
     String(values.actionUrl ?? ""),
+    locale,
   );
 }
 
