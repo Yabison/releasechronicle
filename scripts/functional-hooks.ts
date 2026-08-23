@@ -81,8 +81,12 @@ async function createHooks(productId: string) {
     { type: "webhook", config: { url: `http://localhost:${RECEIVER_PORT}/hook` } },
     { type: "email", config: { to: ["functional-test@example.org"], locale: "fr" } },
     { type: "email", config: { to: ["functional-test-en@example.org"], locale: "en" } },
+    // Both shapes: the legacy Office 365 card and the Adaptive Card a Power
+    // Automate flow expects. Teams answers 200 to either, so only reading them
+    // tells you which one you actually built.
     { type: "teams", config: { url: `http://localhost:${RECEIVER_PORT}/teams`, locale: "fr" } },
     { type: "teams", config: { url: `http://localhost:${RECEIVER_PORT}/teams`, locale: "en" } },
+    { type: "teams", config: { url: `http://localhost:${RECEIVER_PORT}/teams-adaptive`, locale: "fr", format: "adaptive" } },
   ];
   const created = [];
   for (const spec of specs) {
@@ -135,6 +139,25 @@ function reportTeams(cards: Received[]): void {
       ? `\nTeams card problems:\n  ${unique.join("\n  ")}`
       : `\nevery Teams card carries a type, a summary, a title and a body (${cards.length} cards, ${shown.size} distinct)`,
   );
+}
+
+
+/** The Adaptive Card path: what a Power Automate flow would hand to a channel. */
+function reportAdaptive(cards: Received[]): void {
+  if (cards.length === 0) {
+    console.log("\nno Adaptive Card received");
+    return;
+  }
+  const first = cards[0].body as {
+    type?: string;
+    attachments?: { contentType?: string; content?: { body?: { text?: string }[]; actions?: { url?: string }[] } }[];
+  };
+  const content = first.attachments?.[0]?.content;
+  console.log(`\nAdaptive Cards: ${cards.length} received`);
+  console.log(`  envelope    ${first.type} / ${first.attachments?.[0]?.contentType}`);
+  console.log(`  heading     ${content?.body?.[0]?.text ?? "(none)"}`);
+  console.log(`  body        ${(content?.body?.[1]?.text ?? "").split("\n")[0]}`);
+  console.log(`  action      ${content?.actions?.[0]?.url ? "button present" : "no button"}`);
 }
 
 type Step = { label: string; kind: string };
@@ -267,11 +290,16 @@ async function run() {
   );
 
   const webhookBodies = received.filter((r) => r.path.startsWith("/hook"));
-  const teamsCards = received.filter((r) => r.path.startsWith("/teams"));
-  console.log(`\nreceived by the local receiver: ${webhookBodies.length} webhook, ${teamsCards.length} teams`);
+  const teamsCards = received.filter((r) => r.path === "/teams");
+  const adaptiveCards = received.filter((r) => r.path === "/teams-adaptive");
+  console.log(
+    `\nreceived by the local receiver: ${webhookBodies.length} webhook, ` +
+      `${teamsCards.length} teams (legacy), ${adaptiveCards.length} teams (adaptive)`,
+  );
   if (webhookBodies[0]) console.log(`  webhook, first: ${JSON.stringify(webhookBodies[0].body).slice(0, 200)}…`);
 
   reportTeams(teamsCards);
+  reportAdaptive(adaptiveCards);
 
   console.log(`
 where to look now

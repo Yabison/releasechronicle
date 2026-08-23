@@ -2,22 +2,21 @@ import type { Connector, ConnectorResult, HookEvent } from "../types";
 import { renderTemplate, templateValues } from "../renderTemplate";
 import { teamsTemplate, templateLocale } from "../templates";
 import { checkConfiguredOutboundUrl } from "@/lib/outboundUrl";
+import { teamsPayload } from "./teamsCard";
 
 const TIMEOUT_MS = 5000;
 
-function messageCard(event: HookEvent, config: Record<string, unknown>) {
+function cardFor(event: HookEvent, config: Record<string, unknown>) {
   const locale = templateLocale(config);
   const values = templateValues(event, locale);
   const tpl = teamsTemplate(event, locale);
-  const title = renderTemplate(tpl.title, values);
-  const text = renderTemplate(tpl.text, values);
-  return {
-    "@type": "MessageCard",
-    "@context": "http://schema.org/extensions",
-    summary: title || event.kind,
-    title: title || event.kind,
-    text: text || event.kind,
-  };
+  return teamsPayload(
+    event,
+    config,
+    renderTemplate(tpl.title, values),
+    renderTemplate(tpl.text, values),
+    String(values.actionUrl ?? ""),
+  );
 }
 
 export const teamsConnector: Connector = {
@@ -33,7 +32,7 @@ export const teamsConnector: Connector = {
       const res = await fetch(checked.url, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(messageCard(event, config)),
+        body: JSON.stringify(cardFor(event, config)),
         signal: controller.signal,
         redirect: "manual",
       });

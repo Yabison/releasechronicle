@@ -444,5 +444,6 @@
   "hookKind.deploy.status_undone": "Status undone",
   "hookKind.deploy.rolled_back": "Rolled back",
   "hookKind.incident.created": "Incident opened",
-  "hookKind.maintenance.created": "Maintenance scheduled"
+  "hookKind.maintenance.created": "Maintenance scheduled",
+  "logs.mailbox": "Catch-all mailbox (dev)"
 }
