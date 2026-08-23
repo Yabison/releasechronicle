@@ -25,3 +25,6 @@ private/
 
 # Worktrees créés par Claude Code : un checkout complet, jamais versionné.
 .claude/worktrees/
+
+# Vendored at build time by scripts/copy-swagger.mjs from swagger-ui-dist.
+public/swagger/

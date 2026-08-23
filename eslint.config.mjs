@@ -14,7 +14,7 @@ const config = [
     // ones in this one. vitest.config.ts excludes the same path, for the same
     // reason. The CI never sees it — the directory is gitignored — so this is
     // purely about `npm run lint` staying usable on a machine with a worktree.
-    ignores: [".next/**", "node_modules/**", "coverage/**", "next-env.d.ts", ".claude/**"],
+    ignores: [".next/**", "node_modules/**", "coverage/**", "next-env.d.ts", ".claude/**", "public/swagger/**"],
   },
   {
     rules: {
