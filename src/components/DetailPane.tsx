@@ -95,7 +95,6 @@ export function DetailPane({
     const g = envGroups.find((x) => `group:${x.slug}` === env);
     return g ? new Set(g.members) : new Set<string>();
   }, [env, envGroups]);
-  const showEnvBadge = env === ALL_ENV || groupMembers !== null;
   // Filters are visibility toggles, all enabled by default.
   const [active, setActive] = useState<Set<FilterKey>>(() => {
     const c = sp("cat");
@@ -295,7 +294,7 @@ export function DetailPane({
                   onClick={() => setSelected(e.eventId)}
                   lotMembers={e.lot ? siblings(lotMembers[lotKey(e.environment, e.lot)] ?? [], e.eventId) : []}
                   lotWarning={e.lot ? (lotWarnings[lotKey(e.environment, e.lot)] ?? []) : []}
-                  envColor={showEnvBadge ? (envColors[e.environment] ?? "#64748b") : null}
+                  envColor={envColors[e.environment] ?? "#64748b"}
                   tagColors={tagColors}
                 />
               ))}
@@ -312,7 +311,7 @@ export function DetailPane({
                   onClick={() => setSelected(e.eventId)}
                   lotMembers={e.lot ? siblings(lotMembers[lotKey(e.environment, e.lot)] ?? [], e.eventId) : []}
                   lotWarning={e.lot ? (lotWarnings[lotKey(e.environment, e.lot)] ?? []) : []}
-                  envColor={showEnvBadge ? (envColors[e.environment] ?? "#64748b") : null}
+                  envColor={envColors[e.environment] ?? "#64748b"}
                   tagColors={tagColors}
                 />
               ))}
