@@ -43,7 +43,7 @@ function assertDevTarget(): void {
   }
 }
 
-type Received = { at: string; body: unknown };
+type Received = { at: string; path: string; body: unknown };
 
 function startReceiver(received: Received[]) {
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -52,7 +52,7 @@ function startReceiver(received: Received[]) {
     req.on("end", () => {
       let body: unknown = raw;
       try { body = JSON.parse(raw); } catch { /* keep the raw text */ }
-      received.push({ at: new Date().toISOString(), body });
+      received.push({ at: new Date().toISOString(), path: req.url ?? "/", body });
       res.writeHead(200, { "content-type": "application/json" });
       res.end('{"ok":true}');
     });
@@ -81,7 +81,8 @@ async function createHooks(productId: string) {
     { type: "webhook", config: { url: `http://localhost:${RECEIVER_PORT}/hook` } },
     { type: "email", config: { to: ["functional-test@example.org"], locale: "fr" } },
     { type: "email", config: { to: ["functional-test-en@example.org"], locale: "en" } },
-    { type: "teams", config: { url: `http://localhost:${RECEIVER_PORT}/teams` } },
+    { type: "teams", config: { url: `http://localhost:${RECEIVER_PORT}/teams`, locale: "fr" } },
+    { type: "teams", config: { url: `http://localhost:${RECEIVER_PORT}/teams`, locale: "en" } },
   ];
   const created = [];
   for (const spec of specs) {
@@ -92,6 +93,48 @@ async function createHooks(productId: string) {
     );
   }
   return created;
+}
+
+
+type MessageCard = { "@type"?: string; "@context"?: string; summary?: string; title?: string; text?: string };
+
+/**
+ * What a Teams channel would actually show.
+ *
+ * Teams renders a legacy MessageCard: a title line and a body. A card whose
+ * title or text came out empty still posts and still returns 200 — it simply
+ * appears blank in the channel — so the transport being OK says nothing about
+ * the message being readable. That is what this checks.
+ */
+function reportTeams(cards: Received[]): void {
+  if (cards.length === 0) {
+    console.log("\nno Teams card received");
+    return;
+  }
+
+  const problems: string[] = [];
+  const shown = new Set<string>();
+  console.log("\nTeams cards, as a channel would render them");
+
+  for (const { body } of cards) {
+    const card = body as MessageCard;
+    const key = `${card.title}||${card.text}`;
+    if (card["@type"] !== "MessageCard") problems.push(`@type is ${card["@type"] ?? "missing"}, expected MessageCard`);
+    if (!card.summary?.trim()) problems.push("summary is empty (Teams uses it for the notification toast)");
+    if (!card.title?.trim()) problems.push("title is empty — the card renders blank");
+    if (!card.text?.trim()) problems.push("text is empty");
+    if (shown.has(key)) continue;
+    shown.add(key);
+    console.log(`\n  ${card.title}`);
+    console.log(`  ${card.text}`);
+  }
+
+  const unique = [...new Set(problems)];
+  console.log(
+    unique.length
+      ? `\nTeams card problems:\n  ${unique.join("\n  ")}`
+      : `\nevery Teams card carries a type, a summary, a title and a body (${cards.length} cards, ${shown.size} distinct)`,
+  );
 }
 
 type Step = { label: string; kind: string };
@@ -223,8 +266,12 @@ async function run() {
       : `\nevery kind produced at least one delivery (${expected.size} kinds, ${deliveries.length} deliveries)`,
   );
 
-  console.log(`\nwebhook bodies received by the local receiver: ${received.length}`);
-  if (received[0]) console.log(`  first: ${JSON.stringify(received[0].body).slice(0, 220)}…`);
+  const webhookBodies = received.filter((r) => r.path.startsWith("/hook"));
+  const teamsCards = received.filter((r) => r.path.startsWith("/teams"));
+  console.log(`\nreceived by the local receiver: ${webhookBodies.length} webhook, ${teamsCards.length} teams`);
+  if (webhookBodies[0]) console.log(`  webhook, first: ${JSON.stringify(webhookBodies[0].body).slice(0, 200)}…`);
+
+  reportTeams(teamsCards);
 
   console.log(`
 where to look now
