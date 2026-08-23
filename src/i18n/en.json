@@ -438,5 +438,11 @@
   "settings.useCurrentPage": "Use this page",
   "settings.useCurrentSearch": "Pin this search",
   "settings.noSearchHere": "No filter active on this page",
-  "settings.resetHome": "Default"
+  "settings.resetHome": "Default",
+  "hookKind.deploy.created": "Release created",
+  "hookKind.deploy.status_changed": "Status changed",
+  "hookKind.deploy.status_undone": "Status undone",
+  "hookKind.deploy.rolled_back": "Rolled back",
+  "hookKind.incident.created": "Incident opened",
+  "hookKind.maintenance.created": "Maintenance scheduled"
 }

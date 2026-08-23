@@ -9,8 +9,9 @@ export const emailConnector: Connector = {
     const to = Array.isArray(config.to) ? config.to.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
     if (to.length === 0) return { ok: false, error: "aucun destinataire" };
     if (!isMailerConfigured()) return { ok: false, error: "SMTP non configuré" };
-    const values = templateValues(event);
-    const tpl = emailTemplate(event, templateLocale(config));
+    const locale = templateLocale(config);
+    const values = templateValues(event, locale);
+    const tpl = emailTemplate(event, locale);
     const subject = renderTemplate(tpl.subject, values);
     const text = renderTemplate(tpl.body, values);
     try {

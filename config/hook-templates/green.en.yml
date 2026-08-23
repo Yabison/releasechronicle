@@ -1,14 +1,38 @@
-# Green template (English) — event finished (deployment validated / incident resolved).
-# Used when the notification target is configured with locale "en";
-# the locale-less green.yml stays the French default.
-# Variables: {kind} {company} {product} {service} {environment} {actor}
-#            {version} {status} {comment} {fromStatus} {toStatus}
+# Green template — release finished.
+#
+# Every value the dispatcher knows is available. `transition` and `kindLabel`
+# are computed: `transition` is empty when there is none, so a creation no
+# longer renders as a bare arrow between two blanks, and `kindLabel` is the
+# sentence a reader understands where `kind` is the internal identifier.
+#
+#   identity     {kind} {kindLabel} {eventId} {type}
+#   where        {company} {product} {service} {environment}
+#   who / when   {actor} {when} {occurredAt}
+#   deployment   {version} {status} {fromStatus} {toStatus} {transition}
+#   incident     {incidentType}
+#   maintenance  {scheduledAt} {windowStart} {windowEnd}
+#   free text    {comment} {actionUrl}
 email:
-  subject: "🟢 [{product}/{service}] done — {version}"
+  subject: "🟢 [{product}/{service}] {kindLabel} — {environment}"
   body: |
-    Done on {product}/{service} ({environment})
-    Version {version} · status {status} · by {actor}
+    {kindLabel} on {company} / {product} / {service}
+    Environment: {environment}
+    When: {when}
+    Version: {version}
+    Status: {status} {transition}
+    By: {actor}
+    Incident type: {incidentType}
+    Scheduled for: {scheduledAt}
+    Window: {windowStart} → {windowEnd}
+
     {comment}
+
+    Action: {actionUrl}
+    Reference: {eventId}
 teams:
-  title: "🟢 {kind} — {product}/{service} ({environment})"
-  text: "Version {version} · status {status} · by {actor}. {comment}"
+  title: "🟢 {kindLabel} — {product}/{service} ({environment})"
+  text: |
+    **{version}** {transition}
+    Status {status} · by {actor} · {when}
+    {comment}
+    {actionUrl}

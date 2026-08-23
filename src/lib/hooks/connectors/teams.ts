@@ -6,8 +6,9 @@ import { checkConfiguredOutboundUrl } from "@/lib/outboundUrl";
 const TIMEOUT_MS = 5000;
 
 function messageCard(event: HookEvent, config: Record<string, unknown>) {
-  const values = templateValues(event);
-  const tpl = teamsTemplate(event, templateLocale(config));
+  const locale = templateLocale(config);
+  const values = templateValues(event, locale);
+  const tpl = teamsTemplate(event, locale);
   const title = renderTemplate(tpl.title, values);
   const text = renderTemplate(tpl.text, values);
   return {

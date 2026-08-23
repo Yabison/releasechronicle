@@ -1,12 +1,38 @@
-# Template rouge — incidents & rollbacks.
-# Variables: {kind} {company} {product} {service} {environment} {actor}
-#            {version} {status} {comment} {fromStatus} {toStatus}
+# Template rouge — incidents et rollbacks.
+#
+# Every value the dispatcher knows is available. `transition` and `kindLabel`
+# are computed: `transition` is empty when there is none, so a creation no
+# longer renders as a bare arrow between two blanks, and `kindLabel` is the
+# sentence a reader understands where `kind` is the internal identifier.
+#
+#   identity     {kind} {kindLabel} {eventId} {type}
+#   where        {company} {product} {service} {environment}
+#   who / when   {actor} {when} {occurredAt}
+#   deployment   {version} {status} {fromStatus} {toStatus} {transition}
+#   incident     {incidentType}
+#   maintenance  {scheduledAt} {windowStart} {windowEnd}
+#   free text    {comment} {actionUrl}
 email:
-  subject: "🔴 [{product}/{service}] {kind}"
+  subject: "🔴 [{product}/{service}] {kindLabel} — {environment}"
   body: |
-    Incident / rollback sur {product}/{service} ({environment})
-    Version {version} · statut {status} · par {actor}
+    {kindLabel} sur {company} / {product} / {service}
+    Environnement : {environment}
+    Quand : {when}
+    Version : {version}
+    Statut : {status} {transition}
+    Par : {actor}
+    Type d'incident : {incidentType}
+    Prévu le : {scheduledAt}
+    Fenêtre : {windowStart} → {windowEnd}
+
     {comment}
+
+    Action : {actionUrl}
+    Référence : {eventId}
 teams:
-  title: "🔴 {kind} — {product}/{service} ({environment})"
-  text: "Version {version} · statut {status} · par {actor}. {comment}"
+  title: "🔴 {kindLabel} — {product}/{service} ({environment})"
+  text: |
+    **{version}** {transition}
+    Statut {status} · par {actor} · {when}
+    {comment}
+    {actionUrl}
