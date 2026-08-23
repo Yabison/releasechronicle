@@ -2,6 +2,8 @@ import type { Connector, ConnectorResult, HookEvent } from "../types";
 import { renderTemplate, templateValues } from "../renderTemplate";
 import { emailTemplate, templateLocale } from "../templates";
 import { sendMail, isMailerConfigured } from "@/lib/mailer";
+import { emailHtml } from "./emailHtml";
+import { getMessages, translate } from "@/i18n";
 
 export const emailConnector: Connector = {
   type: "email",
@@ -14,8 +16,13 @@ export const emailConnector: Connector = {
     const tpl = emailTemplate(event, locale);
     const subject = renderTemplate(tpl.subject, values);
     const text = renderTemplate(tpl.body, values);
+    const html = emailHtml({
+      body: text,
+      actionUrl: String(values.actionUrl ?? ""),
+      actionLabel: translate(getMessages(locale), "hook.openAction"),
+    });
     try {
-      await sendMail({ to, subject, text });
+      await sendMail({ to, subject, text, html });
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "send failed" };

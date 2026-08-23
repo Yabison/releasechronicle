@@ -25,12 +25,17 @@ function getTransport(): Transporter {
   return transport;
 }
 
-/** Send a plain-text email via the env-configured SMTP transport. Throws on failure. */
-export async function sendMail(opts: { to: string[]; subject: string; text: string }): Promise<void> {
+/** Send an email via the env-configured SMTP transport. Throws on failure.
+ *
+ *  `html` is optional and sent as an alternative, never as a replacement: the
+ *  text part stays the message, and a client that shows it loses nothing but
+ *  the button. */
+export async function sendMail(opts: { to: string[]; subject: string; text: string; html?: string }): Promise<void> {
   await getTransport().sendMail({
     from: process.env.SMTP_FROM,
     to: opts.to.join(", "),
     subject: opts.subject,
     text: opts.text,
+    ...(opts.html ? { html: opts.html } : {}),
   });
 }
