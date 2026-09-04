@@ -16,10 +16,13 @@ export const emailConnector: Connector = {
     const tpl = emailTemplate(event, locale);
     const subject = renderTemplate(tpl.subject, values);
     const text = renderTemplate(tpl.body, values);
+    const messages = getMessages(locale);
     const html = emailHtml({
       body: text,
-      actionUrl: String(values.actionUrl ?? ""),
-      actionLabel: translate(getMessages(locale), "hook.openAction"),
+      links: [
+        { url: String(values.actionUrl ?? ""), label: translate(messages, "hook.openAction"), primary: true },
+        { url: String(values.eventUrl ?? ""), label: translate(messages, "hook.seeEvent") },
+      ],
     });
     try {
       await sendMail({ to, subject, text, html });

@@ -11,7 +11,8 @@
 #   deployment   {version} {status} {fromStatus} {toStatus} {transition}
 #   incident     {incidentType}
 #   maintenance  {scheduledAt} {windowStart} {windowEnd}
-#   free text    {comment} {actionUrl}
+#   free text    {comment}
+#   links        {actionUrl} (deployments only) {eventUrl} (always)
 email:
   subject: "🟢 [{product}/{service}] {kindLabel} — {environment}"
   body: |
@@ -28,7 +29,7 @@ email:
     {comment}
 
     Action : {actionUrl}
-    Référence : {eventId}
+    Voir l'événement : {eventUrl}
 teams:
   title: "🟢 {kindLabel} — {product}/{service} ({environment})"
   text: |

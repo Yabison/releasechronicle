@@ -15,6 +15,7 @@ function cardFor(event: HookEvent, config: Record<string, unknown>) {
     renderTemplate(tpl.text, values),
     event.kind,
     String(values.actionUrl ?? ""),
+    String(values.eventUrl ?? ""),
     locale,
   );
 }

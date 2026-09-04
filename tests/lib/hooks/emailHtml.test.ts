@@ -30,35 +30,54 @@ describe("isSafeActionUrl", () => {
 });
 
 describe("emailHtml", () => {
-  const url = "https://example.org/go/abc";
+  const action = "https://example.org/go/abc";
+  const event = "https://example.org/acme/checkout/api?event=e1";
+  const links = (...ls: { url: string; label: string; primary?: boolean }[]) => ls;
 
-  it("renders the action as a button", () => {
-    const html = emailHtml({ body: "Version : 1.0", actionUrl: url, actionLabel: "Ouvrir" });
-    expect(html).toContain(`href="${url}"`);
+  it("renders each link as a button", () => {
+    const html = emailHtml({
+      body: "Version : 1.0",
+      links: links({ url: action, label: "Ouvrir", primary: true }, { url: event, label: "Voir" }),
+    });
+    expect(html).toContain(`href="${action}"`);
     expect(html).toContain(">Ouvrir<");
+    expect(html).toContain(`href="${event}"`);
+    expect(html).toContain(">Voir<");
   });
 
-  // The text part already spells the link out; repeating it above the button
-  // says the same thing twice.
-  it("drops the line that held the raw link", () => {
-    const html = emailHtml({ body: `Version : 1.0\nAction : ${url}`, actionUrl: url, actionLabel: "Ouvrir" });
+  // The text part already spells the links out; repeating them above the
+  // buttons says the same thing twice.
+  it("drops the lines that held the raw URLs", () => {
+    const html = emailHtml({
+      body: `Version : 1.0\nAction : ${action}\nVoir : ${event}`,
+      links: links({ url: action, label: "Ouvrir", primary: true }, { url: event, label: "Voir" }),
+    });
     expect(html).toContain("Version : 1.0");
-    expect(html).not.toContain(`Action : ${url}`);
+    expect(html).not.toContain(`Action : ${action}`);
+    expect(html).not.toContain(`Voir : ${event}`);
   });
 
-  it("renders no button when the event carries no action", () => {
-    const html = emailHtml({ body: "Version : 1.0", actionUrl: "", actionLabel: "Ouvrir" });
+  // An incident has no next status, so no action link — but it still carries
+  // the event, which is the point of the second button.
+  it("keeps the event button when there is no action", () => {
+    const html = emailHtml({ body: "x", links: links({ url: "", label: "Ouvrir", primary: true }, { url: event, label: "Voir" }) });
+    expect(html).not.toContain(">Ouvrir<");
+    expect(html).toContain(">Voir<");
+  });
+
+  it("renders no row at all when nothing is linkable", () => {
+    const html = emailHtml({ body: "Version : 1.0", links: links({ url: "", label: "Ouvrir" }) });
     expect(html).not.toContain("<a href");
   });
 
   // A button pointing at javascript: would be worse than no button.
-  it("renders no button for an unsafe scheme", () => {
-    const html = emailHtml({ body: "x", actionUrl: "javascript:alert(1)", actionLabel: "Ouvrir" });
+  it("skips an unsafe scheme", () => {
+    const html = emailHtml({ body: "x", links: links({ url: "javascript:alert(1)", label: "Ouvrir" }) });
     expect(html).not.toContain("<a href");
   });
 
   it("escapes the body it embeds", () => {
-    const html = emailHtml({ body: "<b>bold</b>", actionUrl: "", actionLabel: "" });
+    const html = emailHtml({ body: "<b>bold</b>", links: [] });
     expect(html).toContain("&lt;b&gt;bold&lt;/b&gt;");
     expect(html).not.toContain("<b>bold</b>");
   });

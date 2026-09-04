@@ -446,5 +446,6 @@
   "hookKind.incident.created": "Incident opened",
   "hookKind.maintenance.created": "Maintenance scheduled",
   "logs.mailbox": "Catch-all mailbox (dev)",
-  "hook.openAction": "Open"
+  "hook.openAction": "Open",
+  "hook.seeEvent": "See the event"
 }

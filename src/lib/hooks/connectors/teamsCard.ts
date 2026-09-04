@@ -15,6 +15,7 @@ export function adaptiveCard(
   text: string,
   fallback: string,
   actionUrl: string,
+  eventUrl: string,
   locale: Locale,
 ) {
   // wrap on both blocks: without it Teams renders a single line and the
@@ -23,6 +24,12 @@ export function adaptiveCard(
     { type: "TextBlock", text: title || fallback, weight: "Bolder", size: "Medium", wrap: true },
     { type: "TextBlock", text: text || fallback, wrap: true },
   ];
+
+  const messages = getMessages(locale);
+  const actions = [
+    actionUrl ? { type: "Action.OpenUrl", title: translate(messages, "hook.openAction"), url: actionUrl } : null,
+    eventUrl ? { type: "Action.OpenUrl", title: translate(messages, "hook.seeEvent"), url: eventUrl } : null,
+  ].filter((a): a is { type: string; title: string; url: string } => a !== null);
 
   return {
     type: "message",
@@ -36,16 +43,12 @@ export function adaptiveCard(
           type: "AdaptiveCard",
           version: "1.4",
           body,
-          // A button, not a URL pasted mid-sentence for the reader to notice
-          // and copy. Omitted entirely when the event carries no action link,
-          // rather than rendering a button that goes nowhere.
-          ...(actionUrl
-            ? {
-                actions: [
-                  { type: "Action.OpenUrl", title: translate(getMessages(locale), "hook.openAction"), url: actionUrl },
-                ],
-              }
-            : {}),
+          // Buttons, not URLs pasted mid-sentence for the reader to notice and
+          // copy. The action exists only on a deployment with a next status;
+          // the event link is on every card, so an incident is no longer a dead
+          // end. A link that is absent yields no button rather than one that
+          // goes nowhere.
+          ...(actions.length ? { actions } : {}),
         },
       },
     ],

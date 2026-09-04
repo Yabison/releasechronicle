@@ -96,10 +96,23 @@ export function templateValues(
     scheduledAt: formatStamp(str(d.scheduledAt), locale),
     windowStart: formatStamp(str(d.windowStart), locale),
     windowEnd: formatStamp(str(d.windowEnd), locale),
-    // free text and the one-click link
+    // free text and the two links
     comment: str(d.comment),
+    // The one-click link: only on a deployment that has a next status.
     actionUrl: str(d.actionUrl),
+    // The event in the app. Always present, whatever the kind — an incident or
+    // a maintenance had no link at all, so a reader who wanted the detail had
+    // to go and find it.
+    eventUrl: eventUrl(event, str(d.eventId)),
   };
+}
+
+/** The event's page. HookEvent carries slugs, not display names, so this is the
+ *  same path the app links to internally. */
+function eventUrl(event: HookEvent, eventId: string): string {
+  if (!eventId) return "";
+  const base = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+  return `${base}/${event.company}/${event.product}/${event.service}?event=${eventId}`;
 }
 
 /** Readable, timezone-explicit, and empty for an absent date rather than
