@@ -1,5 +1,6 @@
 import { hasRole, type SessionUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
+import { invalidateSidebarTree } from "@/lib/cache";
 
 /** Roles allowed to mutate data (create/transition/edit events, admin config). */
 export function canWrite(session: SessionUser | null): boolean {
@@ -41,4 +42,6 @@ export async function setPublicEventTypes(types: string[]): Promise<void> {
     create: { id: "singleton", eventTypes: clean },
     update: { eventTypes: clean },
   });
+  // The anonymous tree counts only public event types, so its cached copy is now stale.
+  await invalidateSidebarTree();
 }
