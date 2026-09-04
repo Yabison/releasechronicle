@@ -1,3 +1,10 @@
+# Fixed so every checkout, worktree and clone acts on the same containers.
+# Without it compose derives the project name from the directory, so a second
+# clone silently starts a second set that fights the first for ports 5432,
+# 5433, 1389 and 1025 — some containers come up, others fail, and `make up`
+# looks like it only started half of them.
+name: releasechronicle
+
 services:
   db:
     image: postgres:16
