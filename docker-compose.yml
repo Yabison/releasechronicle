@@ -54,13 +54,19 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: "postgresql://rc:rc@db:5432/releasechronicle"
-      # No usable default on purpose: the image runs with NODE_ENV=production, where
-      # the app refuses to start on a public secret. Set both in .env
-      # (`openssl rand -base64 32`). Empty rather than `:?` so that `npm run dev:up`,
-      # which only brings up db/ldap/mailpit, still interpolates this file.
-      RC_WRITE_TOKEN: "${RC_WRITE_TOKEN:-}"
+      # Required, and compose refuses to create the container without them. The
+      # image runs with NODE_ENV=production, where a missing or public secret is
+      # a hard failure — but that failure used to surface as a 500 the first
+      # time somebody tried to log in, long after the container had reported
+      # itself healthy. Failing at `up` says the same thing at the moment it can
+      # still be acted on.
+      #
+      # These were empty defaults so that `npm run dev:up` could interpolate the
+      # file while starting only db/ldap/mailpit. That script now excludes the
+      # app service outright, so the reason is gone.
+      RC_WRITE_TOKEN: "${RC_WRITE_TOKEN:?set RC_WRITE_TOKEN in .env — openssl rand -base64 32}"
       AUTH_PROVIDER: "ldap"
-      AUTH_SECRET: "${AUTH_SECRET:-}"
+      AUTH_SECRET: "${AUTH_SECRET:?set AUTH_SECRET in .env — openssl rand -base64 32}"
       LDAP_URL: "ldap://ldap:389"
       LDAP_BASE_DN: "dc=example,dc=org"
       LDAP_BIND_DN: "cn=admin,dc=example,dc=org"
