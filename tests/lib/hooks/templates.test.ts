@@ -38,17 +38,19 @@ describe("templates loaded from config files", () => {
 
 describe("localized templates", () => {
   it("defaults to French", () => {
-    expect(emailTemplate({ ...base, kind: "incident.created" }).body).toContain("Incident / rollback sur");
-    expect(emailTemplate({ ...base, kind: "deploy.status_changed", data: { toStatus: "VALIDATE" } }).subject).toContain("terminé");
+    expect(emailTemplate({ ...base, kind: "incident.created" }).body).toContain("sur {company}");
+    // The green wording moved from the subject, which is now the same shape for
+    // every colour, into the body headline.
+    expect(emailTemplate({ ...base, kind: "deploy.status_changed", data: { toStatus: "VALIDATE" } }).body).toContain("Environnement :");
   });
   it("serves the English catalog when asked", () => {
-    expect(emailTemplate({ ...base, kind: "incident.created" }, "en").body).toContain("Incident / rollback on");
-    expect(emailTemplate({ ...base, kind: "deploy.created" }, "en").body).toContain("Release in progress on");
-    expect(emailTemplate({ ...base, kind: "deploy.status_changed", data: { toStatus: "VALIDATE" } }, "en").subject).toContain("done");
+    expect(emailTemplate({ ...base, kind: "incident.created" }, "en").body).toContain("on {company}");
+    expect(emailTemplate({ ...base, kind: "deploy.created" }, "en").body).toContain("Environment:");
+    expect(emailTemplate({ ...base, kind: "deploy.status_changed", data: { toStatus: "VALIDATE" } }, "en").body).toContain("Environment:");
     expect(teamsTemplate({ ...base, kind: "deploy.created" }, "en").text).toContain("by {actor}");
   });
   it("falls back to the default locale for an unknown one", () => {
     // @ts-expect-error — deliberately invalid locale, exercised as runtime input
-    expect(emailTemplate({ ...base, kind: "incident.created" }, "de").body).toContain("Incident / rollback sur");
+    expect(emailTemplate({ ...base, kind: "incident.created" }, "de").body).toContain("Environnement :");
   });
 });
