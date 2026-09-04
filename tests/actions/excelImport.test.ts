@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { buildWorkbook } from "@/lib/excel";
@@ -32,6 +32,10 @@ beforeEach(async () => { await resetDb(); });
 afterAll(async () => { await prisma.$disconnect(); });
 
 describe("importEventsXlsx", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("imports all valid rows", async () => {
     await seed();
     const buf = await buildWorkbook([dep({ externalId: "dep-1" }), dep({ externalId: "dep-2" })]);
@@ -93,6 +97,20 @@ describe("importEventsXlsx", () => {
     const res = await importEventsXlsx(fileFrom(buf));
     if (res.ok) throw new Error("expected failure");
     expect(res.errors[0]).toMatchObject({ row: 2, error: "err.serviceNotFound" });
+  });
+
+  it("resolves each distinct service once, not once per row", async () => {
+    await seed();
+    const rows = Array.from({ length: 6 }, (_, i) => dep({ externalId: `dep-${i}` }));
+    const buf = await buildWorkbook(rows);
+    const findFirst = vi.spyOn(prisma.service, "findFirst");
+    const findMany = vi.spyOn(prisma.service, "findMany");
+
+    const res = await importEventsXlsx(fileFrom(buf));
+
+    expect(res).toEqual({ ok: true, count: 6 });
+    // Six rows, one service: the lookups must not scale with the row count.
+    expect(findFirst.mock.calls.length + findMany.mock.calls.length).toBeLessThanOrEqual(1);
   });
 
   it("is idempotent — re-importing an export leaves the count unchanged", async () => {

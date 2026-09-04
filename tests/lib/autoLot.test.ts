@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
@@ -106,5 +106,31 @@ describe("attachToAutoLot", () => {
     });
     expect(rows.map((e) => e.autoLot)).toEqual([false, false]);
     expect(rows.map((e) => e.lot)).toEqual(["1.0.0", "2.0.0"]);
+  });
+});
+
+// The sweeper calls attachToAutoLot once per deployment of the last 7 days, so a
+// per-candidate membership count makes the sweep quadratic in the number of
+// deployments. One grouped count for the whole window keeps it linear.
+describe("attachToAutoLot membership counting", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("counts lot membership for the whole window at once, not once per candidate", async () => {
+    const { sMaster, sDep } = await setup();
+    const base = new Date("2026-08-08T10:00:00Z");
+    for (let i = 0; i < 4; i++) {
+      await deploy(i % 2 ? sDep : sMaster, new Date(base.getTime() + i * 60_000), `1.0.${i}`);
+    }
+    const last = await deploy(sDep, new Date(base.getTime() + 5 * 60_000), "1.0.4");
+    const count = vi.spyOn(prisma.event, "count");
+
+    const r = await attachToAutoLot(last.id, new Date(base.getTime() + 5 * 60_000));
+
+    expect(r.members).toBe(5);
+    // One count remains: the early "is my own lot already a manual multi-member
+    // lot?" check. What must not scale with the candidate count is the rest.
+    expect(count.mock.calls.length).toBeLessThanOrEqual(1);
   });
 });

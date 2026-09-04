@@ -96,11 +96,12 @@ export function listProducts(companyId: string, publicOnly: boolean = false, inc
   });
 }
 
-export async function getProductBySlug(companySlug: string, productSlug: string) {
-  const company = await getCompanyBySlug(companySlug);
-  if (!company) return null;
+export function getProductBySlug(companySlug: string, productSlug: string) {
+  // One nested filter, not a walk: the live-parent rule is the same either way
+  // (product AND company must both be live), and this resolver sits on the hot
+  // path of every ingest request.
   return prisma.product.findFirst({
-    where: { companyId: company.id, slug: productSlug, deletedAt: null },
+    where: { slug: productSlug, deletedAt: null, company: { slug: companySlug, deletedAt: null } },
   });
 }
 
@@ -183,16 +184,47 @@ export function listServices(productId: string, publicOnly: boolean = false, inc
   });
 }
 
-export async function getServiceBySlug(
+export function getServiceBySlug(
   companySlug: string,
   productSlug: string,
   serviceSlug: string,
 ) {
-  const product = await getProductBySlug(companySlug, productSlug);
-  if (!product) return null;
-  return prisma.service.findFirst({
-    where: { productId: product.id, slug: serviceSlug, deletedAt: null },
+  return prisma.service.findFirst({ where: liveServiceWhere({ company: companySlug, product: productSlug, service: serviceSlug }) });
+}
+
+/** A company/product/service slug triple, as the REST bodies and Excel rows carry it. */
+export type ServiceRef = { company: string; product: string; service: string };
+
+/** Key a ServiceRef takes in the map `getServicesBySlugs` returns. */
+export function serviceRefKey(ref: ServiceRef): string {
+  return `${ref.company}/${ref.product}/${ref.service}`;
+}
+
+function liveServiceWhere(ref: ServiceRef) {
+  return {
+    slug: ref.service, deletedAt: null,
+    product: { slug: ref.product, deletedAt: null, company: { slug: ref.company, deletedAt: null } },
+  };
+}
+
+/**
+ * Resolve many slug triples in ONE query, keyed by `serviceRefKey`. For bulk
+ * callers (the Excel import) that would otherwise resolve a service per row.
+ * Missing and soft-deleted triples are simply absent from the map.
+ */
+export async function getServicesBySlugs(refs: ServiceRef[]): Promise<Map<string, { id: string }>> {
+  const byKey = new Map(refs.map((r) => [serviceRefKey(r), r]));
+  if (byKey.size === 0) return new Map();
+  const rows = await prisma.service.findMany({
+    where: { OR: [...byKey.values()].map(liveServiceWhere) },
+    select: { id: true, slug: true, product: { select: { slug: true, company: { select: { slug: true } } } } },
   });
+  return new Map(
+    rows.map((r) => [
+      serviceRefKey({ company: r.product.company.slug, product: r.product.slug, service: r.slug }),
+      { id: r.id },
+    ]),
+  );
 }
 
 /**

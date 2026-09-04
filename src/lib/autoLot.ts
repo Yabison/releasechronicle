@@ -15,6 +15,25 @@ async function isMultiMember(lot: string | null, environment: string): Promise<b
   return (await prisma.event.count({ where: { lot, environment, type: "DEPLOYMENT", deletedAt: null } })) > 1;
 }
 
+/**
+ * The same count as `isMultiMember`, for every candidate lot at once.
+ *
+ * Asking per candidate made `attachToAutoLot` cost one query per row in the
+ * window, and the sweeper calls it once per deployment of the last 7 days — so the
+ * sweep was quadratic in the number of deployments. One grouped count keeps it
+ * linear. Lots absent from the result have no live deployment left.
+ */
+async function lotMemberCounts(lots: (string | null)[], environment: string): Promise<Map<string, number>> {
+  const unique = [...new Set(lots.filter((l): l is string => !!l))];
+  if (unique.length === 0) return new Map();
+  const grouped = await prisma.event.groupBy({
+    by: ["lot"],
+    where: { lot: { in: unique }, environment, type: "DEPLOYMENT", deletedAt: null },
+    _count: { _all: true },
+  });
+  return new Map(grouped.flatMap((g) => (g.lot ? [[g.lot, g._count._all] as [string, number]] : [])));
+}
+
 // `_now` is unused: the grouping window derives from the event's own occurredAt
 // (see `from`/`to` below). Kept only so existing callers' signatures still match.
 export async function attachToAutoLot(eventId: string, _now: Date = new Date()): Promise<{ lot: string | null; members: number }> {
@@ -38,9 +57,11 @@ export async function attachToAutoLot(eventId: string, _now: Date = new Date()):
     orderBy: { occurredAt: "asc" },
   });
 
+  const memberCounts = await lotMemberCounts(rows.map((r) => r.lot), ev.environment);
   const cands: Cand[] = [];
   for (const r of rows) {
-    const eligible = r.autoLot || !(await isMultiMember(r.lot, r.environment));
+    // rows are already filtered to ev.environment, so one count map covers them all.
+    const eligible = r.autoLot || !r.lot || (memberCounts.get(r.lot) ?? 0) <= 1;
     if (!eligible) continue;
     cands.push({ id: r.id, lot: r.lot, autoLot: r.autoLot, occurredAt: r.occurredAt, masterSlug: r.service.isMaster ? r.service.slug : null });
   }
