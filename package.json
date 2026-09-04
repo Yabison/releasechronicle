@@ -4,6 +4,8 @@
   "private": true,
   "license": "Apache-2.0",
   "scripts": {
+    "prebuild": "node scripts/copy-swagger.mjs",
+    "predev": "node scripts/copy-swagger.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -35,6 +37,7 @@
     "nodemailer": "^9.0.5",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "swagger-ui-dist": "^5.18.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
