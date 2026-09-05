@@ -378,6 +378,7 @@
   "err.atLeastOneProduct": "at least one product is required",
   "err.lotRow": "product {n}: {reason}",
   "err.serviceNotFound": "service not found",
+  "err.changelogBody": "the release note is empty or too long (20,000 characters maximum)",
   "err.causeSelfLink": "an event cannot be its own cause",
   "err.causeNotFound": "the cause event was not found",
   "err.causeDifferentProduct": "the cause must belong to the same product",

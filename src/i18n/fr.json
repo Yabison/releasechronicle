@@ -378,6 +378,7 @@
   "err.atLeastOneProduct": "au moins un produit requis",
   "err.lotRow": "produit {n} : {reason}",
   "err.serviceNotFound": "service introuvable",
+  "err.changelogBody": "la note de release est vide ou trop longue (20 000 caractères maximum)",
   "err.causeSelfLink": "un événement ne peut pas être sa propre cause",
   "err.causeNotFound": "l'événement cause est introuvable",
   "err.causeDifferentProduct": "la cause doit appartenir au même produit",
