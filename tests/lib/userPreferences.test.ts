@@ -4,8 +4,8 @@ import { isSafeHomePath, isSafeHomeQuery, sanitize, homeTarget, EMPTY_PREFERENCE
 describe("isSafeHomePath", () => {
   it("accepts a path on this site", () => {
     expect(isSafeHomePath("/")).toBe(true);
-    expect(isSafeHomePath("/weda")).toBe(true);
-    expect(isSafeHomePath("/weda/weda/weda")).toBe(true);
+    expect(isSafeHomePath("/yabison")).toBe(true);
+    expect(isSafeHomePath("/yabison/checkout/api")).toBe(true);
     expect(isSafeHomePath("/metrics")).toBe(true);
   });
 
@@ -17,13 +17,13 @@ describe("isSafeHomePath", () => {
     expect(isSafeHomePath("https://evil.com")).toBe(false);
     expect(isSafeHomePath("http://evil.com")).toBe(false);
     expect(isSafeHomePath("javascript:alert(1)")).toBe(false);
-    expect(isSafeHomePath("weda")).toBe(false);
+    expect(isSafeHomePath("yabison")).toBe(false);
     expect(isSafeHomePath("")).toBe(false);
   });
 
   it("refuses traversal", () => {
     expect(isSafeHomePath("/../etc/passwd")).toBe(false);
-    expect(isSafeHomePath("/weda/../..")).toBe(false);
+    expect(isSafeHomePath("/yabison/../..")).toBe(false);
   });
 });
 
@@ -41,8 +41,8 @@ describe("isSafeHomeQuery", () => {
 
 describe("sanitize", () => {
   it("keeps valid values", () => {
-    expect(sanitize({ locale: "en", theme: "dark", timeMode: "utc", homePath: "/weda", homeQuery: "cat=INCIDENT" })).toEqual({
-      locale: "en", theme: "dark", timeMode: "utc", homePath: "/weda", homeQuery: "cat=INCIDENT",
+    expect(sanitize({ locale: "en", theme: "dark", timeMode: "utc", homePath: "/yabison", homeQuery: "cat=INCIDENT" })).toEqual({
+      locale: "en", theme: "dark", timeMode: "utc", homePath: "/yabison", homeQuery: "cat=INCIDENT",
     });
   });
 
@@ -52,7 +52,7 @@ describe("sanitize", () => {
   });
 
   it("tolerates a leading question mark on the query", () => {
-    expect(sanitize({ homePath: "/weda", homeQuery: "?cat=A" }).homeQuery).toBe("cat=A");
+    expect(sanitize({ homePath: "/yabison", homeQuery: "?cat=A" }).homeQuery).toBe("cat=A");
   });
 
   // A pinned search with nowhere to be pinned is not a preference.
@@ -67,8 +67,8 @@ describe("homeTarget", () => {
     expect(homeTarget({ ...EMPTY_PREFERENCES, homeQuery: "cat=A" })).toBeNull();
   });
   it("joins the path and the pinned search", () => {
-    expect(homeTarget({ ...EMPTY_PREFERENCES, homePath: "/weda" })).toBe("/weda");
-    expect(homeTarget({ ...EMPTY_PREFERENCES, homePath: "/weda", homeQuery: "cat=A" })).toBe("/weda?cat=A");
+    expect(homeTarget({ ...EMPTY_PREFERENCES, homePath: "/yabison" })).toBe("/yabison");
+    expect(homeTarget({ ...EMPTY_PREFERENCES, homePath: "/yabison", homeQuery: "cat=A" })).toBe("/yabison?cat=A");
   });
 });
 
