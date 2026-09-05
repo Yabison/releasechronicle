@@ -19,6 +19,7 @@ import { useTimeFormat } from "@/lib/useTimeFormat";
 import { useTagColors } from "@/lib/useTagColors";
 import type { ClientEvent } from "@/lib/timeline";
 import { siblings, lotKey } from "@/lib/deployLot";
+import { workflowIssuesByEvent } from "@/lib/releaseTrace";
 import styles from "./DetailPane.module.css";
 
 const FILTERS: EntryCategory[] = ["DEPLOY", "HOTFIX", "INCIDENT", "MAINTENANCE"];
@@ -174,6 +175,9 @@ export function DetailPane({
   );
   const [phaseDefaults, setPhaseDefaults] = useState<{ changeType: string; parentId: string; environment: string; parentOccurredAt: string } | null>(null);
   const tagColors = useTagColors();
+  // Computed on every loaded event, not the env-scoped ones: whether PROD skipped
+  // PREPROD is only visible when the PREPROD rows are still in the picture.
+  const workflowIssues = useMemo(() => workflowIssuesByEvent(events, envWorkflow), [events, envWorkflow]);
 
   const scopedEvents = useMemo(() => {
     const ver = q.version.trim().toLowerCase();
@@ -227,7 +231,15 @@ export function DetailPane({
         <div className={styles.crumb}>
           <span className={styles.crumbProduct}>{productName}</span> / <span className={styles.crumbService}>{serviceName}</span>
           <Link href={`${path}/changelog`} className={styles.changelogLink}>{t("changelog.link")}</Link>
-          <select className={styles.envSelect} value={env} onChange={(e) => setEnv(e.target.value)} aria-label={t("common.environment")}>
+          {/* Painted in the env's colour once one is picked, so the filter reads
+              like the badges it narrows the list to. */}
+          <select
+            className={styles.envSelect}
+            value={env}
+            onChange={(e) => setEnv(e.target.value)}
+            aria-label={t("common.environment")}
+            style={envColors[env] ? { background: envColors[env], borderColor: envColors[env], color: "#fff", fontWeight: 600 } : undefined}
+          >
             <option value={ALL_ENV}>{t("detail.allEnvs")}</option>
             {envGroups.length > 0 && (
               <optgroup label={t("detail.groups")}>
@@ -301,6 +313,7 @@ export function DetailPane({
                   lotWarning={e.lot ? (lotWarnings[lotKey(e.environment, e.lot)] ?? []) : []}
                   envColor={envColors[e.environment] ?? "#64748b"}
                   tagColors={tagColors}
+                  workflowIssues={workflowIssues.get(e.eventId)}
                 />
               ))}
             </div>
@@ -318,6 +331,7 @@ export function DetailPane({
                   lotWarning={e.lot ? (lotWarnings[lotKey(e.environment, e.lot)] ?? []) : []}
                   envColor={envColors[e.environment] ?? "#64748b"}
                   tagColors={tagColors}
+                  workflowIssues={workflowIssues.get(e.eventId)}
                 />
               ))}
             </div>

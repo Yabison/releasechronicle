@@ -16,7 +16,7 @@ import type { DeployStatus } from "@prisma/client";
 import { DeployTimeline } from "./DeployTimeline";
 import { useI18n } from "@/i18n/useI18n";
 import { useTimeFormat } from "@/lib/useTimeFormat";
-import { actionMessage, changeTypeLabel, phaseLabel, rollbackText } from "@/i18n/labels";
+import { actionMessage, changeTypeLabel, phaseLabel, releaseIssueLabel, rollbackText } from "@/i18n/labels";
 import styles from "./EventDrawer.module.css";
 
 function truncate(s: string, n = 48): string {
@@ -604,7 +604,7 @@ export function EventDrawer({
                 )}
 
                 {trace.respected === false ? (
-                  <p className={styles.traceBad}>{t("drawer.workflowBad")} {trace.issues.join(" ; ")}</p>
+                  <p className={styles.traceBad}>{t("drawer.workflowBad")} {trace.issues.map((i) => releaseIssueLabel(t, i)).join(" ; ")}</p>
                 ) : trace.respected ? (
                   <p className={styles.traceOk}>{t("drawer.workflowOk")}</p>
                 ) : null}

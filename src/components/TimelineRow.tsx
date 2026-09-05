@@ -1,7 +1,8 @@
 import { entrySeverity, type TimelineEntry } from "@/lib/eventTimeline";
 import { rowLeadIcon } from "@/lib/rowLeadIcon";
 import { RowLeadIcon } from "./RowLeadIcon";
-import { categoryLabel, changeTypeLabel, phaseLabel, deployStatusLongLabel } from "@/i18n/labels";
+import { categoryLabel, changeTypeLabel, phaseLabel, deployStatusLongLabel, releaseIssueLabel } from "@/i18n/labels";
+import type { ReleaseIssue } from "@/lib/releaseTrace";
 import { STATUS_TEXT_VAR } from "@/lib/deployStatusMeta";
 import type { DeployStatus } from "@prisma/client";
 import { LotBadge } from "./LotBadge";
@@ -27,6 +28,7 @@ export function TimelineRow({
   envColor = null,
   tagColors = {},
   context = null,
+  workflowIssues = [],
 }: {
   entry: TimelineEntry;
   onClick: () => void;
@@ -37,6 +39,9 @@ export function TimelineRow({
   /** "product / service", shown on the dashboards where one list spans many
    *  services and the row would otherwise not say what it belongs to. */
   context?: string | null;
+  /** Env-workflow violations of this build (see workflowIssuesByEvent); empty when
+   *  the release went through the environments in the expected order. */
+  workflowIssues?: ReleaseIssue[];
 }) {
   const { t } = useI18n();
   const { stampDay, stampTime, dayKey } = useTimeFormat();
@@ -55,6 +60,18 @@ export function TimelineRow({
       ? t("leadIcon.reasonLotIncomplete")
       : undefined;
   const status = (entry.deployStatus ?? null) as DeployStatus | null;
+  // A build that skipped an env or reached one too early. Marked beside the
+  // status and tagged: the problem is about the package as much as about this
+  // deployment.
+  const workflowBroken = workflowIssues.length > 0;
+  const workflowTitle = workflowBroken
+    ? t("timeline.workflowErrorTitle", { issues: workflowIssues.map((i) => releaseIssueLabel(t, i)).join(" ; ") })
+    : undefined;
+  const workflowMark = workflowBroken && (
+    <span className={styles.sevIcon} data-sev="danger" role="img" aria-label={workflowTitle} title={workflowTitle}>
+      ⚠
+    </span>
+  );
 
   return (
     <button className={styles.row} onClick={onClick} data-done={entry.done} data-rolledback={entry.rolledBack}>
@@ -136,6 +153,7 @@ export function TimelineRow({
               ⚠
             </span>
           )}
+          {workflowMark}
         </span>
         {(entry.warnPre || lotIncomplete) && (
           <span className={styles.statusLine}>
@@ -162,9 +180,14 @@ export function TimelineRow({
       </span>
 
       <span className={styles.meta}>
-        {entry.tags && entry.tags.length > 0 && (
+        {(workflowBroken || (entry.tags && entry.tags.length > 0)) && (
           <span className={styles.tags}>
-            {entry.tags.map((tag) => (
+            {workflowBroken && (
+              <span className={styles.tag} data-level="danger" title={workflowTitle}>
+                {t("timeline.workflowError")}
+              </span>
+            )}
+            {(entry.tags ?? []).map((tag) => (
               <span
                 key={tag}
                 className={styles.tag}
