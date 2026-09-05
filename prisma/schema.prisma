@@ -20,18 +20,18 @@ enum IngestScope {
 }
 
 model Company {
-  id        String    @id @default(cuid())
-  name      String
-  slug      String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-  deletedBatch String?
-  products  Product[]
+  id            String         @id @default(cuid())
+  name          String
+  slug          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  deletedAt     DateTime?
+  deletedBatch  String?
+  products      Product[]
   ingestSources IngestSource[]
-  autoLotNaming String @default("master")
-  public    Boolean   @default(false)
-  sortOrder Int       @default(0)
+  autoLotNaming String         @default("master")
+  public        Boolean        @default(false)
+  sortOrder     Int            @default(0)
 
   // slug's real uniqueness constraint is a PARTIAL unique index created by hand in
   // the migration (`Company_slug_key` ... WHERE "deletedAt" IS NULL), so a
@@ -42,20 +42,20 @@ model Company {
 }
 
 model Product {
-  id        String    @id @default(cuid())
-  name      String
-  slug      String
-  companyId String
-  company   Company   @relation(fields: [companyId], references: [id])
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id           String    @id @default(cuid())
+  name         String
+  slug         String
+  companyId    String
+  company      Company   @relation(fields: [companyId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
   deletedBatch String?
-  services  Service[]
-  hooks     Hook[]
-  envWorkflow String[] @default([])
-  sortOrder Int       @default(0)
-  public    Boolean   @default(false)
+  services     Service[]
+  hooks        Hook[]
+  envWorkflow  String[]  @default([])
+  sortOrder    Int       @default(0)
+  public       Boolean   @default(false)
 
   // The real uniqueness constraint is a PARTIAL unique index created by hand in the
   // migration (`Product_companyId_slug_key` ... WHERE "deletedAt" IS NULL), so a
@@ -67,27 +67,28 @@ model Product {
 }
 
 model Service {
-  id        String      @id @default(cuid())
-  name      String
-  slug      String
-  type      ServiceType
-  productId String
-  product   Product     @relation(fields: [productId], references: [id])
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  deletedAt DateTime?
-  deletedBatch String?
-  events    Event[]
-  ingestSources IngestSource[]
-  runtimeStates RuntimeState[]
-  buildUrlTemplate String?
-  isMaster  Boolean     @default(false)
+  id                  String         @id @default(cuid())
+  name                String
+  slug                String
+  type                ServiceType
+  productId           String
+  product             Product        @relation(fields: [productId], references: [id])
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  deletedAt           DateTime?
+  deletedBatch        String?
+  events              Event[]
+  ingestSources       IngestSource[]
+  runtimeStates       RuntimeState[]
+  changelogs          Changelog[]
+  buildUrlTemplate    String?
+  isMaster            Boolean        @default(false)
   // Env workflow: inherits the product's by default; when envWorkflowOverride is true,
   // the service uses its own envWorkflow instead (no more inheritance).
-  envWorkflow String[]  @default([])
-  envWorkflowOverride Boolean @default(false)
-  sortOrder Int         @default(0)
-  public    Boolean     @default(false)
+  envWorkflow         String[]       @default([])
+  envWorkflowOverride Boolean        @default(false)
+  sortOrder           Int            @default(0)
+  public              Boolean        @default(false)
 
   // The real uniqueness constraint is a PARTIAL unique index created by hand in the
   // migration (`Service_productId_slug_key` ... WHERE "deletedAt" IS NULL), so a
@@ -110,9 +111,18 @@ model EnvironmentConfig {
 
 /// Singleton (id = "singleton") holding global public-mode settings.
 model PublicSetting {
-  id         String   @id @default("singleton")
-  eventTypes String[] @default(["DEPLOYMENT", "MAINTENANCE"])
-  updatedAt  DateTime @updatedAt
+  id                  String              @id @default("singleton")
+  eventTypes          String[]            @default(["DEPLOYMENT", "MAINTENANCE"])
+  /// Qui peut lire les notes de release. Le defaut sur est celui qui ne publie pas ;
+  /// PUBLIC ne fait que RETIRER le changelog a un anonyme, jamais lui ouvrir un
+  /// service qu'il n'avait pas deja le droit de voir.
+  changelogVisibility ChangelogVisibility @default(AUTHENTICATED)
+  updatedAt           DateTime            @updatedAt
+}
+
+enum ChangelogVisibility {
+  PUBLIC
+  AUTHENTICATED
 }
 
 /// Per-user preferences, keyed by the session subject (the LDAP uid or the local
@@ -157,12 +167,12 @@ model RuntimeState {
 }
 
 model TagConfig {
-  id        String    @id @default(cuid())
-  slug      String    @unique
+  id        String   @id @default(cuid())
+  slug      String   @unique
   name      String
   color     String
-  sortOrder Int       @default(0)
-  createdAt DateTime  @default(now())
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
 }
 
 model EnvironmentGroup {
@@ -214,42 +224,42 @@ enum IncidentStatus {
 }
 
 model Event {
-  id           String        @id @default(cuid())
-  serviceId    String
-  service      Service       @relation(fields: [serviceId], references: [id])
-  environment  String
-  type         EventType
-  occurredAt   DateTime
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  deletedAt    DateTime?
-  source       EventSource   @default(API)
-  externalId   String?
-  metadata     Json?
-  tags         String[]
-  causedById   String?
-  causedBy     Event?        @relation("EventCausation", fields: [causedById], references: [id])
-  causes       Event[]       @relation("EventCausation")
+  id             String          @id @default(cuid())
+  serviceId      String
+  service        Service         @relation(fields: [serviceId], references: [id])
+  environment    String
+  type           EventType
+  occurredAt     DateTime
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+  source         EventSource     @default(API)
+  externalId     String?
+  metadata       Json?
+  tags           String[]
+  causedById     String?
+  causedBy       Event?          @relation("EventCausation", fields: [causedById], references: [id])
+  causes         Event[]         @relation("EventCausation")
   // PRE_MEP / POST_MEP deployments link to their parent MEP/HOTFIX deployment.
-  parentId     String?
-  parent       Event?        @relation("MepPhase", fields: [parentId], references: [id])
-  phases       Event[]       @relation("MepPhase")
-  hourType     String?       // HO (heures ouvrées) | HNO (heures non ouvrées)
-  version      String?
-  lot          String?
-  requester    String?
-  changeType   ChangeType?
-  externalLink String?
-  deployStatus DeployStatus?
-  incidentType String?
+  parentId       String?
+  parent         Event?          @relation("MepPhase", fields: [parentId], references: [id])
+  phases         Event[]         @relation("MepPhase")
+  hourType       String? // HO (heures ouvrées) | HNO (heures non ouvrées)
+  version        String?
+  lot            String?
+  requester      String?
+  changeType     ChangeType?
+  externalLink   String?
+  deployStatus   DeployStatus?
+  incidentType   String?
   incidentStatus IncidentStatus?
-  startedAt    DateTime?
-  resolvedAt   DateTime?
-  comment      String?
-  windowStart  DateTime?
-  windowEnd    DateTime?
-  scheduledAt  DateTime?
-  autoLot      Boolean       @default(false)
+  startedAt      DateTime?
+  resolvedAt     DateTime?
+  comment        String?
+  windowStart    DateTime?
+  windowEnd      DateTime?
+  scheduledAt    DateTime?
+  autoLot        Boolean         @default(false)
 
   rollbacks         Rollback[]
   qaValidations     QaValidation[]
@@ -281,18 +291,18 @@ model EventComment {
 }
 
 model Rollback {
-  id        String   @id @default(cuid())
-  eventId   String
-  event     Event    @relation(fields: [eventId], references: [id])
+  id              String   @id @default(cuid())
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id])
   /// Free-text reason given by the user; null when they gave none — the UI then
   /// composes a localized sentence from previousVersion/actorName.
-  comment   String?
+  comment         String?
   /// Version that was live before the rolled-back deployment, when known.
   previousVersion String?
   /// Who triggered the rollback; null for rows created before this was recorded.
-  actorName String?
-  link      String?
-  createdAt DateTime @default(now())
+  actorName       String?
+  link            String?
+  createdAt       DateTime @default(now())
 
   // Postgres does not index FKs by itself; the DORA queries _count rollbacks
   // per event and every fiche loads its annotations by eventId.
@@ -338,18 +348,19 @@ model StatusTransition {
 }
 
 model Hook {
-  id         String         @id @default(cuid())
-  productId  String
-  product    Product        @relation(fields: [productId], references: [id])
-  type       String
-  events     String[]
-  transitions String[]      @default([])
-  config     Json
-  enabled    Boolean        @default(true)
-  createdAt  DateTime       @default(now())
-  deliveries HookDelivery[]
-  targetId   String?
-  target     NotificationTarget? @relation(fields: [targetId], references: [id], onDelete: Restrict)
+  id          String              @id @default(cuid())
+  productId   String
+  product     Product             @relation(fields: [productId], references: [id])
+  type        String
+  events      String[]
+  transitions String[]            @default([])
+  config      Json
+  enabled     Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  deliveries  HookDelivery[]
+  targetId    String?
+  target      NotificationTarget? @relation(fields: [targetId], references: [id], onDelete: Restrict)
+
   @@index([productId])
   // deleteTarget checks for referencing hooks before allowing the delete.
   @@index([targetId])
@@ -384,6 +395,7 @@ model HookDelivery {
   payload       Json?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
   @@index([hookId, createdAt])
   @@index([status, nextAttemptAt])
 }
@@ -400,6 +412,7 @@ model IngestSource {
   defaultEnvironment String?
   enabled            Boolean     @default(true)
   createdAt          DateTime    @default(now())
+
   @@index([serviceId])
   @@index([companyId])
 }
@@ -416,17 +429,18 @@ model DirectoryUser {
 /// Security-relevant events: logins, admin changes to secrets, one-click link use.
 /// Append-only; nothing in the app updates or deletes a row.
 model AuditLog {
-  id       String   @id @default(cuid())
-  at       DateTime @default(now())
+  id      String   @id @default(cuid())
+  at      DateTime @default(now())
   /// Dotted name, e.g. "auth.login", "auth.login_failed", "hook.created".
-  action   String
+  action  String
   /// Session display name, or null when the caller was anonymous.
-  actor    String?
-  actorIp  String?
+  actor   String?
+  actorIp String?
   /// Id or slug of whatever the action touched.
-  target   String?
-  detail   Json?
-  ok       Boolean  @default(true)
+  target  String?
+  detail  Json?
+  ok      Boolean  @default(true)
+
   @@index([at])
   @@index([action, at])
 }
@@ -439,5 +453,33 @@ model ActionTokenUse {
   eventId String
   usedAt  DateTime @default(now())
   usedIp  String?
+
   @@index([usedAt])
+}
+
+enum ChangelogSource {
+  CI
+  UI
+}
+
+/// Note de release, attachee a (service, version) et non a un evenement : une
+/// promotion QA -> PREPROD -> PROD produit trois deploiements pour une seule
+/// release, et la note decrit la release.
+model Changelog {
+  id         String          @id @default(cuid())
+  service    Service         @relation(fields: [serviceId], references: [id])
+  serviceId  String
+  version    String
+  /// Source Markdown telle qu'envoyee. Le HTML rendu n'est jamais stocke, si bien
+  /// qu'un durcissement des regles d'assainissement vaut retroactivement.
+  body       String
+  /// UI verrouille la note : la CI ne la reecrit plus (voir upsertChangelogFromCi).
+  source     ChangelogSource @default(CI)
+  /// Renseigne uniquement pour une edition manuelle.
+  authorName String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([serviceId, version])
+  @@index([serviceId])
 }
