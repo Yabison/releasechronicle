@@ -54,19 +54,16 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: "postgresql://rc:rc@db:5432/releasechronicle"
-      # Required, and compose refuses to create the container without them. The
-      # image runs with NODE_ENV=production, where a missing or public secret is
-      # a hard failure — but that failure used to surface as a 500 the first
-      # time somebody tried to log in, long after the container had reported
-      # itself healthy. Failing at `up` says the same thing at the moment it can
-      # still be acted on.
+      # Checked by docker-entrypoint.sh, which refuses to start the server
+      # without them, rather than by `${VAR:?}` here.
       #
-      # These were empty defaults so that `npm run dev:up` could interpolate the
-      # file while starting only db/ldap/mailpit. That script now excludes the
-      # app service outright, so the reason is gone.
-      RC_WRITE_TOKEN: "${RC_WRITE_TOKEN:?set RC_WRITE_TOKEN in .env — openssl rand -base64 32}"
+      # Interpolation applies to the whole file, not to the services being
+      # started: `${VAR:?}` on this service aborted `docker compose up -d
+      # db_test ldap`, and `logs`, and `down`. The CI does exactly that and has
+      # no .env, so requiring them here broke every compose command for the
+      # sake of one service.
       AUTH_PROVIDER: "ldap"
-      AUTH_SECRET: "${AUTH_SECRET:?set AUTH_SECRET in .env — openssl rand -base64 32}"
+      AUTH_SECRET: "${AUTH_SECRET:-}"
       LDAP_URL: "ldap://ldap:389"
       LDAP_BASE_DN: "dc=example,dc=org"
       LDAP_BIND_DN: "cn=admin,dc=example,dc=org"
