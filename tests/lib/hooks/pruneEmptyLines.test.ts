@@ -20,7 +20,7 @@ describe("pruneEmptyLines", () => {
 
   // Prose is not a field, and a colon inside a sentence must not make it one.
   it("keeps a line with no field label", () => {
-    const prose = "Release en cours sur weda / wmickey";
+    const prose = "Release en cours sur yabison / checkout";
     expect(pruneEmptyLines(prose)).toBe(prose);
   });
 

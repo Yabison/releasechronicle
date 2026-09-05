@@ -135,7 +135,7 @@ model UserPreference {
   theme     String?
   /// "local" or "utc" — how timestamps are displayed.
   timeMode  String?
-  /// Path to land on instead of "/", e.g. "/weda/weda".
+  /// Path to land on instead of "/", e.g. "/yabison/checkout".
   homePath  String?
   /// Query string pinned with it, e.g. "?cat=INCIDENT". Stored apart so a path
   /// can be kept while the pinned search is cleared.
