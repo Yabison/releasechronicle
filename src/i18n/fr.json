@@ -106,6 +106,7 @@
   "lot.keyPlaceholder": "ex : release-2026.08",
   "lot.noEligible": "Aucune release éligible dans cet environnement.",
   "lot.createN": "Créer le lot ({n})",
+  "lot.truncated": "Les {n} releases les plus récentes sont affichées ; affinez par environnement si la vôtre manque.",
   "form.newEvent": "Nouvel événement",
   "metrics.title": "Métriques DORA",
   "metrics.allCompanies": "Toutes companies",

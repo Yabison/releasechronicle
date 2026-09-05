@@ -1,6 +1,7 @@
 import type { ServiceType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { uniqueSlug } from "@/lib/slug";
+import { afterTreeChange } from "@/lib/cache";
 
 // Note: the create* functions derive a unique slug then create in two steps,
 // which is not atomic. Concurrent creates with the same name can both pass the
@@ -18,7 +19,7 @@ export async function createCompany(input: { name: string }) {
     (await prisma.company.count({ where: { slug: s, deletedAt: null } })) > 0,
   );
   const max = await prisma.company.aggregate({ _max: { sortOrder: true } });
-  return prisma.company.create({ data: { name: input.name, slug, sortOrder: (max._max.sortOrder ?? -1) + 1 } });
+  return afterTreeChange(prisma.company.create({ data: { name: input.name, slug, sortOrder: (max._max.sortOrder ?? -1) + 1 } }));
 }
 
 /**
@@ -35,7 +36,7 @@ export function listCompanies(publicOnly: boolean = false, includeDeleted: boole
 
 /** Update a company's display order. */
 export function updateCompanyOrder(id: string, sortOrder: number) {
-  return prisma.company.update({ where: { id }, data: { sortOrder } });
+  return afterTreeChange(prisma.company.update({ where: { id }, data: { sortOrder } }));
 }
 
 export function getCompanyBySlug(slug: string) {
@@ -79,9 +80,9 @@ export async function createProduct(input: { companyId: string; name: string }) 
     (await prisma.product.count({ where: { companyId: input.companyId, slug: s, deletedAt: null } })) > 0,
   );
   const max = await prisma.product.aggregate({ where: { companyId: input.companyId }, _max: { sortOrder: true } });
-  return prisma.product.create({
+  return afterTreeChange(prisma.product.create({
     data: { name: input.name, slug, companyId: input.companyId, sortOrder: (max._max.sortOrder ?? -1) + 1 },
-  });
+  }));
 }
 
 export function listProducts(companyId: string, publicOnly: boolean = false, includeDeleted: boolean = false) {
@@ -95,11 +96,12 @@ export function listProducts(companyId: string, publicOnly: boolean = false, inc
   });
 }
 
-export async function getProductBySlug(companySlug: string, productSlug: string) {
-  const company = await getCompanyBySlug(companySlug);
-  if (!company) return null;
+export function getProductBySlug(companySlug: string, productSlug: string) {
+  // One nested filter, not a walk: the live-parent rule is the same either way
+  // (product AND company must both be live), and this resolver sits on the hot
+  // path of every ingest request.
   return prisma.product.findFirst({
-    where: { companyId: company.id, slug: productSlug, deletedAt: null },
+    where: { slug: productSlug, deletedAt: null, company: { slug: companySlug, deletedAt: null } },
   });
 }
 
@@ -126,7 +128,7 @@ export async function getProductBySlugIncludingDeleted(companySlug: string, prod
 
 /** Update a product's editable fields (env workflow, display order). */
 export function updateProduct(id: string, data: { envWorkflow?: string[]; sortOrder?: number; public?: boolean }) {
-  return prisma.product.update({ where: { id }, data });
+  return afterTreeChange(prisma.product.update({ where: { id }, data }));
 }
 
 /**
@@ -141,16 +143,16 @@ export async function updateService(
   if (data.isMaster === true) {
     const svc = await prisma.service.findUnique({ where: { id }, select: { productId: true } });
     if (svc) {
-      return prisma.$transaction(async (tx) => {
+      return afterTreeChange(prisma.$transaction(async (tx) => {
         await tx.service.updateMany({
           where: { productId: svc.productId, isMaster: true, NOT: { id } },
           data: { isMaster: false },
         });
         return tx.service.update({ where: { id }, data });
-      });
+      }));
     }
   }
-  return prisma.service.update({ where: { id }, data });
+  return afterTreeChange(prisma.service.update({ where: { id }, data }));
 }
 
 export async function createService(input: {
@@ -166,9 +168,9 @@ export async function createService(input: {
     (await prisma.service.count({ where: { productId: input.productId, slug: s, deletedAt: null } })) > 0,
   );
   const max = await prisma.service.aggregate({ where: { productId: input.productId }, _max: { sortOrder: true } });
-  return prisma.service.create({
+  return afterTreeChange(prisma.service.create({
     data: { name: input.name, slug, type: input.type, productId: input.productId, sortOrder: (max._max.sortOrder ?? -1) + 1 },
-  });
+  }));
 }
 
 export function listServices(productId: string, publicOnly: boolean = false, includeDeleted: boolean = false) {
@@ -182,16 +184,47 @@ export function listServices(productId: string, publicOnly: boolean = false, inc
   });
 }
 
-export async function getServiceBySlug(
+export function getServiceBySlug(
   companySlug: string,
   productSlug: string,
   serviceSlug: string,
 ) {
-  const product = await getProductBySlug(companySlug, productSlug);
-  if (!product) return null;
-  return prisma.service.findFirst({
-    where: { productId: product.id, slug: serviceSlug, deletedAt: null },
+  return prisma.service.findFirst({ where: liveServiceWhere({ company: companySlug, product: productSlug, service: serviceSlug }) });
+}
+
+/** A company/product/service slug triple, as the REST bodies and Excel rows carry it. */
+export type ServiceRef = { company: string; product: string; service: string };
+
+/** Key a ServiceRef takes in the map `getServicesBySlugs` returns. */
+export function serviceRefKey(ref: ServiceRef): string {
+  return `${ref.company}/${ref.product}/${ref.service}`;
+}
+
+function liveServiceWhere(ref: ServiceRef) {
+  return {
+    slug: ref.service, deletedAt: null,
+    product: { slug: ref.product, deletedAt: null, company: { slug: ref.company, deletedAt: null } },
+  };
+}
+
+/**
+ * Resolve many slug triples in ONE query, keyed by `serviceRefKey`. For bulk
+ * callers (the Excel import) that would otherwise resolve a service per row.
+ * Missing and soft-deleted triples are simply absent from the map.
+ */
+export async function getServicesBySlugs(refs: ServiceRef[]): Promise<Map<string, { id: string }>> {
+  const byKey = new Map(refs.map((r) => [serviceRefKey(r), r]));
+  if (byKey.size === 0) return new Map();
+  const rows = await prisma.service.findMany({
+    where: { OR: [...byKey.values()].map(liveServiceWhere) },
+    select: { id: true, slug: true, product: { select: { slug: true, company: { select: { slug: true } } } } },
   });
+  return new Map(
+    rows.map((r) => [
+      serviceRefKey({ company: r.product.company.slug, product: r.product.slug, service: r.slug }),
+      { id: r.id },
+    ]),
+  );
 }
 
 /**
@@ -240,7 +273,7 @@ export async function moveService(serviceId: string, targetProductId: string) {
   }
   const clash = await prisma.service.count({ where: { productId: targetProductId, slug: svc.slug, deletedAt: null, NOT: { id: serviceId } } });
   if (clash > 0) throw new SlugConflictError(`a service '${svc.slug}' already exists in the target product`);
-  return prisma.service.update({ where: { id: serviceId }, data: { productId: targetProductId } });
+  return afterTreeChange(prisma.service.update({ where: { id: serviceId }, data: { productId: targetProductId } }));
 }
 
 /** Move a product under a different company. Throws SlugConflictError if the target
@@ -254,5 +287,5 @@ export async function moveProduct(productId: string, targetCompanyId: string) {
   }
   const clash = await prisma.product.count({ where: { companyId: targetCompanyId, slug: prod.slug, deletedAt: null, NOT: { id: productId } } });
   if (clash > 0) throw new SlugConflictError(`a product '${prod.slug}' already exists in the target company`);
-  return prisma.product.update({ where: { id: productId }, data: { companyId: targetCompanyId } });
+  return afterTreeChange(prisma.product.update({ where: { id: productId }, data: { companyId: targetCompanyId } }));
 }

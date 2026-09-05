@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
+import { afterTreeChange } from "@/lib/cache";
 
 /**
  * Deleting stamps the target AND its live descendants with one shared
@@ -54,7 +55,7 @@ export class RestoreBlockedError extends Error {
 export type RestoreCounts = { products?: number; services?: number };
 
 export async function deleteCompany(id: string): Promise<{ products: number; services: number; batch: string }> {
-  return prisma.$transaction(async (tx) => {
+  return afterTreeChange(prisma.$transaction(async (tx) => {
     // Lock the company row before snapshotting its live products, not after: this
     // is the mirror of restoreProduct's/restoreService's ancestor lock above. Without
     // it, a restore that locks this same row could commit strictly between the
@@ -88,11 +89,11 @@ export async function deleteCompany(id: string): Promise<{ products: number; ser
     const updated = await tx.company.updateMany({ where: { id, deletedAt: null }, data: stamp });
     if (updated.count === 0) throw new HierarchyStateConflictError("company is already deleted");
     return { products: products.count, services: services.count, batch: stamp.deletedBatch };
-  });
+  }));
 }
 
 export async function deleteProduct(id: string): Promise<{ services: number; batch: string }> {
-  return prisma.$transaction(async (tx) => {
+  return afterTreeChange(prisma.$transaction(async (tx) => {
     // Lock the product row before its own services sweep, for the same reason
     // deleteCompany locks its company row first (see the note there): restoreService
     // takes this exact row lock as one of its two ancestor checks, so without this a
@@ -107,11 +108,11 @@ export async function deleteProduct(id: string): Promise<{ services: number; bat
     const updated = await tx.product.updateMany({ where: { id, deletedAt: null }, data: stamp });
     if (updated.count === 0) throw new HierarchyStateConflictError("product is already deleted");
     return { services: services.count, batch: stamp.deletedBatch };
-  });
+  }));
 }
 
 export async function deleteService(id: string): Promise<{ batch: string }> {
-  return prisma.$transaction(async (tx) => {
+  return afterTreeChange(prisma.$transaction(async (tx) => {
     const service = await tx.service.findUnique({ where: { id }, select: { id: true, deletedAt: true } });
     if (!service) throw new HierarchyNotFoundError("service not found");
     if (service.deletedAt) throw new HierarchyStateConflictError("service is already deleted");
@@ -119,13 +120,13 @@ export async function deleteService(id: string): Promise<{ batch: string }> {
     const updated = await tx.service.updateMany({ where: { id, deletedAt: null }, data: stamp });
     if (updated.count === 0) throw new HierarchyStateConflictError("service is already deleted");
     return { batch: stamp.deletedBatch };
-  });
+  }));
 }
 
 const CLEAR = { deletedAt: null, deletedBatch: null };
 
 export async function restoreCompany(id: string): Promise<RestoreCounts> {
-  return prisma.$transaction(async (tx) => {
+  return afterTreeChange(prisma.$transaction(async (tx) => {
     const company = await tx.company.findUnique({ where: { id } });
     if (!company) throw new HierarchyNotFoundError("company not found");
     if (!company.deletedAt) throw new HierarchyStateConflictError("company is not deleted");
@@ -142,11 +143,11 @@ export async function restoreCompany(id: string): Promise<RestoreCounts> {
     const updated = await tx.company.updateMany({ where: { id, deletedAt: { not: null } }, data: CLEAR });
     if (updated.count === 0) throw new HierarchyStateConflictError("company is not deleted");
     return { products: products.count, services: services.count };
-  });
+  }));
 }
 
 export async function restoreProduct(id: string): Promise<RestoreCounts> {
-  return prisma.$transaction(async (tx) => {
+  return afterTreeChange(prisma.$transaction(async (tx) => {
     const product = await tx.product.findUnique({ where: { id } });
     if (!product) throw new HierarchyNotFoundError("product not found");
     if (!product.deletedAt) throw new HierarchyStateConflictError("product is not deleted");
@@ -171,11 +172,11 @@ export async function restoreProduct(id: string): Promise<RestoreCounts> {
     const updated = await tx.product.updateMany({ where: { id, deletedAt: { not: null } }, data: CLEAR });
     if (updated.count === 0) throw new HierarchyStateConflictError("product is not deleted");
     return { services: services.count };
-  });
+  }));
 }
 
 export async function restoreService(id: string): Promise<RestoreCounts> {
-  return prisma.$transaction(async (tx) => {
+  return afterTreeChange(prisma.$transaction(async (tx) => {
     const service = await tx.service.findUnique({ where: { id } });
     if (!service) throw new HierarchyNotFoundError("service not found");
     if (!service.deletedAt) throw new HierarchyStateConflictError("service is not deleted");
@@ -211,5 +212,5 @@ export async function restoreService(id: string): Promise<RestoreCounts> {
     const updated = await tx.service.updateMany({ where: { id, deletedAt: { not: null } }, data: CLEAR });
     if (updated.count === 0) throw new HierarchyStateConflictError("service is not deleted");
     return {};
-  });
+  }));
 }

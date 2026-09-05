@@ -36,7 +36,7 @@ import {
   PhaseTransitionError,
   RetiredChangeTypeError,
 } from "@/lib/events";
-import { getServiceBySlug } from "@/lib/hierarchy";
+import { getServicesBySlugs, serviceRefKey } from "@/lib/hierarchy";
 import { prisma } from "@/lib/db";
 import { commentRequired, roleGroup } from "@/lib/deployWorkflow";
 import { getSession, hasRole } from "@/lib/auth/session";
@@ -485,6 +485,11 @@ export async function createLotAction(input: CreateLotInput): Promise<{ ok: true
   const active = new Set(await getActiveEnvSlugs());
   if (!active.has(common.environment)) return fail("err.unknownEnv");
 
+  // Resolved up front, in one query: the loop below would otherwise resolve a
+  // service per item. Order of failures is unchanged — each item is still zod-
+  // checked before its service is looked up, and the first bad item still wins.
+  const services = await getServicesBySlugs(items);
+
   const validated: { data: EventData }[] = [];
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
@@ -498,7 +503,7 @@ export async function createLotAction(input: CreateLotInput): Promise<{ ok: true
     };
     const v = deploymentBodySchema.safeParse(body);
     if (!v.success) return fail("err.lotRow", { n: i + 1, reason: zodErrorMessage(v.error) });
-    const svc = await getServiceBySlug(it.company, it.product, it.service);
+    const svc = services.get(serviceRefKey(it));
     if (!svc) return fail("err.lotRow", { n: i + 1, reason: "err.serviceNotFound" });
     validated.push({
       data: {

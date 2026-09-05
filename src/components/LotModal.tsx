@@ -43,6 +43,7 @@ function ExistingLot({ path, company, onSuccess }: { path: string; company: stri
   const [envs, setEnvs] = useState<string[]>([]);
   const [env, setEnv] = useState("");
   const [cands, setCands] = useState<Candidate[]>([]);
+  const [truncated, setTruncated] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [lot, setLot] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -58,11 +59,11 @@ function ExistingLot({ path, company, onSuccess }: { path: string; company: stri
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    setCands([]); setSel(new Set());
+    setCands([]); setSel(new Set()); setTruncated(false);
     if (env) {
       fetch(`/api/v1/lots/candidates?company=${company}&environment=${env}`)
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-        .then(setCands)
+        .then((res: { items: Candidate[]; truncated: boolean }) => { setCands(res.items); setTruncated(res.truncated); })
         .catch(() => setErr(t("common.loadFailed")));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,6 +93,7 @@ function ExistingLot({ path, company, onSuccess }: { path: string; company: stri
       </label>
       <div className={styles.candList}>
         {env && cands.length === 0 && <p className={styles.muted}>{t("lot.noEligible")}</p>}
+        {truncated && <p className={styles.muted}>{t("lot.truncated", { n: cands.length })}</p>}
         {cands.map((c) => (
           <label key={c.eventId} className={styles.candRow}>
             <input type="checkbox" checked={sel.has(c.eventId)} onChange={() => toggle(c.eventId)} />

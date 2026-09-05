@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import {
   createCompany,
@@ -182,5 +182,43 @@ describe("the slug uniqueness backstop is a PARTIAL index, not a full one", () =
       expect(r.indexdef).toMatch(/UNIQUE/i);
       expect(r.indexdef).toMatch(/WHERE \("?deletedAt"? IS NULL\)/i);
     }
+  });
+});
+
+// Every ingest request resolves its service by slug, so the walk down the
+// hierarchy is on the hot path: one round-trip per level is one round-trip too
+// many when a single nested filter expresses the same live-parent rule.
+describe("slug resolution round-trips", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("resolves a service without querying its company and product separately", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Payments" });
+    await createService({ productId: p.id, name: "Checkout", type: "API" });
+    const company = vi.spyOn(prisma.company, "findFirst");
+    const product = vi.spyOn(prisma.product, "findFirst");
+    const service = vi.spyOn(prisma.service, "findFirst");
+
+    const svc = await getServiceBySlug("acme", "payments", "checkout");
+
+    expect(svc?.slug).toBe("checkout");
+    expect(service).toHaveBeenCalledTimes(1);
+    expect(product).not.toHaveBeenCalled();
+    expect(company).not.toHaveBeenCalled();
+  });
+
+  it("resolves a product without querying its company separately", async () => {
+    const c = await createCompany({ name: "Acme" });
+    await createProduct({ companyId: c.id, name: "Payments" });
+    const company = vi.spyOn(prisma.company, "findFirst");
+    const product = vi.spyOn(prisma.product, "findFirst");
+
+    const prod = await getProductBySlug("acme", "payments");
+
+    expect(prod?.slug).toBe("payments");
+    expect(product).toHaveBeenCalledTimes(1);
+    expect(company).not.toHaveBeenCalled();
   });
 });

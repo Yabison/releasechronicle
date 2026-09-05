@@ -6,7 +6,7 @@ import { deploymentBodySchema, incidentBodySchema, maintenanceBodySchema } from 
 import { zodErrorMessage } from "@/lib/schemas/parse";
 import { createEvent, upsertEventByExternalId, type EventData } from "@/lib/events";
 import { readWorkbook, buildWorkbook, rowToBody, eventToRow, type ExcelRow } from "@/lib/excel";
-import { getServiceBySlug } from "@/lib/hierarchy";
+import { getServicesBySlugs, serviceRefKey } from "@/lib/hierarchy";
 import { getActiveEnvSlugs } from "@/lib/environment";
 import { queryEventsForExport, type ExportFilter } from "@/lib/eventExport";
 import { prisma } from "@/lib/db";
@@ -47,6 +47,10 @@ export async function importEventsXlsx(formData: FormData): Promise<ImportResult
   const prepared: { externalId: string | null; data: EventData }[] = [];
   const activeEnvSlugs = new Set(await getActiveEnvSlugs());
 
+  // Two passes, so the service lookups cost one query for the whole file instead
+  // of one per row: validate first, then resolve every distinct slug triple at once.
+  type ValidRow = Extract<ReturnType<typeof validateRow>, { ok: true }>["value"];
+  const valid: { rowNum: number; bodyType: EventType; val: ValidRow }[] = [];
   for (let i = 0; i < rows.length; i++) {
     const rowNum = i + 2; // header is row 1
     const body = rowToBody(rows[i]);
@@ -58,7 +62,12 @@ export async function importEventsXlsx(formData: FormData): Promise<ImportResult
       errors.push({ row: rowNum, error: "err.unknownEnvNamed", vars: { env: val.environment } });
       continue;
     }
-    const service = await getServiceBySlug(val.service.company, val.service.product, val.service.service);
+    valid.push({ rowNum, bodyType, val });
+  }
+
+  const services = await getServicesBySlugs(valid.map((r) => r.val.service));
+  for (const { rowNum, bodyType, val } of valid) {
+    const service = services.get(serviceRefKey(val.service));
     if (!service) { errors.push({ row: rowNum, error: "err.serviceNotFound" }); continue; }
     prepared.push({
       externalId: val.externalId ?? null,
@@ -75,7 +84,9 @@ export async function importEventsXlsx(formData: FormData): Promise<ImportResult
     });
   }
 
-  if (errors.length) return { ok: false, errors };
+  // The two passes produce errors out of row order (an unknown service is found
+  // after every validation error); the caller renders them as a list per row.
+  if (errors.length) return { ok: false, errors: errors.sort((a, b) => a.row - b.row) };
 
   await prisma.$transaction(async (tx) => {
     for (const p of prepared) {

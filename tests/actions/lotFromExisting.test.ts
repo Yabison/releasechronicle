@@ -26,9 +26,9 @@ describe("lot from existing deployments", () => {
     const { s1, s2, dep } = await setup();
     await dep(s1.id);
     await dep(s2.id);
-    const cands = await listLotCandidates("acme", "PROD");
-    expect(cands).toHaveLength(2);
-    expect(cands.map((c) => c.service).sort()).toEqual(["api", "worker"]);
+    const { items } = await listLotCandidates("acme", "PROD");
+    expect(items).toHaveLength(2);
+    expect(items.map((c) => c.service).sort()).toEqual(["api", "worker"]);
   });
 
   it("assigns an existing lot to the selected deployments", async () => {
