@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -44,6 +45,7 @@ export function DetailPane({
   defaultFrom,
   olderCount,
   causal = {},
+  changelogHtml = {},
 }: {
   company: string;
   product: string;
@@ -67,6 +69,8 @@ export function DetailPane({
   /** eventId → resolved product-wide causal summary, computed server-side
    *  (getCausalSummaries in @/lib/causal) with visibility already applied. */
   causal?: Record<string, CausalInfo>;
+  /** version -> HTML de sa note de release, rendu et assaini au serveur. */
+  changelogHtml?: Record<string, string>;
 }) {
   const { t, locale } = useI18n();
   const { mode: timeMode } = useTimeFormat();
@@ -222,6 +226,7 @@ export function DetailPane({
       <div className={styles.head}>
         <div className={styles.crumb}>
           <span className={styles.crumbProduct}>{productName}</span> / <span className={styles.crumbService}>{serviceName}</span>
+          <Link href={`${path}/changelog`} className={styles.changelogLink}>{t("changelog.link")}</Link>
           <select className={styles.envSelect} value={env} onChange={(e) => setEnv(e.target.value)} aria-label={t("common.environment")}>
             <option value={ALL_ENV}>{t("detail.allEnvs")}</option>
             {envGroups.length > 0 && (
@@ -343,6 +348,7 @@ export function DetailPane({
           envColors={envColors}
           canWrite={canWrite}
           causal={causal[selectedEvent.id] ?? { led: [] }}
+          changelogHtml={selectedEvent.version ? (changelogHtml[selectedEvent.version] ?? null) : null}
           onNewPhase={(changeType, parentId) => {
             const parent = events.find((e) => e.id === parentId);
             setPhaseDefaults({ changeType, parentId, environment: parent?.environment ?? "", parentOccurredAt: parent?.occurredAt ?? "" });

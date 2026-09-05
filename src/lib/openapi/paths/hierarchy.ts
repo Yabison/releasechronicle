@@ -359,6 +359,45 @@ export const hierarchyPaths = {
       },
     },
   },
+  "/api/v1/services/{slug}/changelog": {
+    get: {
+      summary: "Release notes for a service, newest release first",
+      description:
+        "One note per (service, version): an environment promotion redeploys the same release and finds the same note. Readable anonymously only when the whole company/product/service chain is public AND the changelog visibility setting is PUBLIC -- the setting can only take access away, never grant it. A caller who may not read them gets 404, like everything else private here.",
+      parameters: [slug, companyQ, productQ],
+      responses: {
+        "200": {
+          description: "The service's release notes",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["items"],
+                properties: {
+                  items: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      required: ["version", "body", "source", "updatedAt"],
+                      properties: {
+                        version: { type: "string" },
+                        body: { type: "string", description: "Markdown source, as sent or typed" },
+                        source: { type: "string", enum: ["CI", "UI"], description: "UI means edited by hand, which stops the CI overwriting it" },
+                        authorName: { type: "string", nullable: true, description: "Set only for a hand-edited note" },
+                        updatedAt: { type: "string", format: "date-time" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        "400": badRequest,
+        "404": { description: "Service not found, or not readable by this caller", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+      },
+    },
+  },
   "/api/v1/services/{slug}/events": {
     get: {
       summary: "List events for a service (cursor-paginated, newest first)",

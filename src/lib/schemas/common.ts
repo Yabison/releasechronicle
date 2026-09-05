@@ -20,6 +20,13 @@ export const optionalOrNull = (max = 1000) =>
 
 export const commentStr = nonEmpty(5000);
 
+/**
+ * Corps d'une note de release. Vide vaut absent : une CI qui envoie `changelog: ""`
+ * (un fichier de notes manquant, une variable non substituee) ne doit pas effacer
+ * la note existante -- `optionalStr` transforme la chaine vide en undefined.
+ */
+export const changelogStr = optionalStr(20_000);
+
 /** ISO-8601 (or anything Date can parse) string → Date. */
 export const isoDate = z.string().transform((s, ctx) => {
   const d = new Date(s);

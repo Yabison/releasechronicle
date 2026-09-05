@@ -98,3 +98,7 @@
 .dateEdit input { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
 
 .warn { background: var(--warning-bg); color: var(--warning-text); border: 1px solid var(--warning-line); border-radius: var(--radius); padding: 6px 10px; font-size: 0.85em; margin-bottom: 10px; }
+
+/* Sortie vers la page complete, sous la note repliee. */
+.changelogAll { display: inline-block; margin-top: 8px; font-size: 0.8em; color: var(--muted); }
+.changelogAll:hover { text-decoration: underline; }

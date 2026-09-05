@@ -3,6 +3,10 @@
 .envSelect { font: inherit; padding: 2px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
 .crumbProduct { color: var(--cat-deploy); }
 .crumbService { color: var(--cat-deploy); }
+/* Discret a cote du fil d'ariane : c'est une sortie vers une autre page, pas une
+   action sur celle-ci. */
+.changelogLink { font-size: 0.78em; color: var(--muted); text-decoration: none; }
+.changelogLink:hover { text-decoration: underline; }
 .newBtn { composes: btnGhost from global; }
 .headActions { display: flex; align-items: center; gap: calc(var(--space) * 2); flex-wrap: wrap; }
 

@@ -313,6 +313,10 @@
   "publicCfg.title": "Public mode",
   "publicCfg.intro": "Without login, only the items checked below are visible, read-only.",
   "publicCfg.eventTypes": "Public event types",
+  "publicCfg.changelog": "Release notes",
+  "publicCfg.changelogHelp": "This setting only takes away: an anonymous visitor must already have access to the service and to the deployment type.",
+  "publicCfg.changelogPublic": "Visible to everyone",
+  "publicCfg.changelogAuth": "Signed-in accounts only",
   "publicCfg.environments": "Public environments",
   "publicCfg.entities": "Public companies / apps / services",
   "publicCfg.hint": "A service is public only if its company AND product AND itself are checked.",
@@ -376,6 +380,7 @@
   "err.atLeastOneProduct": "at least one product is required",
   "err.lotRow": "product {n}: {reason}",
   "err.serviceNotFound": "service not found",
+  "err.changelogBody": "the release note is empty or too long (20,000 characters maximum)",
   "err.causeSelfLink": "an event cannot be its own cause",
   "err.causeNotFound": "the cause event was not found",
   "err.causeDifferentProduct": "the cause must belong to the same product",
@@ -450,5 +455,12 @@
   "hookKind.maintenance.created": "Maintenance scheduled",
   "logs.mailbox": "Catch-all mailbox (dev)",
   "hook.openAction": "Open",
-  "hook.seeEvent": "See the event"
+  "hook.seeEvent": "See the event",
+  "changelog.title": "Release notes",
+  "changelog.back": "← back to the service",
+  "changelog.empty": "No release note for this service yet.",
+  "changelog.handEdited": "edited by hand",
+  "changelog.handEditedBy": "edited by {name}",
+  "changelog.link": "Release notes",
+  "changelog.viewAll": "See all release notes"
 }

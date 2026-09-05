@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ChangeType, DeployStatus, IncidentStatus } from "@prisma/client";
 import {
-  nonEmpty, optionalStr, optionalOrNull, commentStr, isoDate, tagsSchema,
+  nonEmpty, optionalStr, optionalOrNull, commentStr, changelogStr, isoDate, tagsSchema,
   changeTypeSchema, deployStatusSchema, incidentStatusSchema, ignoredIfInvalid,
 } from "./common";
 
@@ -64,6 +64,7 @@ export const deploymentBodySchema = z
     scheduledAt: isoDate.nullish(),
     parentId: optionalStr(),
     hourType: z.unknown().optional(),
+    changelog: changelogStr,
   })
   .superRefine((b, ctx) => {
     const isPhase = b.changeType === ChangeType.PRE_MEP || b.changeType === ChangeType.POST_MEP;
@@ -83,6 +84,9 @@ export const deploymentBodySchema = z
   .transform((b) => ({
     ...toEnvelope(b),
     occurredAt: b.occurredAt ?? new Date(),
+    // Au niveau racine, pas dans `fields` : la note appartient a la release, pas
+    // aux colonnes de l'evenement.
+    changelog: b.changelog,
     fields: {
       version: b.version ?? "",
       comment: b.comment ?? null,
@@ -155,5 +159,7 @@ export type EventBodyShape<F extends Record<string, unknown> = Record<string, un
   externalId?: string;
   metadata?: unknown;
   tags?: string[];
+  /** Note de release. Portee par le payload de deploiement uniquement. */
+  changelog?: string;
   fields: F;
 };

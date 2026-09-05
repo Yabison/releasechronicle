@@ -1,6 +1,7 @@
 import type { Event, IngestSource } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { createEvent, type EventData } from "@/lib/events";
+import { upsertChangelogFromCi } from "@/lib/changelog";
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { log } from "@/lib/log";
 import { ciDeploymentBodySchema } from "@/lib/schemas/ciDeployment";
@@ -74,7 +75,14 @@ export async function ingestDeployment(
     tags: [],
     fields: parsed.data.fields,
   };
-  const event = await createEvent(data);
+  // Meme raison que dans ingest.ts : l'evenement et sa note tombent ensemble.
+  const event = await prisma.$transaction(async (tx) => {
+    const created = await createEvent(data, tx);
+    if (b.changelog && b.version) {
+      await upsertChangelogFromCi(resolved.serviceId, b.version, b.changelog, tx);
+    }
+    return created;
+  });
   try {
     const { attachToAutoLot } = await import("@/lib/autoLot");
     await attachToAutoLot(event.id);

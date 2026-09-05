@@ -1,3 +1,4 @@
+import { ChangelogVisibility } from "@prisma/client";
 import { hasRole, type SessionUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { invalidateSidebarTree } from "@/lib/cache";
@@ -44,4 +45,35 @@ export async function setPublicEventTypes(types: string[]): Promise<void> {
   });
   // The anonymous tree counts only public event types, so its cached copy is now stale.
   await invalidateSidebarTree();
+}
+
+const CHANGELOG_MODES = Object.values(ChangelogVisibility) as string[];
+
+/** Qui peut lire les notes de release. Le defaut sur est celui qui ne publie pas. */
+export async function getChangelogVisibility(): Promise<ChangelogVisibility> {
+  const s = await prisma.publicSetting.findUnique({ where: { id: "singleton" } });
+  return s?.changelogVisibility ?? ChangelogVisibility.AUTHENTICATED;
+}
+
+export async function setChangelogVisibility(mode: ChangelogVisibility): Promise<void> {
+  // Refuser plutot que stocker : une valeur hors enum passerait la colonne en
+  // erreur Postgres brute, et un appelant non valide merite un message clair.
+  if (!CHANGELOG_MODES.includes(mode)) throw new Error(`unknown changelog visibility: ${mode}`);
+  await prisma.publicSetting.upsert({
+    where: { id: "singleton" },
+    create: { id: "singleton", changelogVisibility: mode },
+    update: { changelogVisibility: mode },
+  });
+}
+
+/**
+ * Le reglage ne fait que RETIRER. Un anonyme doit de toute facon satisfaire les
+ * regles existantes -- chaine societe/produit/service publique, type DEPLOYMENT
+ * public --, verifiees par l'appelant (page ou route). PUBLIC n'ouvre donc jamais
+ * un service qu'il n'avait pas deja le droit de voir ; AUTHENTICATED lui retire le
+ * changelog qu'il aurait sinon pu lire.
+ */
+export async function canReadChangelog(session: SessionUser | null): Promise<boolean> {
+  if (!isAnonymous(session)) return true;
+  return (await getChangelogVisibility()) === ChangelogVisibility.PUBLIC;
 }

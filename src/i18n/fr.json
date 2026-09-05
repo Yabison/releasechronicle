@@ -313,6 +313,10 @@
   "publicCfg.title": "Mode public",
   "publicCfg.intro": "Sans connexion, seuls les éléments cochés ci-dessous sont visibles, en lecture seule.",
   "publicCfg.eventTypes": "Types d’événements publics",
+  "publicCfg.changelog": "Notes de release",
+  "publicCfg.changelogHelp": "Ce réglage ne fait que retirer : un visiteur anonyme doit de toute façon avoir accès au service et au type déploiement.",
+  "publicCfg.changelogPublic": "Visibles par tous",
+  "publicCfg.changelogAuth": "Réservées aux comptes connectés",
   "publicCfg.environments": "Environnements publics",
   "publicCfg.entities": "Compagnies / apps / services publics",
   "publicCfg.hint": "Un service n’est visible en public que si sa compagnie ET son produit ET lui-même sont cochés.",
@@ -376,6 +380,7 @@
   "err.atLeastOneProduct": "au moins un produit requis",
   "err.lotRow": "produit {n} : {reason}",
   "err.serviceNotFound": "service introuvable",
+  "err.changelogBody": "la note de release est vide ou trop longue (20 000 caractères maximum)",
   "err.causeSelfLink": "un événement ne peut pas être sa propre cause",
   "err.causeNotFound": "l'événement cause est introuvable",
   "err.causeDifferentProduct": "la cause doit appartenir au même produit",
@@ -450,5 +455,12 @@
   "hookKind.maintenance.created": "Maintenance planifiée",
   "logs.mailbox": "Boîte de réception (dev)",
   "hook.openAction": "Ouvrir",
-  "hook.seeEvent": "Voir l'événement"
+  "hook.seeEvent": "Voir l'événement",
+  "changelog.title": "Notes de release",
+  "changelog.back": "← retour au service",
+  "changelog.empty": "Aucune note de release pour ce service.",
+  "changelog.handEdited": "éditée à la main",
+  "changelog.handEditedBy": "éditée par {name}",
+  "changelog.link": "Notes de release",
+  "changelog.viewAll": "Voir toutes les notes de release"
 }

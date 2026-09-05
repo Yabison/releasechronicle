@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ChangeType, DeployStatus } from "@prisma/client";
-import { nonEmpty, optionalStr, optionalOrNull, commentStr, isoDate, changeTypeSchema, deployStatusSchema, ignoredIfInvalid } from "./common";
+import { nonEmpty, optionalStr, optionalOrNull, commentStr, changelogStr, isoDate, changeTypeSchema, deployStatusSchema, ignoredIfInvalid } from "./common";
 
 /**
  * The CI ingest variant of a deployment body. Every way it diverges from the
@@ -25,6 +25,7 @@ export const ciDeploymentBodySchema = z
     comment: ignoredIfInvalid(commentStr),
     externalLink: optionalOrNull(),
     scheduledAt: isoDate.nullish(),
+    changelog: changelogStr,
   })
   .superRefine((b, ctx) => {
     if (b.deployStatus === DeployStatus.SCHEDULED && b.scheduledAt == null) {
@@ -33,6 +34,9 @@ export const ciDeploymentBodySchema = z
   })
   .transform((b) => ({
     version: b.version,
+    // Au niveau racine, pas dans `fields` : la note appartient a la release, pas
+    // aux colonnes de l'evenement.
+    changelog: b.changelog,
     company: b.company,
     product: b.product,
     service: b.service,

@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { ChangelogBody } from "./ChangelogBody";
 
 import { useRef, useState, useTransition, useMemo, useEffect } from "react";
 import { slugify } from "@/lib/slug";
@@ -359,6 +361,7 @@ export function EventDrawer({
   onOpenEvent,
   canWrite = true,
   causal = { led: [] },
+  changelogHtml = null,
 }: {
   event: ClientEvent;
   all: ClientEvent[];
@@ -377,6 +380,9 @@ export function EventDrawer({
    *  getCausalSummaries in @/lib/causal). Defaults to "no links" so callers that
    *  haven't wired it through yet degrade to "block hidden", not a crash. */
   causal?: CausalInfo;
+  /** Note de release de la version deployee, deja rendue et assainie au serveur.
+   *  null quand il n'y en a pas -- ou quand le reglage de visibilite la retire. */
+  changelogHtml?: string | null;
 }) {
   // Anonymous / read-only visitors see the full detail but no mutating controls.
   const editable = canWrite && !!path;
@@ -522,6 +528,22 @@ export function EventDrawer({
             <div className={styles.section}>
               <DeployTimeline event={event} path={path} canWrite={editable} />
             </div>
+
+            {changelogHtml && (
+              <div className={styles.section}>
+                {/* Repliee : la note peut etre longue, et le drawer sert d'abord a
+                    lire l'etat du deploiement. */}
+                <details>
+                  <summary className={styles.secTitle}>{t("changelog.title")}</summary>
+                  <ChangelogBody html={changelogHtml} />
+                  {path && (
+                    <Link href={`${path}/changelog`} className={styles.changelogAll}>
+                      {t("changelog.viewAll")}
+                    </Link>
+                  )}
+                </details>
+              </div>
+            )}
 
             {isMepParent && phases.length > 0 && (
               <div className={styles.section}>
