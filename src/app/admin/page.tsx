@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import styles from "./admin.module.css";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 import { LOCALES, DEFAULT_LOCALE, type Locale } from "@/i18n";
 import { TRANSITION_OPTIONS } from "@/lib/hooks/transitions";
 
@@ -20,6 +21,8 @@ const HOOK_KINDS = [
   "maintenance.created",
 ] as const;
 
+const SERVICE_TYPES = ["APP", "COMPONENT", "API"] as const;
+
 type Section = "companies" | "envs" | "products" | "tags" | "hooks" | "sources" | "targets" | "directory" | "calendars";
 const NAV: { id: Section; label: string }[] = [
   { id: "companies", label: "admin.nav.companies" },
@@ -33,11 +36,11 @@ const NAV: { id: Section; label: string }[] = [
   { id: "calendars", label: "admin.nav.calendars" },
 ];
 
-type Company = { id: string; name: string; slug: string; autoLotNaming: string; sortOrder?: number };
-type Product = { id: string; name: string; slug: string; envWorkflow: string[]; sortOrder?: number };
-type Hook = { id: string; type: string; events: string[]; transitions: string[]; config: { url?: string; to?: string[] }; enabled: boolean; targetId?: string | null };
+type Company = { id: string; name: string; slug: string; autoLotNaming: string; sortOrder?: number; deletedAt?: string | null };
+type Product = { id: string; name: string; slug: string; envWorkflow: string[]; sortOrder?: number; deletedAt?: string | null };
+type Hook = { id: string; type: string; events: string[]; transitions: string[]; config: { url?: string; to?: string[]; [key: string]: unknown }; enabled: boolean; targetId?: string | null };
 type IngestSource = { id: string; label: string; token: string; defaultEnvironment: string | null };
-type Service = { id: string; name: string; slug: string; type?: string; buildUrlTemplate?: string | null; isMaster?: boolean; envWorkflow?: string[]; envWorkflowOverride?: boolean; sortOrder?: number };
+type Service = { id: string; name: string; slug: string; type?: string; buildUrlTemplate?: string | null; isMaster?: boolean; envWorkflow?: string[]; envWorkflowOverride?: boolean; sortOrder?: number; deletedAt?: string | null };
 type Target = { id: string; type: string; label: string; config: { to?: string[]; url?: string; locale?: string } };
 type DirUser = { id: string; username: string; name: string; email: string | null; roles: string[]; syncedAt: string };
 type TagRow = { name: string; slug: string; color: string | null; count: number };
@@ -45,11 +48,21 @@ type CalFeed = { id: string; name: string; token: string; company: string | null
 
 export default function AdminPage() {
   const { t: tr } = useI18n();
+  const { stampFull } = useTimeFormat();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [name, setName] = useState("");
   const [status, setStatus] = useState("");
+  const [showDeletedCompanies, setShowDeletedCompanies] = useState(false);
+  const [deletedCompanies, setDeletedCompanies] = useState<Company[]>([]);
   const [prodCompany, setProdCompany] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
+  const [newProductName, setNewProductName] = useState("");
+  const [showDeletedProducts, setShowDeletedProducts] = useState(false);
+  const [deletedProducts, setDeletedProducts] = useState<Product[]>([]);
+  const [newServiceName, setNewServiceName] = useState<Record<string, string>>({});
+  const [newServiceType, setNewServiceType] = useState<Record<string, string>>({});
+  const [deletedServicesOpen, setDeletedServicesOpen] = useState<Record<string, boolean>>({});
+  const [deletedServices, setDeletedServices] = useState<Record<string, Service[]>>({});
   const [templates, setTemplates] = useState<Record<string, string>>({});
   const [workflows, setWorkflows] = useState<Record<string, string[]>>({});
   const [hooks, setHooks] = useState<Hook[]>([]);
@@ -60,6 +73,14 @@ export default function AdminPage() {
   const [hookEvents, setHookEvents] = useState<string[]>(["*"]);
   const [hookTransitions, setHookTransitions] = useState<string[]>([]);
   const [hookMsg, setHookMsg] = useState("");
+  // Non-null while the hook form is editing an existing hook (PUT) instead of
+  // creating a new one (POST). The same form/state is reused for both, per the
+  // "no second modal" constraint.
+  const [editingHookId, setEditingHookId] = useState<string | null>(null);
+  // The raw config of the hook currently being edited (null when creating). The
+  // form only knows `url`/`to`, but a config can carry keys it doesn't own (e.g.
+  // webhook `headers`); this is spread back in on save so editing never drops them.
+  const [editingRawConfig, setEditingRawConfig] = useState<Record<string, unknown> | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [sources, setSources] = useState<IngestSource[]>([]);
   const [srcService, setSrcService] = useState("");
@@ -138,6 +159,7 @@ export default function AdminPage() {
     else setStatus(`Error ${res.status}`);
   }
   async function deleteFeed(id: string) {
+    if (!window.confirm(tr("confirm.deleteFeed"))) return;
     await fetch(`/api/v1/calendar-feeds/${id}`, { method: "DELETE" });
     await loadFeeds();
   }
@@ -168,6 +190,8 @@ export default function AdminPage() {
     if (res.ok) await loadTags(); else setStatus(`Error ${res.status}`);
   }
   async function deleteTag(name: string) {
+    // Not a config-only delete: it strips the tag from every event carrying it.
+    if (!window.confirm(tr("confirm.deleteTag", { name }))) return;
     await tagReq("DELETE", { name });
     await loadTags();
   }
@@ -224,6 +248,7 @@ export default function AdminPage() {
     if (res.ok) { setNewGroupName(""); setNewGroupMembers([]); await loadEnvs(); } else setStatus(`Error ${res.status}`);
   }
   async function deleteEnvGroup(id: string) {
+    if (!window.confirm(tr("confirm.deleteEnvGroup"))) return;
     await fetch(`/api/v1/environment-groups/${id}`, { method: "DELETE" });
     await loadEnvs();
   }
@@ -255,6 +280,7 @@ export default function AdminPage() {
     await loadEnvs();
   }
   async function deleteEnv(id: string) {
+    if (!window.confirm(tr("confirm.deleteEnv"))) return;
     await fetch(`/api/v1/environments/${id}`, { method: "DELETE" });
     await loadEnvs();
   }
@@ -276,6 +302,7 @@ export default function AdminPage() {
     else setStatus(`Error ${res.status}`);
   }
   async function deleteTarget(id: string) {
+    if (!window.confirm(tr("confirm.deleteTarget"))) return;
     const res = await fetch(`/api/v1/notification-targets/${id}`, { method: "DELETE" });
     if (!res.ok) { const d = await res.json().catch(() => ({})); setStatus(d.error ?? `Error ${res.status}`); }
     await loadTargets();
@@ -319,8 +346,50 @@ export default function AdminPage() {
     }
   }
 
+  async function loadDeletedCompanies() {
+    const res = await fetch("/api/v1/companies?includeDeleted=1");
+    const list: Company[] = res.ok ? await res.json() : [];
+    setDeletedCompanies(list.filter((c) => c.deletedAt));
+  }
+  function toggleDeletedCompanies() {
+    setShowDeletedCompanies((v) => {
+      const next = !v;
+      if (next) void loadDeletedCompanies();
+      return next;
+    });
+  }
+  async function deleteCompanyRow(slug: string) {
+    if (!window.confirm(tr("confirm.deleteCompany"))) return;
+    const res = await fetch(`/api/v1/companies/${slug}`, { method: "DELETE" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setStatus(d.error ?? `Error ${res.status}`); return; }
+    setStatus(tr("admin.companyDeleted", { products: d.products ?? 0, services: d.services ?? 0 }));
+    await refresh();
+    if (showDeletedCompanies) await loadDeletedCompanies();
+  }
+  async function restoreCompanyRow(slug: string) {
+    const res = await fetch(`/api/v1/companies/${slug}/restore`, { method: "POST" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setStatus(d.error ?? `Error ${res.status}`); return; }
+    setStatus("");
+    await refresh();
+    await loadDeletedCompanies();
+  }
+
   async function loadProducts(companySlug: string) {
     setProdCompany(companySlug);
+    // A company switch invalidates the hooks section entirely: the previous
+    // product/hooks/edit-in-progress belong to a different company and must not
+    // leak into whatever gets picked next.
+    setHookProduct("");
+    setHooks([]);
+    resetHookForm();
+    // Same reasoning for the deleted-products/deleted-services disclosures: they
+    // scope to a company/product that just changed under them.
+    setShowDeletedProducts(false);
+    setDeletedProducts([]);
+    setDeletedServicesOpen({});
+    setDeletedServices({});
     if (!companySlug) { setProducts([]); setProdServices({}); return; }
     const res = await fetch(`/api/v1/products?company=${companySlug}`);
     const list: Product[] = await res.json();
@@ -337,6 +406,102 @@ export default function AdminPage() {
     const allSvcs = entries.flatMap(([, svcs]) => svcs);
     setTemplates(Object.fromEntries(allSvcs.map((s) => [s.id, s.buildUrlTemplate ?? ""])));
     setSvcWf(Object.fromEntries(allSvcs.map((s) => [s.id, s.envWorkflow ?? []])));
+  }
+
+  async function createProductRow(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus("");
+    const company = companies.find((c) => c.slug === prodCompany);
+    if (!company || !newProductName.trim()) return;
+    const res = await fetch("/api/v1/products", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ companyId: company.id, name: newProductName }),
+    });
+    if (res.ok) { setNewProductName(""); await loadProducts(prodCompany); }
+    else { const d = await res.json().catch(() => ({})); setStatus(d.error ?? `Error ${res.status}`); }
+  }
+
+  async function loadDeletedProducts() {
+    if (!prodCompany) { setDeletedProducts([]); return; }
+    const res = await fetch(`/api/v1/products?company=${prodCompany}&includeDeleted=1`);
+    const list: Product[] = res.ok ? await res.json() : [];
+    setDeletedProducts(list.filter((p) => p.deletedAt));
+  }
+  function toggleDeletedProducts() {
+    setShowDeletedProducts((v) => {
+      const next = !v;
+      if (next) void loadDeletedProducts();
+      return next;
+    });
+  }
+  async function deleteProductRow(slug: string) {
+    if (!window.confirm(tr("confirm.deleteProduct"))) return;
+    const res = await fetch(`/api/v1/products/${slug}?company=${prodCompany}`, { method: "DELETE" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setStatus(d.error ?? `Error ${res.status}`); return; }
+    setStatus(tr("admin.productDeleted", { services: d.services ?? 0 }));
+    // loadProducts() resets the deleted-products disclosure closed (same
+    // treatment it already gives hookProduct/hooks on every refresh); reopen it
+    // is one more click away and keeps this refresh path single-purpose.
+    await loadProducts(prodCompany);
+  }
+  async function restoreProductRow(slug: string) {
+    const res = await fetch(`/api/v1/products/${slug}/restore?company=${prodCompany}`, { method: "POST" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setStatus(d.error ?? `Error ${res.status}`); return; }
+    setStatus("");
+    await loadProducts(prodCompany);
+  }
+
+  async function createServiceRow(p: Product) {
+    setStatus("");
+    const name = (newServiceName[p.slug] ?? "").trim();
+    if (!name) return;
+    const type = newServiceType[p.slug] ?? SERVICE_TYPES[0];
+    const res = await fetch("/api/v1/services", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ productId: p.id, name, type }),
+    });
+    if (res.ok) {
+      setNewServiceName((m) => ({ ...m, [p.slug]: "" }));
+      await loadProducts(prodCompany);
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setStatus(d.error ?? `Error ${res.status}`);
+    }
+  }
+
+  async function loadDeletedServices(productSlug: string) {
+    if (!prodCompany) return;
+    const res = await fetch(`/api/v1/services?company=${prodCompany}&product=${productSlug}&includeDeleted=1`);
+    const list: Service[] = res.ok ? await res.json() : [];
+    setDeletedServices((m) => ({ ...m, [productSlug]: list.filter((s) => s.deletedAt) }));
+  }
+  function toggleDeletedServices(productSlug: string) {
+    setDeletedServicesOpen((m) => {
+      const next = !m[productSlug];
+      if (next) void loadDeletedServices(productSlug);
+      return { ...m, [productSlug]: next };
+    });
+  }
+  async function deleteServiceRow(productSlug: string, serviceSlug: string) {
+    if (!window.confirm(tr("confirm.deleteService"))) return;
+    const res = await fetch(`/api/v1/services/${serviceSlug}?company=${prodCompany}&product=${productSlug}`, { method: "DELETE" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setStatus(d.error ?? `Error ${res.status}`); return; }
+    setStatus(tr("admin.serviceDeleted"));
+    // Same reasoning as deleteProductRow: loadProducts() closes the per-product
+    // deleted-services disclosure along with the rest of its transient state.
+    await loadProducts(prodCompany);
+  }
+  async function restoreServiceRow(productSlug: string, serviceSlug: string) {
+    const res = await fetch(`/api/v1/services/${serviceSlug}/restore?company=${prodCompany}&product=${productSlug}`, { method: "POST" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { setStatus(d.error ?? `Error ${res.status}`); return; }
+    setStatus("");
+    await loadProducts(prodCompany);
   }
 
   async function putService(productSlug: string, s: Service, body: Record<string, unknown>) {
@@ -464,10 +629,13 @@ export default function AdminPage() {
   async function loadHooks(productSlug: string) {
     setHookProduct(productSlug);
     setSrcService(""); setSources([]);
+    // Switching product would otherwise let a stale editingHookId (belonging to
+    // the previous product) leak into a PUT sent to the new product's hooks.
+    resetHookForm();
     void loadServices(productSlug);
     if (!prodCompany || !productSlug) { setHooks([]); return; }
     const res = await fetch(`/api/v1/products/${productSlug}/hooks?company=${prodCompany}`);
-    setHooks(await res.json());
+    setHooks(res.ok ? await res.json() : []);
   }
   async function loadServices(productSlug: string) {
     if (!prodCompany || !productSlug) { setServices([]); return; }
@@ -515,9 +683,105 @@ export default function AdminPage() {
     }
   }
   async function removeHook(id: string) {
+    if (!window.confirm(tr("confirm.deleteHook"))) return;
     await fetch(`/api/v1/products/${hookProduct}/hooks/${id}?company=${prodCompany}`, {
       method: "DELETE",
     });
+    await loadHooks(hookProduct);
+  }
+
+  // Clears the hook form back to "create" defaults, whether that's because an
+  // edit was cancelled, an edit was saved, or the product/company changed.
+  function resetHookForm() {
+    setEditingHookId(null);
+    setEditingRawConfig(null);
+    setHookType("webhook");
+    setHookTargetId("");
+    setHookUrl("");
+    setHookTo("");
+    setHookEvents(["*"]);
+    setHookTransitions([]);
+  }
+  function cancelEditHook() {
+    resetHookForm();
+    setHookMsg("");
+  }
+  // Loads an existing hook into the create form, switching it into "edit" mode.
+  // `type` is intentionally left as-is but the form disables that field: the
+  // backend accepts and ignores a `type` in the PUT body, so letting it be
+  // edited here would silently do nothing.
+  function startEditHook(h: Hook) {
+    setEditingHookId(h.id);
+    setHookMsg("");
+    setHookType(h.type);
+    setHookTargetId(h.targetId ?? "");
+    setHookEvents(h.events.length ? h.events : ["*"]);
+    setHookTransitions(h.transitions ?? []);
+    // A target-based hook's config is owned by the target ({} on the hook itself),
+    // so there's nothing to preserve there. Otherwise, keep the full config —
+    // including keys the form doesn't own (e.g. webhook `headers`) — so saving
+    // the edit can spread it back in instead of replacing it wholesale.
+    setEditingRawConfig(h.targetId ? null : (h.config ?? {}));
+    if (h.targetId) {
+      setHookUrl("");
+      setHookTo("");
+    } else {
+      setHookUrl(h.config?.url ?? "");
+      setHookTo((h.config?.to ?? []).join(", "));
+    }
+  }
+  async function saveHookEdit() {
+    if (!hookProduct || !editingHookId) return;
+    setHookMsg("");
+    const transitions = hookEvents.includes("deploy.status_changed") ? hookTransitions : [];
+    // Partial update: only send the fields the form owns. `type` is never sent —
+    // it's not updatable and the form keeps it disabled while editing.
+    const payload: Record<string, unknown> = { events: hookEvents, transitions };
+    if (hookTargetId) {
+      payload.targetId = hookTargetId;
+    } else {
+      const to = hookTo.split(",").map((s) => s.trim()).filter(Boolean);
+      if (hookType === "email" && to.length === 0) { setHookMsg("Au moins un destinataire email requis."); return; }
+      if (hookType !== "email" && !hookUrl.trim()) { setHookMsg("URL requise."); return; }
+      // Spread the hook's raw config first so keys the form doesn't own (e.g.
+      // webhook `headers`) survive the edit instead of being silently dropped.
+      payload.config = hookType === "email" ? { ...editingRawConfig, to } : { ...editingRawConfig, url: hookUrl.trim() };
+      // Explicit detach: harmless no-op if the hook already had no target, and
+      // required if switching a target-based hook back to inline config.
+      payload.targetId = null;
+    }
+    const res = await fetch(`/api/v1/products/${hookProduct}/hooks/${editingHookId}?company=${prodCompany}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      resetHookForm();
+      setHookMsg(tr("admin.hookUpdated"));
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setHookMsg(d.error ?? `Erreur ${res.status}`);
+    }
+    // Always re-read from the server: a rejected PUT must not leave the form's
+    // optimistic state looking like it stuck.
+    await loadHooks(hookProduct);
+  }
+  function submitHookForm() {
+    if (editingHookId) void saveHookEdit();
+    else void addHook();
+  }
+  async function toggleHookEnabled(h: Hook) {
+    setHookMsg("");
+    const res = await fetch(`/api/v1/products/${hookProduct}/hooks/${h.id}?company=${prodCompany}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: !h.enabled }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setHookMsg(d.error ?? `Erreur ${res.status}`);
+    }
+    // Re-read from the server either way, so a rejected toggle visibly snaps back.
     await loadHooks(hookProduct);
   }
 
@@ -537,6 +801,7 @@ export default function AdminPage() {
     if (res.ok) { setSrcLabel(""); await loadSources(srcService); } else setStatus(`Error ${res.status}`);
   }
   async function removeSource(id: string) {
+    if (!window.confirm(tr("confirm.deleteSource"))) return;
     await fetch(`/api/v1/services/${srcService}/ingest-sources/${id}?company=${prodCompany}&product=${hookProduct}`, { method: "DELETE" });
     await loadSources(srcService);
   }
@@ -566,6 +831,7 @@ export default function AdminPage() {
     if (res.ok) { setSrcLabel(""); await loadScopedSources(); } else setStatus(`Error ${res.status}`);
   }
   async function removeScopedSource(id: string) {
+    if (!window.confirm(tr("confirm.deleteSource"))) return;
     await fetch(`/api/v1/ingest-sources/${id}`, { method: "DELETE" });
     await loadScopedSources();
   }
@@ -575,9 +841,14 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [srcScope, prodCompany]);
 
-  useEffect(() => {
+  // hookTargetId reset used to live in a useEffect keyed on hookType, but that
+  // fired on every hookType change including the programmatic one made when
+  // populating the form from startEditHook, clobbering the target it had just
+  // set. Resetting it directly in the (user-only) onChange below avoids that.
+  function onHookTypeChange(value: string) {
+    setHookType(value);
     setHookTargetId("");
-  }, [hookType]);
+  }
 
   const companyPicker = (
     <label className={styles.slug}>
@@ -666,9 +937,25 @@ ${fields.join(",\n")}
                         <option value="date">{tr("common.date")}</option>
                       </select>
                     </label>
+                    <button className={styles.danger} onClick={() => deleteCompanyRow(c.slug)} title={tr("common.delete")}>×</button>
                   </li>
                 ))}
               </ul>
+
+              <button onClick={toggleDeletedCompanies}>
+                {showDeletedCompanies ? tr("admin.hideDeleted") : tr("admin.showDeleted")}
+              </button>
+              {showDeletedCompanies && (
+                <ul className={styles.list}>
+                  {deletedCompanies.length === 0 && <li className={styles.muted}>{tr("admin.noDeleted")}</li>}
+                  {deletedCompanies.map((c) => (
+                    <li key={c.id} className={styles.listItem}>
+                      <strong>{c.name}</strong> <span className={styles.slug}>({c.slug})</span>
+                      <button onClick={() => restoreCompanyRow(c.slug)}>{tr("admin.restore")}</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           )}
 
@@ -770,117 +1057,179 @@ ${fields.join(",\n")}
               <div className={styles.contextBar}>{companyPicker}</div>
               {!prodCompany ? (
                 <p className={styles.muted}>{tr("admin.pickCompany")}</p>
-              ) : products.length === 0 ? (
-                <p className={styles.muted}>{tr("admin.noProduct")}</p>
               ) : (
-                products.map((p, pidx) => (
-                  <div key={p.id} className={styles.card}>
-                    <div className={styles.cardHead}>
-                      <button onClick={() => moveProduct(pidx, -1)} disabled={pidx === 0} title={tr("admin.moveUp")}>↑</button>
-                      <button onClick={() => moveProduct(pidx, 1)} disabled={pidx === products.length - 1} title={tr("admin.moveDown")}>↓</button>
-                      {" "}{p.name} <span className={styles.slug}>({p.slug})</span>
-                    </div>
-                    <div className={styles.row}>
-                      <label className={styles.slug}>
-                        {tr("admin.moveToCompanyLabel")}{" "}
-                        <select
-                          value=""
-                          onChange={(e) => { if (e.target.value) void moveProductTo(p.slug, e.target.value); }}
-                        >
-                          <option value="">{tr("admin.moveToCompany")}</option>
-                          {companies.filter((c) => c.slug !== prodCompany).map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <ul className={styles.list}>
-                      {(prodServices[p.slug] ?? []).length === 0 && (
-                        <li className={styles.muted}>{tr("admin.noService")}</li>
-                      )}
-                      {(prodServices[p.slug] ?? []).map((s, sidx, arr) => (
-                        <li key={s.id} className={styles.listItem}>
-                          <button onClick={() => moveServiceOrder(p.slug, arr, sidx, -1)} disabled={sidx === 0} title={tr("admin.moveUp")}>↑</button>
-                          <button onClick={() => moveServiceOrder(p.slug, arr, sidx, 1)} disabled={sidx === arr.length - 1} title={tr("admin.moveDown")}>↓</button>
-                          <strong>{s.name}</strong>
-                          <span className={styles.badge}>{s.type}</span>
-                          <span className={styles.slug}>({s.slug})</span>
-                          <label className={styles.slug}>
+                <>
+                  <div className={styles.card}>
+                    <div className={styles.cardHead}>{tr("admin.createProduct")}</div>
+                    <form onSubmit={createProductRow} className={styles.row}>
+                      <input value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder={tr("admin.productNamePh")} />
+                      <button type="submit" className={styles.primary}>{tr("common.create")}</button>
+                    </form>
+                  </div>
+                  {products.length === 0 && <p className={styles.muted}>{tr("admin.noProduct")}</p>}
+                  {products.map((p, pidx) => (
+                    <div key={p.id} className={styles.card}>
+                      <div className={styles.cardHead}>
+                        <button onClick={() => moveProduct(pidx, -1)} disabled={pidx === 0} title={tr("admin.moveUp")}>↑</button>
+                        <button onClick={() => moveProduct(pidx, 1)} disabled={pidx === products.length - 1} title={tr("admin.moveDown")}>↓</button>
+                        {" "}{p.name} <span className={styles.slug}>({p.slug})</span>
+                        <button className={styles.danger} onClick={() => deleteProductRow(p.slug)} title={tr("common.delete")}>×</button>
+                      </div>
+                      <div className={styles.row}>
+                        <label className={styles.slug}>
+                          {tr("admin.moveToCompanyLabel")}{" "}
+                          <select
+                            value=""
+                            onChange={(e) => { if (e.target.value) void moveProductTo(p.slug, e.target.value); }}
+                          >
+                            <option value="">{tr("admin.moveToCompany")}</option>
+                            {companies.filter((c) => c.slug !== prodCompany).map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <ul className={styles.list}>
+                        {(prodServices[p.slug] ?? []).length === 0 && (
+                          <li className={styles.muted}>{tr("admin.noService")}</li>
+                        )}
+                        {(prodServices[p.slug] ?? []).map((s, sidx, arr) => (
+                          <li key={s.id} className={styles.listItem}>
+                            <button onClick={() => moveServiceOrder(p.slug, arr, sidx, -1)} disabled={sidx === 0} title={tr("admin.moveUp")}>↑</button>
+                            <button onClick={() => moveServiceOrder(p.slug, arr, sidx, 1)} disabled={sidx === arr.length - 1} title={tr("admin.moveDown")}>↓</button>
+                            <strong>{s.name}</strong>
+                            <span className={styles.badge}>{s.type}</span>
+                            <span className={styles.slug}>({s.slug})</span>
+                            <label className={styles.slug}>
+                              <input
+                                type="checkbox"
+                                checked={!!s.isMaster}
+                                onChange={(e) => saveServiceMaster(p.slug, s, e.target.checked)}
+                              />{" "}
+                              {tr("admin.mainApp")}
+                            </label>
+                            <label className={styles.slug}>
+                              {tr("admin.toProduct")}{" "}
+                              <select
+                                value=""
+                                onChange={(e) => { if (e.target.value) void moveServiceTo(p.slug, s.slug, e.target.value); }}
+                              >
+                                <option value="">{tr("admin.move")}</option>
+                                {allProducts.filter((ap) => ap.id !== p.id).map((ap) => (
+                                  <option key={ap.id} value={ap.id}>{ap.company}/{ap.name}</option>
+                                ))}
+                              </select>
+                            </label>
+                            <span className={styles.slug}>Build URL</span>
                             <input
-                              type="checkbox"
-                              checked={!!s.isMaster}
-                              onChange={(e) => saveServiceMaster(p.slug, s, e.target.checked)}
-                            />{" "}
-                            {tr("admin.mainApp")}
-                          </label>
-                          <label className={styles.slug}>
-                            {tr("admin.toProduct")}{" "}
-                            <select
-                              value=""
-                              onChange={(e) => { if (e.target.value) void moveServiceTo(p.slug, s.slug, e.target.value); }}
-                            >
-                              <option value="">{tr("admin.move")}</option>
-                              {allProducts.filter((ap) => ap.id !== p.id).map((ap) => (
-                                <option key={ap.id} value={ap.id}>{ap.company}/{ap.name}</option>
-                              ))}
-                            </select>
-                          </label>
-                          <span className={styles.slug}>Build URL</span>
-                          <input
-                            value={templates[s.id] ?? ""}
-                            onChange={(e) => setTemplates((t) => ({ ...t, [s.id]: e.target.value }))}
-                            placeholder="https://ci/builds/{version}"
-                            style={{ flex: 1, minWidth: 200 }}
-                          />
-                          <button onClick={() => saveServiceBuildUrl(p.slug, s)}>{tr("common.save")}</button>
+                              value={templates[s.id] ?? ""}
+                              onChange={(e) => setTemplates((t) => ({ ...t, [s.id]: e.target.value }))}
+                              placeholder="https://ci/builds/{version}"
+                              style={{ flex: 1, minWidth: 200 }}
+                            />
+                            <button onClick={() => saveServiceBuildUrl(p.slug, s)}>{tr("common.save")}</button>
+                            <button className={styles.danger} onClick={() => deleteServiceRow(p.slug, s.slug)} title={tr("common.delete")}>×</button>
 
-                          <div className={styles.wfChips} style={{ flexBasis: "100%" }}>
-                            <span className={styles.slug}>{tr("admin.workflowEnv")}</span>
-                            {!s.envWorkflowOverride ? (
-                              <>
-                                <span className={styles.muted}>
-                                  {tr("admin.inherited")} {(workflows[p.slug] ?? []).length ? (workflows[p.slug] ?? []).join(" → ") : "(aucun)"}
-                                </span>
-                                <button className={styles.wfAdd} onClick={() => customizeSvcWf(p.slug, s, workflows[p.slug] ?? [])}>{tr("admin.customize")}</button>
-                              </>
-                            ) : (
-                              <>
-                                {(svcWf[s.id] ?? []).map((env, idx) => (
-                                  <span key={env} className={styles.wfChip} style={{ background: envColorMap[env] ?? DEFAULT_ENV_COLOR }}>
-                                    {env}
-                                    <button onClick={() => moveSvcWfEnv(s.id, env, -1)} disabled={idx === 0}>←</button>
-                                    <button onClick={() => moveSvcWfEnv(s.id, env, 1)} disabled={idx === (svcWf[s.id]?.length ?? 0) - 1}>→</button>
-                                    <button onClick={() => toggleSvcWfEnv(s.id, env)}>×</button>
+                            <div className={styles.wfChips} style={{ flexBasis: "100%" }}>
+                              <span className={styles.slug}>{tr("admin.workflowEnv")}</span>
+                              {!s.envWorkflowOverride ? (
+                                <>
+                                  <span className={styles.muted}>
+                                    {tr("admin.inherited")} {(workflows[p.slug] ?? []).length ? (workflows[p.slug] ?? []).join(" → ") : "(aucun)"}
                                   </span>
-                                ))}
-                                {envs.map((e) => e.slug).filter((slug) => !(svcWf[s.id] ?? []).includes(slug)).map((slug) => (
-                                  <button key={slug} className={styles.wfAdd} onClick={() => toggleSvcWfEnv(s.id, slug)}>+ {slug}</button>
-                                ))}
-                                <button onClick={() => saveSvcWf(p.slug, s)}>{tr("common.save")}</button>
-                                <button className={styles.wfAdd} onClick={() => inheritSvcWf(p.slug, s)}>{tr("admin.revertInherit")}</button>
-                              </>
-                            )}
-                          </div>
+                                  <button className={styles.wfAdd} onClick={() => customizeSvcWf(p.slug, s, workflows[p.slug] ?? [])}>{tr("admin.customize")}</button>
+                                </>
+                              ) : (
+                                <>
+                                  {(svcWf[s.id] ?? []).map((env, idx) => (
+                                    <span key={env} className={styles.wfChip} style={{ background: envColorMap[env] ?? DEFAULT_ENV_COLOR }}>
+                                      {env}
+                                      <button onClick={() => moveSvcWfEnv(s.id, env, -1)} disabled={idx === 0}>←</button>
+                                      <button onClick={() => moveSvcWfEnv(s.id, env, 1)} disabled={idx === (svcWf[s.id]?.length ?? 0) - 1}>→</button>
+                                      <button onClick={() => toggleSvcWfEnv(s.id, env)}>×</button>
+                                    </span>
+                                  ))}
+                                  {envs.map((e) => e.slug).filter((slug) => !(svcWf[s.id] ?? []).includes(slug)).map((slug) => (
+                                    <button key={slug} className={styles.wfAdd} onClick={() => toggleSvcWfEnv(s.id, slug)}>+ {slug}</button>
+                                  ))}
+                                  <button onClick={() => saveSvcWf(p.slug, s)}>{tr("common.save")}</button>
+                                  <button className={styles.wfAdd} onClick={() => inheritSvcWf(p.slug, s)}>{tr("admin.revertInherit")}</button>
+                                </>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+
+                      <div className={styles.row}>
+                        <span className={styles.slug}>{tr("admin.createService")}</span>
+                        <input
+                          value={newServiceName[p.slug] ?? ""}
+                          onChange={(e) => setNewServiceName((m) => ({ ...m, [p.slug]: e.target.value }))}
+                          placeholder={tr("admin.serviceNamePh")}
+                        />
+                        <select
+                          value={newServiceType[p.slug] ?? SERVICE_TYPES[0]}
+                          onChange={(e) => setNewServiceType((m) => ({ ...m, [p.slug]: e.target.value }))}
+                          title={tr("admin.serviceTypeLabel")}
+                        >
+                          {SERVICE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <button className={styles.primary} onClick={() => createServiceRow(p)}>{tr("common.create")}</button>
+                      </div>
+
+                      <button onClick={() => toggleDeletedServices(p.slug)}>
+                        {deletedServicesOpen[p.slug] ? tr("admin.hideDeleted") : tr("admin.showDeleted")}
+                      </button>
+                      {deletedServicesOpen[p.slug] && (
+                        <ul className={styles.list}>
+                          {(deletedServices[p.slug] ?? []).length === 0 && (
+                            <li className={styles.muted}>{tr("admin.noDeleted")}</li>
+                          )}
+                          {(deletedServices[p.slug] ?? []).map((s) => (
+                            <li key={s.id} className={styles.listItem}>
+                              <strong>{s.name}</strong>
+                              <span className={styles.badge}>{s.type}</span>
+                              <span className={styles.slug}>({s.slug})</span>
+                              <button onClick={() => restoreServiceRow(p.slug, s.slug)}>{tr("admin.restore")}</button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <div className={styles.wfChips}>
+                        <span className={styles.slug}>{tr("admin.workflowEnv")}</span>
+                        {(workflows[p.slug] ?? []).map((env, idx) => (
+                          <span key={env} className={styles.wfChip} style={{ background: envColorMap[env] ?? DEFAULT_ENV_COLOR }}>
+                            {env}
+                            <button onClick={() => moveWf(p.slug, env, -1)} disabled={idx === 0}>←</button>
+                            <button onClick={() => moveWf(p.slug, env, 1)} disabled={idx === (workflows[p.slug]?.length ?? 0) - 1}>→</button>
+                            <button onClick={() => toggleWf(p.slug, env)}>×</button>
+                          </span>
+                        ))}
+                        {envs.map((e) => e.slug).filter((slug) => !(workflows[p.slug] ?? []).includes(slug)).map((slug) => (
+                          <button key={slug} className={styles.wfAdd} onClick={() => toggleWf(p.slug, slug)}>+ {slug}</button>
+                        ))}
+                        <button onClick={() => saveWorkflow(p.slug)}>{tr("common.save")}</button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <button onClick={toggleDeletedProducts}>
+                    {showDeletedProducts ? tr("admin.hideDeleted") : tr("admin.showDeleted")}
+                  </button>
+                  {showDeletedProducts && (
+                    <ul className={styles.list}>
+                      {deletedProducts.length === 0 && <li className={styles.muted}>{tr("admin.noDeleted")}</li>}
+                      {deletedProducts.map((p) => (
+                        <li key={p.id} className={styles.listItem}>
+                          <strong>{p.name}</strong> <span className={styles.slug}>({p.slug})</span>
+                          <button onClick={() => restoreProductRow(p.slug)}>{tr("admin.restore")}</button>
                         </li>
                       ))}
                     </ul>
-                    <div className={styles.wfChips}>
-                      <span className={styles.slug}>{tr("admin.workflowEnv")}</span>
-                      {(workflows[p.slug] ?? []).map((env, idx) => (
-                        <span key={env} className={styles.wfChip} style={{ background: envColorMap[env] ?? DEFAULT_ENV_COLOR }}>
-                          {env}
-                          <button onClick={() => moveWf(p.slug, env, -1)} disabled={idx === 0}>←</button>
-                          <button onClick={() => moveWf(p.slug, env, 1)} disabled={idx === (workflows[p.slug]?.length ?? 0) - 1}>→</button>
-                          <button onClick={() => toggleWf(p.slug, env)}>×</button>
-                        </span>
-                      ))}
-                      {envs.map((e) => e.slug).filter((slug) => !(workflows[p.slug] ?? []).includes(slug)).map((slug) => (
-                        <button key={slug} className={styles.wfAdd} onClick={() => toggleWf(p.slug, slug)}>+ {slug}</button>
-                      ))}
-                      <button onClick={() => saveWorkflow(p.slug)}>{tr("common.save")}</button>
-                    </div>
-                  </div>
-                ))
+                  )}
+                </>
               )}
             </section>
           )}
@@ -911,20 +1260,25 @@ ${fields.join(",\n")}
                         {h.transitions.length > 0 && (
                           <span className={styles.transBadge}>{h.transitions.map((t) => t.replace(">", " → ")).join(", ")}</span>
                         )}
-                        {!h.enabled && <span className={styles.muted}>(désactivé)</span>}
+                        <label className={styles.slug}>
+                          <input type="checkbox" checked={h.enabled} onChange={() => toggleHookEnabled(h)} />{" "}
+                          {tr("admin.hookEnabledLabel")}
+                        </label>
+                        <button onClick={() => startEditHook(h)}>{tr("admin.editHook")}</button>
                         <button className={styles.danger} onClick={() => removeHook(h.id)}>×</button>
                       </li>
                     ))}
                   </ul>
 
                   <div className={styles.hookForm}>
-                    <div className={styles.cardHead}>{tr("admin.newHook")}</div>
+                    <div className={styles.cardHead}>{editingHookId ? tr("admin.editHookTitle") : tr("admin.newHook")}</div>
                     <div className={styles.row}>
-                      <select value={hookType} onChange={(e) => setHookType(e.target.value)}>
+                      <select value={hookType} onChange={(e) => onHookTypeChange(e.target.value)} disabled={!!editingHookId}>
                         <option value="webhook">webhook</option>
                         <option value="teams">teams</option>
                         <option value="email">email</option>
                       </select>
+                      {editingHookId && <span className={styles.muted}>{tr("admin.hookTypeLocked")}</span>}
                       <select value={hookTargetId} onChange={(e) => setHookTargetId(e.target.value)}>
                         <option value="">{tr("admin.hookNoneOption")}</option>
                         {targets.filter((t) => t.type === hookType).map((t) => (
@@ -964,7 +1318,10 @@ ${fields.join(",\n")}
                       </>
                     )}
 
-                    <button className={styles.primary} onClick={addHook}>+ hook</button>
+                    <button className={styles.primary} onClick={submitHookForm}>
+                      {editingHookId ? tr("common.save") : "+ hook"}
+                    </button>
+                    {editingHookId && <button onClick={cancelEditHook}>{tr("common.cancel")}</button>}
                     {hookMsg && <span className={styles.muted} style={{ marginLeft: 8 }}>{hookMsg}</span>}
                   </div>
                 </>
@@ -1130,7 +1487,7 @@ ${fields.join(",\n")}
                     <strong>{u.username}</strong>
                     <span className={styles.slug}>{u.name}</span>
                     <span className={styles.badge}>{u.roles.join(", ") || "—"}</span>
-                    <span className={styles.muted}>{new Date(u.syncedAt).toLocaleString()}</span>
+                    <span className={styles.muted}>{stampFull(u.syncedAt)}</span>
                   </li>
                 ))}
               </ul>

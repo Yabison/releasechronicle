@@ -1,8 +1,11 @@
-import type { EventType, IncidentStatus, DeployStatus, ChangeType, Event, Prisma } from "@prisma/client";
-import { DeployStatus as DeployStatusEnum } from "@prisma/client";
+import type { EventType, IncidentStatus, DeployStatus, ChangeType, Event } from "@prisma/client";
+import { DeployStatus as DeployStatusEnum, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { incidentDuration, maintenanceStatus, currentByEnvironment } from "@/lib/derive";
 import { canTransition, previousStatus } from "@/lib/deployWorkflow";
+import { encodeEventCursor, type EventCursor } from "@/lib/eventCursor";
+import { wouldCreateCycle } from "@/lib/causal";
+import { RETIRED_CHANGE_TYPES } from "@/lib/schemas/common";
 
 /** Normalized event data produced by the validation layer + service resolution. */
 export type EventData = {
@@ -29,13 +32,21 @@ function toCreateData(data: EventData): Prisma.EventUncheckedCreateInput {
     externalId: data.externalId ?? null,
     metadata: (data.metadata as Prisma.InputJsonValue) ?? undefined,
     tags: data.tags ?? [],
-    // `fields` is produced by the per-type validators (eventValidation.ts); its keys are
-    // known type columns only and never collide with the canonical columns set above.
+    // `fields` is produced by the per-type zod schemas (src/lib/schemas/event.ts); its
+    // keys are known type columns only and never collide with the canonical columns set above.
     ...data.fields,
   };
 }
 
 export async function createEvent(data: EventData, db: Db = prisma) {
+  // The event and its initial StatusTransition must land together: "the history
+  // is never empty" is an invariant, not a best effort. Callers already inside a
+  // transaction pass their tx; bare calls get one here.
+  if (db === prisma) return prisma.$transaction((tx) => createEventIn(tx, data));
+  return createEventIn(db, data);
+}
+
+async function createEventIn(db: Db, data: EventData) {
   const ev = await db.event.create({ data: toCreateData(data) });
   if (ev.type === "DEPLOYMENT" && ev.deployStatus) {
     // No requester → no known actor; the UI labels a null actor as the creation itself.
@@ -60,9 +71,16 @@ export async function upsertEventByExternalId(externalId: string, data: EventDat
   });
 }
 
-type ListFilter = { environment?: string; type?: EventType };
+type ListFilter = {
+  environment?: string;
+  type?: EventType;
+  from?: Date;
+  to?: Date;
+  /** Extra where fragment merged into the query (e.g. public-mode visibility). */
+  scope?: Prisma.EventWhereInput;
+};
 
-function deriveFor(
+export function deriveFor(
   e: { type: EventType; windowStart: Date | null; windowEnd: Date | null; startedAt: Date | null; resolvedAt: Date | null },
   now: Date,
 ) {
@@ -75,36 +93,77 @@ function deriveFor(
   return {};
 }
 
+function serviceEventsWhere(serviceId: string, filter: ListFilter): Prisma.EventWhereInput {
+  return {
+    serviceId,
+    deletedAt: null,
+    ...(filter.environment ? { environment: filter.environment } : {}),
+    ...(filter.type ? { type: filter.type } : {}),
+    ...(filter.from || filter.to
+      ? { occurredAt: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } }
+      : {}),
+    ...(filter.scope ?? {}),
+  };
+}
+
+// `id DESC` tie-break keeps same-instant events in one deterministic order, so a
+// cursor can cut between them without skipping or repeating rows.
+const FEED_ORDER = [{ occurredAt: "desc" }, { id: "desc" }] satisfies Prisma.EventOrderByWithRelationInput[];
+
+/** Exported so the dashboards can load events in the same shape as a service
+ *  feed, and reuse buildServiceTimeline instead of a second row model. */
+export const FEED_INCLUDE = {
+  rollbacks: true,
+  qaValidations: true,
+  observations: true,
+  statusTransitions: { orderBy: { createdAt: "asc" } },
+  comments: { orderBy: { createdAt: "asc" } },
+} satisfies Prisma.EventInclude;
+
 export async function listServiceEvents(serviceId: string, filter: ListFilter, now: Date = new Date()) {
   const events = await prisma.event.findMany({
-    where: {
-      serviceId,
-      deletedAt: null,
-      ...(filter.environment ? { environment: filter.environment } : {}),
-      ...(filter.type ? { type: filter.type } : {}),
-    },
-    orderBy: { occurredAt: "desc" },
-    include: { rollbacks: true, qaValidations: true, observations: true, statusTransitions: { orderBy: { createdAt: "asc" } }, comments: { orderBy: { createdAt: "asc" } } },
+    where: serviceEventsWhere(serviceId, filter),
+    orderBy: FEED_ORDER,
+    include: FEED_INCLUDE,
   });
   return events.map((e) => ({ ...e, derived: deriveFor(e, now) }));
 }
 
-export async function listProductEvents(
-  productId: string,
+/**
+ * One page of a service's feed. The cursor is the (occurredAt, id) of the last row
+ * of the previous page; the seek predicate resumes strictly after it in FEED_ORDER.
+ */
+export async function listServiceEventsPage(
+  serviceId: string,
   filter: ListFilter,
+  page: { limit: number; cursor?: EventCursor },
   now: Date = new Date(),
 ) {
-  const events = await prisma.event.findMany({
-    where: {
-      service: { productId },
-      deletedAt: null,
-      ...(filter.environment ? { environment: filter.environment } : {}),
-      ...(filter.type ? { type: filter.type } : {}),
-    },
-    orderBy: { occurredAt: "desc" },
-    include: { rollbacks: true, qaValidations: true, observations: true, statusTransitions: { orderBy: { createdAt: "asc" } }, comments: { orderBy: { createdAt: "asc" } } },
+  const afterCursor: Prisma.EventWhereInput = page.cursor
+    ? {
+        OR: [
+          { occurredAt: { lt: page.cursor.occurredAt } },
+          { occurredAt: page.cursor.occurredAt, id: { lt: page.cursor.id } },
+        ],
+      }
+    : {};
+  const rows = await prisma.event.findMany({
+    where: { AND: [serviceEventsWhere(serviceId, filter), afterCursor] },
+    orderBy: FEED_ORDER,
+    include: FEED_INCLUDE,
+    take: page.limit + 1, // one extra row = "there is a next page", never returned
   });
-  return events.map((e) => ({ ...e, derived: deriveFor(e, now) }));
+  const items = rows.slice(0, page.limit);
+  const last = items[items.length - 1];
+  return {
+    items: items.map((e) => ({ ...e, derived: deriveFor(e, now) })),
+    nextCursor: rows.length > page.limit && last ? encodeEventCursor(last.occurredAt, last.id) : null,
+  };
+}
+
+/** How many events fall before `date` — powers the "show older" affordance without loading them. */
+export function countServiceEventsBefore(serviceId: string, date: Date): Promise<number> {
+  return prisma.event.count({ where: { serviceId, deletedAt: null, occurredAt: { lt: date } } });
 }
 
 export async function currentVersions(serviceId: string) {
@@ -130,9 +189,45 @@ export async function setEventLot(eventId: string, lot: string | null) {
   return prisma.event.update({ where: { id: eventId }, data: { lot } });
 }
 
-/** Change a deployment's changeType (e.g. MEP → MEP HOTFIX). Returns null if not a deployment. */
+export class PhaseTransitionError extends Error {}
+
+/** A retired change type was offered as a reclassification target. */
+export class RetiredChangeTypeError extends Error {}
+
+/**
+ * Change a deployment's changeType (e.g. MEP → MEP HOTFIX). Returns null if not a
+ * deployment. Leaving a phase (PRE_MEP/POST_MEP → anything else) is always allowed;
+ * entering PRE_MEP or POST_MEP is allowed only when the event is ALREADY a phase
+ * (i.e. reclassifying PRE_MEP ↔ POST_MEP). An event that is not currently a phase
+ * may never become one through this path.
+ *
+ * Why: creation enforces more than "has a parentId" for phases — see the
+ * PRE_MEP/POST_MEP branch in `createEventAction` (src/app/actions/events.ts), which
+ * also overwrites the event's environment with the parent's and rejects a date
+ * at/after the parent's (PRE_MEP) or at/before it (POST_MEP). That is true for the
+ * REST/UI path (`deploymentBodySchema`). It is NOT true for the CI ingest path:
+ * `ciDeploymentBodySchema` (src/lib/schemas/ciDeployment.ts) accepts the full
+ * changeType enum with no parentId field at all, so a CI-ingested deployment can
+ * already be a parentless PRE_MEP/POST_MEP. Restricting entry here to "already a
+ * phase" doesn't manufacture the invariants creation enforces for a *fresh* phase
+ * (parent environment/date ordering) — it only allows moving between the two
+ * phase values, which carries no parent-dependent invariant to begin with.
+ */
 export async function setEventChangeType(eventId: string, changeType: ChangeType) {
-  if (!(await assertDeployment(eventId))) return null;
+  const event = await assertDeployment(eventId);
+  if (!event) return null;
+  const enteringPhase = changeType === "PRE_MEP" || changeType === "POST_MEP";
+  const alreadyPhase = event.changeType === "PRE_MEP" || event.changeType === "POST_MEP";
+  if (enteringPhase && !alreadyPhase) {
+    throw new PhaseTransitionError("PRE_MEP/POST_MEP can only be entered by reclassifying an event that is already a phase");
+  }
+  // Same shape of rule for a retired type: keeping the one an event already has is
+  // fine — the drawer offers it precisely in that case — but nothing may acquire
+  // it. Creation refuses it outright (see CREATABLE_CHANGE_TYPES); without this,
+  // reclassification stayed a way to put a retired value on any deployment.
+  if (RETIRED_CHANGE_TYPES.includes(changeType) && event.changeType !== changeType) {
+    throw new RetiredChangeTypeError(`${changeType} is retired: it can only be kept on an event that already carries it`);
+  }
   return prisma.event.update({ where: { id: eventId }, data: { changeType } });
 }
 
@@ -300,4 +395,82 @@ export async function addObservation(eventId: string, input: { who: string; dura
   return prisma.observation.create({
     data: { eventId, who: input.who, durationMinutes: input.durationMinutes, comment: input.comment },
   });
+}
+
+/**
+ * One class for every way a causal link can be refused, discriminated by `reason` so
+ * the action layer can map each to its own `err.*` key (mirrors DeployTransitionError's
+ * "one class per family" shape, but this family has more than one distinct rule).
+ */
+export class CausalLinkError extends Error {
+  constructor(
+    public reason: "selfLink" | "causeNotFound" | "differentProduct" | "cycle",
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Set (or clear, with null) the event that caused `eventId`. Returns null if the
+ * target event does not exist. Clearing (causeId === null) is always allowed, even
+ * when there is nothing to clear. Otherwise throws CausalLinkError when the cause
+ * doesn't exist, is the event itself, belongs to a different product, or would
+ * close a causal cycle.
+ *
+ * The existence/ownership/cycle reads and the write all run inside one
+ * SERIALIZABLE transaction, re-checked against the transaction client itself
+ * (not a separate connection). Without this, two near-simultaneous requests —
+ * A's cause set to B, and B's cause set to A — could each pass the cycle check
+ * before either commits, producing a real 2-node cycle: "cycles must be
+ * impossible" is a hard requirement, not best-effort. Under SERIALIZABLE,
+ * Postgres detects that write-skew pattern and aborts one of the two
+ * transactions (surfaced here as a CausalLinkError("cycle", …) so the caller
+ * gets the same familiar rejection rather than a raw driver error).
+ */
+export async function setEventCausedBy(eventId: string, causeId: string | null) {
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        const target = await tx.event.findUnique({ where: { id: eventId }, select: { id: true, serviceId: true } });
+        if (!target) return null;
+
+        if (causeId === null) {
+          return tx.event.update({ where: { id: eventId }, data: { causedById: null } });
+        }
+        if (causeId === eventId) {
+          throw new CausalLinkError("selfLink", "an event cannot be its own cause");
+        }
+
+        const cause = await tx.event.findUnique({ where: { id: causeId }, select: { id: true, serviceId: true } });
+        if (!cause) {
+          throw new CausalLinkError("causeNotFound", "cause event not found");
+        }
+
+        const [targetService, causeService] = await Promise.all([
+          tx.service.findUnique({ where: { id: target.serviceId }, select: { productId: true } }),
+          tx.service.findUnique({ where: { id: cause.serviceId }, select: { productId: true } }),
+        ]);
+        if (!targetService || !causeService || targetService.productId !== causeService.productId) {
+          throw new CausalLinkError("differentProduct", "the cause must belong to the same product");
+        }
+
+        if (await wouldCreateCycle(eventId, causeId, tx)) {
+          throw new CausalLinkError("cycle", "this link would create a causal cycle");
+        }
+
+        return tx.event.update({ where: { id: eventId }, data: { causedById: causeId } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (e) {
+    // P2034: "Transaction failed due to a write conflict or a deadlock" — Postgres's
+    // serialization-failure signal. It means the concurrency guard just did its job;
+    // refuse the link exactly as a detected cycle would, rather than leaking a raw
+    // driver error to the caller.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+      throw new CausalLinkError("cycle", "concurrent update — refusing to risk a causal cycle, please retry");
+    }
+    throw e;
+  }
 }

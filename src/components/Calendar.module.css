@@ -3,8 +3,8 @@
 .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .dow { background: var(--surface); color: var(--muted); font-size: 0.75rem; text-align: center; padding: 4px 0; }
 .cell { background: var(--surface); min-height: 76px; padding: 4px; }
-.outside { background: #fbfbfc; color: var(--muted); }
+.outside { background: var(--sunken); color: var(--muted); }
 .date { font-size: 0.75rem; color: var(--muted); }
-.maint { background: rgba(25, 113, 194, 0.10); }
+.maint { background: var(--cat-maint-bg); }
 .marker { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 2px; cursor: pointer; }
 .green { background: var(--green); } .red { background: var(--red); } .orange { background: var(--orange); } .blue { background: var(--blue); }

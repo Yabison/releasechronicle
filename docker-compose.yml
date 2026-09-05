@@ -1,3 +1,10 @@
+# Fixed so every checkout, worktree and clone acts on the same containers.
+# Without it compose derives the project name from the directory, so a second
+# clone silently starts a second set that fights the first for ports 5432,
+# 5433, 1389 and 1025 — some containers come up, others fail, and `make up`
+# looks like it only started half of them.
+name: releasechronicle
+
 services:
   db:
     image: postgres:16
@@ -30,7 +37,7 @@ services:
       LDAP_ADMIN_PASSWORD: adminpassword
       LDAP_REMOVE_CONFIG_AFTER_SETUP: "false"
     volumes:
-      - ./test/ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom
+      - ./tests/fixtures/ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom
     ports:
       - "1389:389"
   # Catches all outgoing email; web UI on http://localhost:8025, SMTP on 1025.
@@ -47,11 +54,14 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: "postgresql://rc:rc@db:5432/releasechronicle"
-      # No usable default on purpose: the image runs with NODE_ENV=production, where
-      # the app refuses to start on a public secret. Set both in .env
-      # (`openssl rand -base64 32`). Empty rather than `:?` so that `npm run dev:up`,
-      # which only brings up db/ldap/mailpit, still interpolates this file.
-      RC_WRITE_TOKEN: "${RC_WRITE_TOKEN:-}"
+      # Checked by docker-entrypoint.sh, which refuses to start the server
+      # without them, rather than by `${VAR:?}` here.
+      #
+      # Interpolation applies to the whole file, not to the services being
+      # started: `${VAR:?}` on this service aborted `docker compose up -d
+      # db_test ldap`, and `logs`, and `down`. The CI does exactly that and has
+      # no .env, so requiring them here broke every compose command for the
+      # sake of one service.
       AUTH_PROVIDER: "ldap"
       AUTH_SECRET: "${AUTH_SECRET:-}"
       LDAP_URL: "ldap://ldap:389"
@@ -101,6 +111,9 @@ services:
       DATABASE_URL: "postgresql://rc:rc@db_demo:5432/releasechronicle_demo"
       # Published credentials, so this instance must never hold real data.
       AUTH_USERS_FILE: "/app/config/auth-users.demo.yml"
+      # Prints the demo accounts on the login page. Only ever set it where the
+      # credentials are already public — see src/lib/auth/demoAccounts.ts.
+      RC_DEMO_MODE: "true"
       AUTH_SECRET: "${DEMO_AUTH_SECRET:-}"
       RC_WRITE_TOKEN: "${DEMO_WRITE_TOKEN:-}"
       APP_BASE_URL: "${DEMO_BASE_URL:-http://localhost:3001}"

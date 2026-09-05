@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
-import { siblings, getLotMembers, lotKey, type LotMember } from "@/lib/deployLot";
+import { siblings, getLotMembers, lotKey, listLotCandidates, LOT_CANDIDATE_LIMIT, type LotMember } from "@/lib/deployLot";
+import { deleteService } from "@/lib/hierarchyDelete";
 
 const M = (over: Partial<LotMember>): LotMember => ({
   eventId: "x", company: "c", product: "p", service: "s", version: "1", environment: "PROD", deployStatus: "DEPLOYED", isMaster: false, rolledBack: false, ...over,
@@ -54,5 +55,56 @@ describe("getLotMembers", () => {
   });
   it("returns an empty map for no lots", async () => {
     expect(await getLotMembers([])).toEqual({});
+  });
+  it("excludes members whose service has been soft-deleted", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    await dep(s.id, {});
+    await deleteService(s.id);
+    const map = await getLotMembers(["rel-1"]);
+    expect(map[lotKey("PROD", "rel-1")] ?? []).toHaveLength(0);
+  });
+});
+
+describe("listLotCandidates", () => {
+  it("excludes deployments of a soft-deleted service", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    await dep(s.id, {});
+    await deleteService(s.id);
+    const { items } = await listLotCandidates("acme", "PROD");
+    expect(items).toHaveLength(0);
+  });
+
+  it("reports no truncation when the whole set fits", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    await dep(s.id, { lot: null });
+
+    const res = await listLotCandidates("acme", "PROD");
+
+    expect(res.items).toHaveLength(1);
+    expect(res.truncated).toBe(false);
+  });
+
+  it("caps the list at the limit and says it was cut", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    const now = Date.now();
+    await prisma.event.createMany({
+      data: Array.from({ length: LOT_CANDIDATE_LIMIT + 1 }, (_, i) => ({
+        serviceId: s.id, environment: "PROD", type: "DEPLOYMENT" as const,
+        occurredAt: new Date(now - i * 60_000), version: `1.0.${i}`,
+      })),
+    });
+
+    const res = await listLotCandidates("acme", "PROD");
+
+    expect(res.items).toHaveLength(LOT_CANDIDATE_LIMIT);
+    expect(res.truncated).toBe(true);
   });
 });

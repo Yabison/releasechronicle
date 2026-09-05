@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type DeliveryStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 export function listHooks(productId: string) {
@@ -17,13 +17,34 @@ export function createHook(data: { productId: string; type: string; events: stri
     },
   });
 }
+export function getHook(id: string) {
+  return prisma.hook.findUnique({ where: { id } });
+}
+/** Partial update: only the keys present on `data` are written. `type`/`productId` are not updatable. */
+export function updateHook(
+  id: string,
+  data: { events?: string[]; transitions?: string[]; config?: Record<string, unknown>; targetId?: string | null; enabled?: boolean },
+) {
+  return prisma.hook.update({
+    where: { id },
+    data: {
+      ...(data.events !== undefined ? { events: data.events } : {}),
+      ...(data.transitions !== undefined ? { transitions: data.transitions } : {}),
+      ...(data.config !== undefined ? { config: data.config as Prisma.InputJsonValue } : {}),
+      ...(data.targetId !== undefined ? { targetId: data.targetId } : {}),
+      ...(data.enabled !== undefined ? { enabled: data.enabled } : {}),
+    },
+  });
+}
 export function deleteHook(id: string) {
   return prisma.hook.delete({ where: { id } });
 }
 export type DeliveryRow = {
   id: string;
   kind: string;
-  ok: boolean;
+  status: string;
+  attempts: number;
+  nextAttemptAt: Date | null;
   statusCode: number | null;
   error: string | null;
   createdAt: Date;
@@ -34,7 +55,7 @@ export type DeliveryRow = {
 export type DeliveryFilter = {
   kind?: string;
   type?: string;
-  ok?: boolean;
+  status?: DeliveryStatus;
   statusCode?: number;
   error?: string;
   from?: Date;
@@ -51,7 +72,7 @@ export async function listDeliveries(
     hook: { productId, ...(filter.type ? { type: filter.type } : {}) },
   };
   if (filter.kind) where.kind = filter.kind;
-  if (filter.ok !== undefined) where.ok = filter.ok;
+  if (filter.status) where.status = filter.status;
   if (filter.statusCode !== undefined) where.statusCode = filter.statusCode;
   if (filter.error) where.error = { contains: filter.error, mode: "insensitive" };
   if (filter.from || filter.to) {
@@ -73,7 +94,8 @@ export async function listDeliveries(
     prisma.hookDelivery.count({ where }),
   ]);
   const rows: DeliveryRow[] = records.map((r) => ({
-    id: r.id, kind: r.kind, ok: r.ok, statusCode: r.statusCode, error: r.error,
+    id: r.id, kind: r.kind, status: r.status, attempts: r.attempts, nextAttemptAt: r.nextAttemptAt,
+    statusCode: r.statusCode, error: r.error,
     createdAt: r.createdAt, payload: r.payload, hookType: r.hook.type,
   }));
   return { rows, total };

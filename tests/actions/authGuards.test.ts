@@ -24,6 +24,7 @@ import {
   addEventCommentAction,
   createLotFromExistingAction,
   createLotAction,
+  updateEventCausedByAction,
 } from "@/app/actions/events";
 import { importEventsXlsx, exportEventsXlsx } from "@/app/actions/excel";
 
@@ -101,6 +102,12 @@ describe("server actions refuse an anonymous caller", () => {
     expect(await addEventCommentAction({ eventId: ev.id, body: "hi", path: "/" }))
       .toEqual({ ok: false, error: "err.loginRequired" });
     expect(await prisma.eventComment.count()).toBe(0);
+  });
+
+  it("updateEventCausedByAction", async () => {
+    const ev = await seedDeploy();
+    expect(await updateEventCausedByAction({ eventId: ev.id, causeId: null, path: "/" }))
+      .toEqual({ ok: false, error: "err.loginRequired" });
   });
 
   it("createLotFromExistingAction", async () => {

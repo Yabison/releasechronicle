@@ -12,6 +12,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { readSessionFromCookieHeader } from "@/lib/auth/session";
+import { log } from "@/lib/log";
 
 export type AuditEntry = {
   action: string;
@@ -35,7 +36,10 @@ export async function recordAudit(entry: AuditEntry): Promise<void> {
       },
     });
   } catch (e) {
-    console.error("[audit] failed to record", entry.action, e);
+    // Deliberately no `target`: on a failed login it is the attempted username,
+    // i.e. unauthenticated input and a real person's name. The audit row is where
+    // that belongs; the action and the error are enough to diagnose this failure.
+    log.error("audit write failed", { mod: "audit", action: entry.action, err: e });
   }
 }
 
@@ -72,7 +76,11 @@ export async function listAuditLog(filter: AuditFilter): Promise<{ rows: AuditRo
   const take = Math.min(Math.max(filter.limit ?? 50, 1), 200);
   const skip = Math.max(filter.offset ?? 0, 0);
   const [rows, total] = await Promise.all([
-    prisma.auditLog.findMany({ where, orderBy: { at: "desc" }, take, skip }),
+    // `at` alone leaves rows written in the same millisecond in an undefined
+    // order, which makes pagination lose or repeat them between two pages. The
+    // cuid tiebreaker settles it: it carries the creation timestamp and a counter,
+    // so it keeps the newest first among ties instead of picking at random.
+    prisma.auditLog.findMany({ where, orderBy: [{ at: "desc" }, { id: "desc" }], take, skip }),
     prisma.auditLog.count({ where }),
   ]);
   return { rows, total };

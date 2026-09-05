@@ -6,13 +6,18 @@ import { usePathname } from "next/navigation";
 import type { TreeCompany } from "@/lib/tree";
 import { useI18n } from "@/i18n/useI18n";
 import { APP_NAME, APP_VERSION } from "@/lib/appMeta";
-import { LocaleSwitcher } from "./LocaleSwitcher";
+import { usePathname as useCurrentPath } from "next/navigation";
+import { TimeModeSwitcher } from "./TimeModeSwitcher";
+import { SettingsModal } from "./SettingsModal";
+import type { UserPreferences } from "@/lib/userPreferences";
 import styles from "./Sidebar.module.css";
 
-export type Me = { name: string; roles: string[]; canWrite: boolean } | null;
+export type Me = { name: string; roles: string[]; canWrite: boolean; provider: "local" | "ldap" } | null;
 
-export function Sidebar({ tree, me }: { tree: TreeCompany[]; me: Me }) {
+export function Sidebar({ tree, me, preferences }: { tree: TreeCompany[]; me: Me; preferences: UserPreferences }) {
   const { t } = useI18n();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const here = useCurrentPath();
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/";
@@ -28,10 +33,18 @@ export function Sidebar({ tree, me }: { tree: TreeCompany[]; me: Me }) {
       <div className={styles.identity}>
         {me ? (
           <span className={styles.identityUser}>
-            <span className={styles.userIcon} aria-hidden>
-              👤
-            </span>
-            <span className={styles.userName}>{me.name}</span>
+            {/* The name is the way in: settings about you, behind you. */}
+            <button
+              type="button"
+              className={styles.userButton}
+              onClick={() => setSettingsOpen(true)}
+              title={t("settings.title")}
+            >
+              <span className={styles.userIcon} aria-hidden>
+                👤
+              </span>
+              <span className={styles.userName}>{me.name}</span>
+            </button>
             <button type="button" className={styles.logoutBtn} onClick={logout}>
               {t("nav.logout")}
             </button>
@@ -47,7 +60,7 @@ export function Sidebar({ tree, me }: { tree: TreeCompany[]; me: Me }) {
       </div>
       {tree.map((company) => (
         <div key={company.id} className={styles.company}>
-          <div className={styles.companyName}>{company.name}</div>
+          <Link href={`/${company.slug}`} className={styles.companyName}>{company.name}</Link>
           {company.products.map((product) => (
             <ProductNode
               key={product.id}
@@ -63,8 +76,18 @@ export function Sidebar({ tree, me }: { tree: TreeCompany[]; me: Me }) {
           {t("nav.swagger")}
         </a>
         {me?.canWrite && <Link href="/admin">{t("nav.admin")}</Link>}
-        <LocaleSwitcher />
+        <TimeModeSwitcher />
       </div>
+
+      {settingsOpen && me && (
+        <SettingsModal
+          me={me}
+          preferences={preferences}
+          currentPath={here}
+          currentQuery={typeof window === "undefined" ? "" : window.location.search.replace(/^\?/, "")}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </nav>
   );
 }
@@ -84,14 +107,24 @@ function ProductNode({
 
   return (
     <div className={styles.product}>
-      <button className={styles.productRow} onClick={() => setOpen((o) => !o)}>
-        <span className={styles.caret}>{open ? "▼" : "▶"}</span>
-        <span className={styles.badge}>
-          {product.name.charAt(0).toUpperCase()}
-        </span>
-        <span className={styles.name}>{product.name}</span>
+      {/* The caret toggles the service list; the name goes to the product overview. */}
+      <div className={styles.productRow} data-active={pathname === prefix}>
+        <button
+          className={styles.caretBtn}
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-label={product.name}
+        >
+          <span className={styles.caret}>{open ? "▼" : "▶"}</span>
+        </button>
+        <Link href={prefix} className={styles.productLink}>
+          <span className={styles.badge}>
+            {product.name.charAt(0).toUpperCase()}
+          </span>
+          <span className={styles.name}>{product.name}</span>
+        </Link>
         <span className={styles.count}>{count}</span>
-      </button>
+      </div>
       {open && (
         <div className={styles.children}>
           {product.services.map((s) => {

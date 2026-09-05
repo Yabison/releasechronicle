@@ -20,7 +20,6 @@
 .candRow:hover { background: var(--cat-deploy-bg); }
 .candMain { color: var(--text); }
 .candMeta { color: var(--muted); font-size: 0.9em; margin-left: auto; }
-.submit { align-self: flex-start; font: inherit; border: none; background: var(--accent); color: #fff; border-radius: var(--radius); padding: 7px 16px; cursor: pointer; }
-.submit:disabled { opacity: 0.6; cursor: default; }
+.submit { composes: btnPrimary from global; align-self: flex-start; }
 .error { color: var(--cat-incident); font-size: 0.85em; }
 .muted { color: var(--muted); }

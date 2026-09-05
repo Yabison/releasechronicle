@@ -25,21 +25,30 @@ export default function MetricsPage() {
   const [envs, setEnvs] = useState<string[]>([]);
   const [days, setDays] = useState(30);
   const [m, setM] = useState<DoraMetrics | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => { fetch("/api/v1/companies").then((r) => r.json()).then(setCompanies); }, []);
-  useEffect(() => {
-    fetch("/api/v1/environments")
-      .then((r) => r.json())
-      .then((rows: { slug: string }[]) => setEnvs(rows.map((e) => e.slug)));
+  // Shared handling: any failed lookup surfaces one banner instead of a silent
+  // empty select or a blank metrics area.
+  const getJson = useCallback(async (url: string) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(String(res.status));
+    return res.json();
   }, []);
+
+  useEffect(() => { getJson("/api/v1/companies").then(setCompanies).catch(() => setLoadError(true)); }, [getJson]);
+  useEffect(() => {
+    getJson("/api/v1/environments")
+      .then((rows: { slug: string }[]) => setEnvs(rows.map((e) => e.slug)))
+      .catch(() => setLoadError(true));
+  }, [getJson]);
   useEffect(() => {
     setProduct(""); setService(""); setProducts([]); setServices([]);
-    if (company) fetch(`/api/v1/products?company=${company}`).then((r) => r.json()).then(setProducts);
-  }, [company]);
+    if (company) getJson(`/api/v1/products?company=${company}`).then(setProducts).catch(() => setLoadError(true));
+  }, [company, getJson]);
   useEffect(() => {
     setService(""); setServices([]);
-    if (company && product) fetch(`/api/v1/services?company=${company}&product=${product}`).then((r) => r.json()).then(setServices);
-  }, [company, product]);
+    if (company && product) getJson(`/api/v1/services?company=${company}&product=${product}`).then(setServices).catch(() => setLoadError(true));
+  }, [company, product, getJson]);
 
   const load = useCallback(async () => {
     const p = new URLSearchParams({ days: String(days) });
@@ -47,14 +56,19 @@ export default function MetricsPage() {
     if (product) p.set("product", product);
     if (service) p.set("service", service);
     if (environment) p.set("environment", environment);
-    const res = await fetch(`/api/v1/metrics/dora?${p}`);
-    setM(await res.json());
-  }, [company, product, service, environment, days]);
+    try {
+      setM(await getJson(`/api/v1/metrics/dora?${p}`));
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    }
+  }, [company, product, service, environment, days, getJson]);
   useEffect(() => { void load(); }, [load]);
 
   return (
     <main className={styles.wrap}>
       <h1 className={styles.title}>{t("metrics.title")}</h1>
+      {loadError && <p role="alert" style={{ color: "#dc2626", fontSize: 13 }}>{t("common.loadFailed")}</p>}
       <div className={styles.filters}>
         <select value={company} onChange={(e) => setCompany(e.target.value)}>
           <option value="">{t("metrics.allCompanies")}</option>

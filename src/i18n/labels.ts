@@ -1,6 +1,10 @@
 /** Localized labels for enum-ish values shown in the UI (deployment change types, phases). */
 
-export const CHANGE_TYPES = ["NORMAL", "HOTFIX", "PRE_MEP", "POST_MEP", "POSTMEP_SQL"] as const;
+/** Selectable change types. POSTMEP_SQL is deliberately absent: it is retired
+ *  from the UI, but the Postgres enum keeps the value so events already carrying
+ *  it stay readable — dropping it from the enum would fail on any instance that
+ *  has one. */
+export const CHANGE_TYPES = ["NORMAL", "HOTFIX", "PRE_MEP", "POST_MEP"] as const;
 export type ChangeTypeValue = (typeof CHANGE_TYPES)[number];
 
 type Translate = (key: string) => string;
@@ -18,7 +22,24 @@ export function phaseLabel(t: Translate, phase: "PRE" | "POST"): string {
   return t(`phase.${phase}`);
 }
 
-/** Timeline category badge (MEP / HOTFIX / Incident / Maintenance). */
+/** Localized wording of a deploy status ("Déployé", "En test", …). The raw enum
+ *  names live in STATUS_META for the places that still show them. */
+export function deployStatusLabel(t: Translate, status: string): string {
+  const key = `deploy.status.${status}`;
+  const label = t(key);
+  return label === key ? status : label;
+}
+
+/** The same status, spelled out for the timeline row, where there is room for
+ *  a sentence: "Déployé - Test en attente" rather than "Déployé". The short form
+ *  above stays for the seven-step stepper, which has one column per status. */
+export function deployStatusLongLabel(t: Translate, status: string): string {
+  const key = `deploy.statusLong.${status}`;
+  const label = t(key);
+  return label === key ? deployStatusLabel(t, status) : label;
+}
+
+/** Timeline category badge (RELEASE / HOTFIX / Incident / Maintenance). */
 export function categoryLabel(t: Translate, category: string): string {
   const key = `category.${category}`;
   const label = t(key);
@@ -51,4 +72,12 @@ export function actionMessage(
       )
     : undefined;
   return t(res.error, vars);
+}
+
+/** Wording of one workflow violation from traceRelease, in the user's language. */
+export function releaseIssueLabel(
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  issue: { kind: "OUT_OF_ORDER" | "SKIPPED"; environment: string },
+): string {
+  return t(issue.kind === "OUT_OF_ORDER" ? "trace.outOfOrder" : "trace.skipped", { env: issue.environment });
 }

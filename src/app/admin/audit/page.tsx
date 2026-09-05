@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 
 type Row = {
   id: string;
@@ -31,6 +32,7 @@ const PAGE = 50;
 
 export default function AuditPage() {
   const { t } = useI18n();
+  const { stampFull } = useTimeFormat();
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -69,6 +71,8 @@ export default function AuditPage() {
       <h1>{t("audit.title")}</h1>
       {error && <p role="alert">{t("audit.loadFailed")} ({error})</p>}
 
+      {/* Wide table: scroll inside its own container, never the whole page. */}
+      <div style={{ overflowX: "auto" }}>
       <table>
         <thead>
           <tr>
@@ -107,7 +111,7 @@ export default function AuditPage() {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
-              <td>{new Date(r.at).toISOString().slice(0, 19).replace("T", " ")}</td>
+              <td>{stampFull(r.at)}</td>
               <td>{r.action}</td>
               <td>{r.actor ?? "—"}</td>
               <td>{r.actorIp ?? "—"}</td>
@@ -125,6 +129,7 @@ export default function AuditPage() {
           ))}
         </tbody>
       </table>
+      </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
         <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>{t("logs.prev")}</button>

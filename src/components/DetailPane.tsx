@@ -1,32 +1,31 @@
 "use client";
+import Link from "next/link";
 
 import { useMemo, useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
-import { EventDrawer } from "./EventDrawer";
+import { useSearchParams, useRouter } from "next/navigation";
+import { EventDrawer, type CausalInfo } from "./EventDrawer";
 import { EventModal } from "./EventModal";
 import { LotModal } from "./LotModal";
 import { ExcelBar } from "./ExcelBar";
 import { TimelineRow } from "./TimelineRow";
-import { buildServiceTimeline, groupByMonth, type EntryCategory, type TimelineEntry } from "@/lib/eventTimeline";
+import { buildServiceTimeline, groupByMonth, type EntryCategory } from "@/lib/eventTimeline";
 import { categoryLabel, changeTypeLabel } from "@/i18n/labels";
+import { CategoryFilter } from "./CategoryFilter";
+import { TimelineFilters } from "./TimelineFilters";
+import { FILTER_KEYS, entryFilterKey, isFilterKey, type FilterKey } from "@/lib/timelineFilter";
 import { useAutoRefresh } from "@/lib/useAutoRefresh";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
+import { useTagColors } from "@/lib/useTagColors";
 import type { ClientEvent } from "@/lib/timeline";
 import { siblings, lotKey } from "@/lib/deployLot";
+import { workflowIssuesByEvent } from "@/lib/releaseTrace";
 import styles from "./DetailPane.module.css";
 
 const FILTERS: EntryCategory[] = ["DEPLOY", "HOTFIX", "INCIDENT", "MAINTENANCE"];
 // Visibility filters split DEPLOY into plain MEP + its PRE/POST phases.
-type FilterKey = EntryCategory | "PRE" | "POST";
-const FILTER_KEYS: FilterKey[] = ["DEPLOY", "PRE", "POST", "HOTFIX", "INCIDENT", "MAINTENANCE"];
+
 /** Filter button label: the phase filters reuse the PRE/POST MEP change-type labels. */
-function filterLabel(t: (key: string) => string, key: FilterKey): string {
-  return key === "PRE" || key === "POST" ? changeTypeLabel(t, `${key}_MEP`) : categoryLabel(t, key);
-}
-function entryFilterKey(e: TimelineEntry): FilterKey {
-  if (e.category === "DEPLOY") return e.phase === "PRE" ? "PRE" : e.phase === "POST" ? "POST" : "DEPLOY";
-  return e.category;
-}
 const ALL_ENV = "ALL";
 
 export function DetailPane({
@@ -44,6 +43,10 @@ export function DetailPane({
   envColors,
   envWorkflow,
   canWrite = true,
+  defaultFrom,
+  olderCount,
+  causal = {},
+  changelogHtml = {},
 }: {
   company: string;
   product: string;
@@ -60,29 +63,51 @@ export function DetailPane({
   envColors: Record<string, string>;
   envWorkflow: string[];
   canWrite?: boolean;
+  /** Server-side window start (the 3-month default), "" meaning "everything". */
+  defaultFrom: string;
+  /** Events that exist before the loaded window — powers "show older". */
+  olderCount: number;
+  /** eventId → resolved product-wide causal summary, computed server-side
+   *  (getCausalSummaries in @/lib/causal) with visibility already applied. */
+  causal?: Record<string, CausalInfo>;
+  /** version -> HTML de sa note de release, rendu et assaini au serveur. */
+  changelogHtml?: Record<string, string>;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { mode: timeMode } = useTimeFormat();
+  // Every filter initializes from the URL and is mirrored back to it below, so a
+  // filtered view is a link someone can bookmark or send to a colleague.
+  const searchParams = useSearchParams();
+  const sp = (k: string) => searchParams.get(k);
   // Environment is a global filter at the title level, scoping every event below.
   const environments = useMemo(
     () => [...new Set(events.map((e) => e.environment))].sort(),
     [events],
   );
-  const [env, setEnv] = useState<string>(ALL_ENV);
+  const [env, setEnv] = useState<string>(() => sp("env") ?? ALL_ENV);
   // Environment groups (e.g. ALLPROD = run+secure+prod) shown as extra filter options.
   const [envGroups, setEnvGroups] = useState<{ slug: string; name: string; members: string[] }[]>([]);
-  useEffect(() => { fetch("/api/v1/environment-groups").then((r) => r.json()).then(setEnvGroups).catch(() => {}); }, []);
+  const [loadWarn, setLoadWarn] = useState(false);
+  useEffect(() => {
+    fetch("/api/v1/environment-groups")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(setEnvGroups)
+      .catch(() => setLoadWarn(true));
+  }, []);
   // When a group is selected, env holds "group:<slug>"; resolve its member set.
   const groupMembers = useMemo(() => {
     if (!env.startsWith("group:")) return null;
     const g = envGroups.find((x) => `group:${x.slug}` === env);
     return g ? new Set(g.members) : new Set<string>();
   }, [env, envGroups]);
-  const showEnvBadge = env === ALL_ENV || groupMembers !== null;
   // Filters are visibility toggles, all enabled by default.
-  const [active, setActive] = useState<Set<FilterKey>>(new Set(FILTER_KEYS));
+  const [active, setActive] = useState<Set<FilterKey>>(() => {
+    const c = sp("cat");
+    const keys = c ? c.split(",").filter(isFilterKey) : [];
+    return keys.length ? new Set(keys) : new Set<FilterKey>(FILTER_KEYS);
+  });
   const [selected, setSelected] = useState<string | null>(null);
   // Open a specific MEP when linked with ?event=<id> (e.g. from the build trace in another tab).
-  const searchParams = useSearchParams();
   useEffect(() => {
     const eid = searchParams.get("event");
     if (eid && events.some((e) => e.id === eid)) setSelected(eid);
@@ -90,21 +115,52 @@ export function DetailPane({
   const [modal, setModal] = useState(false);
   const [lotModal, setLotModal] = useState(false);
   // Free-form search: version/requester substrings, exact tag, occurredAt date range.
-  // Default the range to the last 3 months (clear "Du" to see older events).
-  const threeMonthsAgo = useMemo(() => {
-    const d = new Date(now);
-    d.setMonth(d.getMonth() - 3);
-    return d.toISOString().slice(0, 10);
-  }, [now]);
-  const [q, setQ] = useState<{ version: string; requester: string; tags: string[]; hourType: string; from: string; to: string }>({ version: "", requester: "", tags: [], hourType: "", from: threeMonthsAgo, to: "" });
-  // Tag filter: free-text input with autocomplete suggestions; picked tags become chips.
-  const [tagInput, setTagInput] = useState("");
-  function addTag(v: string) {
-    const tag = v.trim();
-    if (!tag) return;
-    setQ((s) => (s.tags.includes(tag) ? s : { ...s, tags: [...s.tags, tag] }));
-    setTagInput("");
+  // The range doubles as the SERVER window (the page only queries [from, to]), so
+  // changing it navigates instead of just filtering the already-loaded rows.
+  const [q, setQ] = useState<{ version: string; requester: string; tags: string[]; hourType: string; from: string; to: string }>(() => ({
+    version: sp("v") ?? "",
+    requester: sp("req") ?? "",
+    tags: sp("tags")?.split(",").filter(Boolean) ?? [],
+    hourType: sp("ht") ?? "",
+    // Absent = the server's 3-month default; an explicit empty `from=` means "everything".
+    from: sp("from") ?? defaultFrom,
+    to: sp("to") ?? "",
+  }));
+  const router = useRouter();
+  function setDateWindow(patch: { from?: string; to?: string }) {
+    const next = { ...q, ...patch };
+    setQ(next);
+    const p = new URLSearchParams(window.location.search);
+    if (next.from === defaultFrom) p.delete("from"); else p.set("from", next.from);
+    if (next.to) p.set("to", next.to); else p.delete("to");
+    // A navigation, not replaceState: the server must re-query the new window.
+    router.replace(`${window.location.pathname}?${p.toString()}`, { scroll: false });
   }
+
+  // Mirror the filters into the URL. history.replaceState keeps this free: no
+  // server round-trip (the page is force-dynamic) and no history-stack spam;
+  // Next keeps useSearchParams in sync with it. Defaults are omitted so an
+  // unfiltered view keeps a clean URL.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const put = (k: string, v: string | null) => (v === null ? p.delete(k) : p.set(k, v));
+    put("env", env === ALL_ENV ? null : env);
+    put("cat", active.size === FILTER_KEYS.length ? null : [...active].join(","));
+    put("v", q.version || null);
+    put("req", q.requester || null);
+    put("tags", q.tags.length ? q.tags.join(",") : null);
+    put("ht", q.hourType || null);
+    // from/to are navigation-owned (setDateWindow): they change the server window.
+    put("event", selected);
+    const qs = p.toString();
+    const next = window.location.pathname + (qs ? `?${qs}` : "");
+    if (next !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [env, active, q, selected]);
+  // Tag filter: free-text input with autocomplete suggestions; picked tags become
+  // chips. TimelineFilters owns the adding now.
+  const [tagInput, setTagInput] = useState("");
 
   // Near-real-time: pick up other users' changes without a manual reload.
   useAutoRefresh();
@@ -118,15 +174,10 @@ export function DetailPane({
     [events, t],
   );
   const [phaseDefaults, setPhaseDefaults] = useState<{ changeType: string; parentId: string; environment: string; parentOccurredAt: string } | null>(null);
-  // Tag colours for the timeline chips.
-  const [tagColors, setTagColors] = useState<Record<string, string>>({});
-  useEffect(() => {
-    fetch("/api/v1/tags").then((r) => r.json()).then((rows: { name: string; slug: string; color: string | null }[]) => {
-      const m: Record<string, string> = {};
-      for (const t of rows) if (t.color) { m[t.name] = t.color; m[t.slug] = t.color; }
-      setTagColors(m);
-    }).catch(() => {});
-  }, []);
+  const tagColors = useTagColors();
+  // Computed on every loaded event, not the env-scoped ones: whether PROD skipped
+  // PREPROD is only visible when the PREPROD rows are still in the picture.
+  const workflowIssues = useMemo(() => workflowIssuesByEvent(events, envWorkflow), [events, envWorkflow]);
 
   const scopedEvents = useMemo(() => {
     const ver = q.version.trim().toLowerCase();
@@ -157,7 +208,10 @@ export function DetailPane({
     () => timeline.history.filter((e) => active.has(entryFilterKey(e))),
     [timeline.history, active],
   );
-  const groups = useMemo(() => groupByMonth(historyToShow), [historyToShow]);
+  const groups = useMemo(
+    () => groupByMonth(historyToShow, { mode: timeMode, locale }),
+    [historyToShow, timeMode, locale],
+  );
   const selectedEvent = events.find((e) => e.id === selected) ?? null;
   const nothing = maintenancesToShow.length === 0 && groups.length === 0;
 
@@ -172,10 +226,20 @@ export function DetailPane({
 
   return (
     <div>
+      {loadWarn && <p role="alert" style={{ color: "var(--cat-incident, #dc2626)", fontSize: 13 }}>{t("common.loadFailed")}</p>}
       <div className={styles.head}>
         <div className={styles.crumb}>
           <span className={styles.crumbProduct}>{productName}</span> / <span className={styles.crumbService}>{serviceName}</span>
-          <select className={styles.envSelect} value={env} onChange={(e) => setEnv(e.target.value)} aria-label={t("common.environment")}>
+          <Link href={`${path}/changelog`} className={styles.changelogLink}>{t("changelog.link")}</Link>
+          {/* Painted in the env's colour once one is picked, so the filter reads
+              like the badges it narrows the list to. */}
+          <select
+            className={styles.envSelect}
+            value={env}
+            onChange={(e) => setEnv(e.target.value)}
+            aria-label={t("common.environment")}
+            style={envColors[env] ? { background: envColors[env], borderColor: envColors[env], color: "#fff", fontWeight: 600 } : undefined}
+          >
             <option value={ALL_ENV}>{t("detail.allEnvs")}</option>
             {envGroups.length > 0 && (
               <optgroup label={t("detail.groups")}>
@@ -211,68 +275,27 @@ export function DetailPane({
           </span>
         ))}
       </div>
-      <div className={styles.filters}>
-        <span className={styles.filtersLabel}>{t("detail.filter")}</span>
-        {FILTER_KEYS.map((c) => (
-          <button key={c} data-active={active.has(c)} onClick={() => toggle(c)}>
-            {filterLabel(t, c)}
-          </button>
-        ))}
-      </div>
+      <CategoryFilter active={active} onToggle={toggle} />
 
-      <div className={styles.search}>
-        <input placeholder={t("common.version")} value={q.version} onChange={(e) => setQ({ ...q, version: e.target.value })} aria-label={t("common.version")} />
-        <input placeholder={t("detail.requester")} value={q.requester} onChange={(e) => setQ({ ...q, requester: e.target.value })} aria-label={t("detail.requester")} />
-        <span className={styles.tagFilter}>
-          {q.tags.map((tg) => (
-            <button
-              key={tg}
-              type="button"
-              className={styles.tagFilterChip}
-              data-active
-              style={tagColors[tg] ? { background: tagColors[tg], color: "#fff", borderColor: tagColors[tg] } : undefined}
-              onClick={() => setQ((s) => ({ ...s, tags: s.tags.filter((x) => x !== tg) }))}
-              title={t("form.addTag")}
-            >
-              {tg} ×
-            </button>
-          ))}
-          {allTags.length > 0 && (
-            <>
-              <input
-                list="tagFilterOptions"
-                placeholder={t("form.tags")}
-                aria-label={t("form.tags")}
-                value={tagInput}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  // Picking a value from the datalist fires change with the full option.
-                  if (allTags.includes(v)) addTag(v);
-                  else setTagInput(v);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); }
-                }}
-              />
-              <datalist id="tagFilterOptions">
-                {allTags.filter((tg) => !q.tags.includes(tg)).map((tg) => (
-                  <option key={tg} value={tg} />
-                ))}
-              </datalist>
-            </>
-          )}
-        </span>
-        <select value={q.hourType} onChange={(e) => setQ({ ...q, hourType: e.target.value })} aria-label={t("form.hourType")}>
-          <option value="">{t("form.hourType")}</option>
-          <option value="HO">{t("form.hoLong")}</option>
-          <option value="HNO">{t("form.hnoLong")}</option>
-        </select>
-        <input type="date" value={q.from} onChange={(e) => setQ({ ...q, from: e.target.value })} aria-label={t("filter.from")} />
-        <input type="date" value={q.to} onChange={(e) => setQ({ ...q, to: e.target.value })} aria-label={t("filter.to")} />
-        {(q.version || q.requester || q.tags.length > 0 || q.hourType || q.from || q.to) && (
-          <button type="button" onClick={() => { setQ({ version: "", requester: "", tags: [], hourType: "", from: "", to: "" }); setTagInput(""); }}>{t("detail.reset")}</button>
-        )}
-      </div>
+      <TimelineFilters
+        value={q}
+        onChange={(patch) => setQ((prev) => ({ ...prev, ...patch }))}
+        onDates={setDateWindow}
+        onReset={
+          q.version || q.requester || q.tags.length > 0 || q.hourType || q.from !== defaultFrom || q.to
+            ? () => {
+                setTagInput("");
+                setQ((prev) => ({ ...prev, version: "", requester: "", tags: [], hourType: "" }));
+                // Dates go through the navigation path: they re-window the server query.
+                setDateWindow({ from: defaultFrom, to: "" });
+              }
+            : null
+        }
+        allTags={allTags}
+        tagInput={tagInput}
+        onTagInput={setTagInput}
+        tagColors={tagColors}
+      />
 
       {nothing ? (
         <p className={styles.empty}>{t("detail.empty")}</p>
@@ -288,8 +311,9 @@ export function DetailPane({
                   onClick={() => setSelected(e.eventId)}
                   lotMembers={e.lot ? siblings(lotMembers[lotKey(e.environment, e.lot)] ?? [], e.eventId) : []}
                   lotWarning={e.lot ? (lotWarnings[lotKey(e.environment, e.lot)] ?? []) : []}
-                  envColor={showEnvBadge ? (envColors[e.environment] ?? "#64748b") : null}
+                  envColor={envColors[e.environment] ?? "#64748b"}
                   tagColors={tagColors}
+                  workflowIssues={workflowIssues.get(e.eventId)}
                 />
               ))}
             </div>
@@ -305,12 +329,22 @@ export function DetailPane({
                   onClick={() => setSelected(e.eventId)}
                   lotMembers={e.lot ? siblings(lotMembers[lotKey(e.environment, e.lot)] ?? [], e.eventId) : []}
                   lotWarning={e.lot ? (lotWarnings[lotKey(e.environment, e.lot)] ?? []) : []}
-                  envColor={showEnvBadge ? (envColors[e.environment] ?? "#64748b") : null}
+                  envColor={envColors[e.environment] ?? "#64748b"}
                   tagColors={tagColors}
+                  workflowIssues={workflowIssues.get(e.eventId)}
                 />
               ))}
             </div>
           ))}
+          {olderCount > 0 && (
+            <button
+              type="button"
+              className={styles.showOlder}
+              onClick={() => setDateWindow({ from: "" })}
+            >
+              {t("detail.showOlder", { n: olderCount })}
+            </button>
+          )}
         </>
       )}
 
@@ -327,6 +361,8 @@ export function DetailPane({
           envWorkflow={envWorkflow}
           envColors={envColors}
           canWrite={canWrite}
+          causal={causal[selectedEvent.id] ?? { led: [] }}
+          changelogHtml={selectedEvent.version ? (changelogHtml[selectedEvent.version] ?? null) : null}
           onNewPhase={(changeType, parentId) => {
             const parent = events.find((e) => e.id === parentId);
             setPhaseDefaults({ changeType, parentId, environment: parent?.environment ?? "", parentOccurredAt: parent?.occurredAt ?? "" });

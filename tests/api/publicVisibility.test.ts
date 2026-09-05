@@ -3,6 +3,8 @@ import { resetDb, prisma } from "../setup/db";
 import { sessionCookie } from "../setup/session";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
+import { getCausalSummaries } from "@/lib/causal";
+import { publicEventScopeWhere, type Scope } from "@/lib/apiVisibility";
 
 import { GET as companiesGET } from "@/app/api/v1/companies/route";
 import { GET as productsGET } from "@/app/api/v1/products/route";
@@ -90,16 +92,30 @@ describe("service events", () => {
   });
   it("returns only public types and environments on a public service", async () => {
     await seed();
-    const rows = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout"), ctx("api"))).json();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ environment: "PROD", type: "DEPLOYMENT", version: "1.0.0" });
+    const body = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout"), ctx("api"))).json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({ environment: "PROD", type: "DEPLOYMENT", version: "1.0.0" });
   });
   it("returns everything to a session", async () => {
     await seed();
-    const rows = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout", AUTH), ctx("api"))).json();
-    expect(rows).toHaveLength(3);
+    const body = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout", AUTH), ctx("api"))).json();
+    expect(body.items).toHaveLength(3);
     const secret = await (await eventsGET(req("/api/v1/services/core/events?company=secret&product=internal", AUTH), ctx("core"))).json();
-    expect(secret).toHaveLength(1);
+    expect(secret.items).toHaveLength(1);
+  });
+  it("fills anonymous pages: private rows are filtered in the query, not after the page is cut", async () => {
+    const { shopSvc } = await seed();
+    // A second public deployment, older than the seed's PROD one. The seed's STAGING
+    // deployment and INCIDENT sit between them; post-filtering a limit=2 page would
+    // return a 1-item first page.
+    await createEvent({
+      serviceId: shopSvc.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date("2020-01-01T00:00:00Z"), tags: [],
+      fields: { version: "0.9.0", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "0.9.0" },
+    } as never);
+    const body = await (await eventsGET(req("/api/v1/services/api/events?company=shop&product=checkout&limit=2"), ctx("api"))).json();
+    expect(body.items).toHaveLength(2);
+    expect(body.items.map((e: { version: string }) => e.version)).toEqual(["1.0.0", "0.9.0"]);
+    expect(body.nextCursor).toBeNull();
   });
   it("hides private-environment versions from /current", async () => {
     await seed();
@@ -153,5 +169,60 @@ describe("lot candidates", () => {
     await seed();
     expect((await candidatesGET(req("/api/v1/lots/candidates?company=shop&environment=PROD"))).status).toBe(401);
     expect((await candidatesGET(req("/api/v1/lots/candidates?company=shop&environment=PROD", AUTH))).status).toBe(200);
+  });
+});
+
+describe("causal summary visibility", () => {
+  /**
+   * Same product ("Checkout"), two services: "api" is fully public, "internal" is
+   * not (even though its product and company are). A cause is deliberately allowed
+   * to live on a sibling service of the same product (see listCausalCandidates) —
+   * so the causal summary must apply the same public/anonymous rules as the rest
+   * of the API to that sibling, exactly like publicEventScopeWhere already does
+   * for the service-events route above.
+   */
+  async function seedCrossServiceCause() {
+    await prisma.environmentConfig.create({
+      data: { slug: "PROD", name: "PROD", color: "#22c55e", sortOrder: 0, public: true },
+    });
+    const shop = await createCompany({ name: "Shop" });
+    const shopProd = await createProduct({ companyId: shop.id, name: "Checkout" });
+    const publicSvc = await createService({ productId: shopProd.id, name: "API", type: "API" });
+    const privateSvc = await createService({ productId: shopProd.id, name: "Internal", type: "API" });
+    await prisma.company.update({ where: { id: shop.id }, data: { public: true } });
+    await prisma.product.update({ where: { id: shopProd.id }, data: { public: true } });
+    await prisma.service.update({ where: { id: publicSvc.id }, data: { public: true } });
+    // privateSvc.public stays false — the leak this test guards against.
+
+    const cause = await createEvent({
+      serviceId: privateSvc.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+      fields: { version: "1.0.0", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED" },
+    });
+    const effect = await createEvent({
+      serviceId: publicSvc.id, environment: "PROD", type: "INCIDENT", occurredAt: new Date(), tags: [],
+      fields: { incidentType: "outage", incidentStatus: "INVESTIGATING", startedAt: new Date(), resolvedAt: null, comment: null },
+    });
+    await prisma.event.update({ where: { id: effect.id }, data: { causedById: cause.id } });
+    return { cause, effect };
+  }
+
+  it("omits a cross-service cause hidden in a non-public sibling service from an anonymous viewer", async () => {
+    const { cause, effect } = await seedCrossServiceCause();
+    const anonScope: Scope = { anonymous: true, types: ["DEPLOYMENT", "MAINTENANCE"], envs: ["PROD"] };
+    const map = await getCausalSummaries(
+      [{ id: effect.id, causedById: cause.id }],
+      publicEventScopeWhere(anonScope),
+    );
+    expect(map.get(effect.id)?.causedBy).toBeUndefined();
+  });
+
+  it("shows the same cross-service cause to a signed-in caller", async () => {
+    const { cause, effect } = await seedCrossServiceCause();
+    const sessionScope: Scope = { anonymous: false };
+    const map = await getCausalSummaries(
+      [{ id: effect.id, causedById: cause.id }],
+      publicEventScopeWhere(sessionScope),
+    );
+    expect(map.get(effect.id)?.causedBy?.id).toBe(cause.id);
   });
 });

@@ -48,12 +48,20 @@ export function publicEventWhere(scope: Scope): Prisma.EventWhereInput {
  * Restrict an Event `where` to fully public hierarchies as well. Kept separate from
  * publicEventWhere because callers that already resolved a service only need the
  * type/environment half.
+ *
+ * Not dead code despite having no caller on this branch: the service page's causal
+ * summary consumes it (see the causal-links work), which is also why the deletedAt
+ * guard below matters — without it an anonymous visitor could be shown a causal link
+ * pointing at an event of a soft-deleted service.
  */
 export function publicEventScopeWhere(scope: Scope): Prisma.EventWhereInput {
   if (!scope.anonymous) return {};
   return {
     ...publicEventWhere(scope),
-    service: { public: true, product: { public: true, company: { public: true } } },
+    // deletedAt only needs checking at the service level: the invariant a live
+    // service always has a live product and company makes the deeper levels
+    // redundant here.
+    service: { public: true, deletedAt: null, product: { public: true, company: { public: true } } },
   };
 }
 

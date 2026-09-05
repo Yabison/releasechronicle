@@ -45,6 +45,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   }
 
   await recordAudit({ action: "deploy.one_click", actor: "lien", actorIp: ip, target: claim.eventId, detail: { to: claim.to } });
-  emitHooks(claim.eventId, "deploy.status_changed", "lien");
+  await emitHooks(claim.eventId, "deploy.status_changed", "lien");
   return Response.redirect(new URL(`/go/${token}?done=1`, req.url), 303);
 }

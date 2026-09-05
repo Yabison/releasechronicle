@@ -1,6 +1,15 @@
+import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
 import { auditRequest } from "@/lib/audit";
 import { listTargets, createTarget, validateTargetConfig } from "@/lib/notificationTarget";
+import { nonEmpty } from "@/lib/schemas/common";
+import { parseBody } from "@/lib/schemas/parse";
+
+const postSchema = z.object({
+  type: z.string().catch(""),
+  label: nonEmpty(),
+  config: z.preprocess((v) => (v && typeof v === "object" ? v : {}), z.record(z.string(), z.unknown())),
+});
 
 // Admin-only: target config carries webhook URLs and SMTP recipients.
 export async function GET(req: Request) {
@@ -11,11 +20,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
-  const body = await req.json().catch(() => null);
-  const type = body && typeof body.type === "string" ? body.type : "";
-  const label = body && typeof body.label === "string" ? body.label.trim() : "";
-  const config = body && body.config && typeof body.config === "object" ? (body.config as Record<string, unknown>) : {};
-  if (!label) return Response.json({ error: "label is required" }, { status: 400 });
+  const parsed = await parseBody(req, postSchema);
+  if (!parsed.ok) return parsed.res;
+  const { type, label, config } = parsed.value;
   const err = validateTargetConfig(type, config);
   if (err) return Response.json({ error: err }, { status: 400 });
   const created = await createTarget({ type, label, config });

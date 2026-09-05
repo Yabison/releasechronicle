@@ -1,287 +1,313 @@
 # releasechronicle
 
-Suivi des mises en production (MEP), déploiements, incidents et fenêtres de
-maintenance — avec workflow de statut, environnements dynamiques, métriques DORA,
-hooks de notification (webhook / Teams / email), authentification LDAP/AD, et un flux
-calendrier iCalendar abonnable.
+*English — [Version française](README.fr.md)*
 
-> Application interne Next.js 15 + PostgreSQL. Les **lectures** sont publiques ; les
-> **écritures de configuration** exigent une session admin ; l'**API d'ingestion REST**
-> (CI/scripts) utilise un jeton d'écriture.
+> **The version under development will be complete and tested within 15 days — by 1 September 2026.**
+> **Live demo: https://releasechronicle.yabison.com**
+
+Track releases, deployments, incidents and maintenance windows — with a status
+workflow, dynamic environments, DORA metrics, notification hooks (webhook / Teams /
+email), LDAP/AD authentication, and a subscribable iCalendar feed.
+
+> Internal Next.js 15 + PostgreSQL application. **Reads** are public; **configuration
+> writes** require an admin session; the **REST ingestion API** (CI/scripts) uses a
+> write token.
 
 ---
 
-## Sommaire
+## Contents
 
-- [Fonctionnalités](#fonctionnalités)
-- [Démarrage rapide (Docker)](#démarrage-rapide-docker)
-- [Développement local](#développement-local)
-- [Configuration (variables d'environnement)](#configuration-variables-denvironnement)
-- [Fichiers de configuration](#fichiers-de-configuration-config)
-- [Authentification & rôles](#authentification--rôles)
-- [Workflow de déploiement](#workflow-de-déploiement)
-- [Environnements](#environnements)
-- [Ingestion depuis la CI](#ingestion-depuis-la-ci)
-- [Hooks de notification](#hooks-de-notification)
-- [Lien d'action « one-click »](#lien-daction-one-click)
-- [Calendrier iCalendar](#calendrier-icalendar)
-- [Métriques DORA](#métriques-dora)
-- [API REST](#api-rest)
-- [Interface admin](#interface-admin)
+- [Features](#features)
+- [Quick start (Docker)](#quick-start-docker)
+- [Datasets](#datasets)
+- [Live demo instance](#live-demo-instance)
+- [Local development](#local-development)
+- [Configuration (environment variables)](#configuration-environment-variables)
+- [Configuration files](#configuration-files-config)
+- [Authentication & roles](#authentication--roles)
+- [Security](#security)
+- [Deployment workflow](#deployment-workflow)
+- [Environments](#environments)
+- [Ingesting from CI](#ingesting-from-ci)
+- [Notification hooks](#notification-hooks)
+- [One-click action link](#one-click-action-link)
+- [iCalendar feed](#icalendar-feed)
+- [DORA metrics](#dora-metrics)
+- [REST API](#rest-api)
+- [Admin interface](#admin-interface)
 - [Tests](#tests)
 - [Architecture](#architecture)
+- [License](#license)
 
 ---
 
-## Fonctionnalités
+## Features
 
-- **Timeline par service** : déploiements (MEP / MEP HOTFIX / MEP ROLLBACK), incidents,
-  maintenances — filtrables par environnement, version, requester, tag, date. Durée de
-  déploiement affichée (IN_PROGRESS → live, ou jusqu'au rollback).
-- **Workflow de statut** : `SCHEDULED → PENDING → IN_PROGRESS → DEPLOYED → TESTING →
-  VALIDATE`, avec historique des transitions, rollback, validation QA.
-- **Déploiements planifiés** : statut `SCHEDULED` + date planifiée ; promotion
-  automatique en `PENDING` un délai configurable avant l'échéance (endpoint
-  déclenché par cron).
-- **Lot multi-produit** : créer en une fois N déploiements partageant un même numéro de
-  lot (Company → Produit → Service par ligne).
-- **Environnements dynamiques** : ajout / renommage / couleur / ordre / soft-delete via
-  l'admin (plus d'enum figé).
-- **Métriques DORA** : fréquence de déploiement, lead time, change failure rate, MTTR —
-  filtrables, avec bandes Elite/High/Medium/Low.
-- **Hooks** webhook / Microsoft Teams / email, ciblés par kind d'événement et par
-  transition précise, avec templates par sévérité (rouge / orange / vert) et **cibles
-  réutilisables** (groupes de mails, URLs).
-- **Lien d'action one-click** dans les messages : avancer le statut sans se connecter.
-- **Flux iCalendar** abonnable (Outlook / Google / Apple) des MEP planifiées et
-  maintenances.
-- **Import / export Excel** des événements.
-- **Authentification** : provider local (fichier) ou **LDAP/AD** (search-then-bind,
-  mapping groupes → rôles).
+- **Per-service timeline**: deployments (release / hotfix / rollback), incidents,
+  maintenance — filterable by environment, version, requester, tag, date. Deployment
+  duration shown (IN_PROGRESS → live, or until the rollback).
+- **Status workflow**: `SCHEDULED → PENDING → IN_PROGRESS → DEPLOYED → TESTING →
+  VALIDATE`, with a transition history, rollback and QA validation.
+- **Scheduled deployments**: `SCHEDULED` status + a planned date; automatic promotion
+  to `PENDING` a configurable lead time before it is due (cron-triggered endpoint).
+- **Multi-product batches**: create N deployments sharing one batch number in a single
+  step (Company → Product → Service per row).
+- **Dynamic environments**: add / rename / colour / order / soft-delete from the admin
+  interface — no frozen enum.
+- **DORA metrics**: deployment frequency, lead time, change failure rate, MTTR —
+  filterable, with Elite/High/Medium/Low bands.
+- **Hooks** for webhook / Microsoft Teams / email, targeted by event kind and by a
+  precise transition, with per-severity templates (red / orange / green) and
+  **reusable targets** (mail groups, URLs).
+- **One-click action link** in messages: move the status forward without signing in.
+- **Subscribable iCalendar feed** (Outlook / Google / Apple) of scheduled releases and
+  maintenance windows.
+- **Excel import / export** of events.
+- **Authentication**: local provider (file) or **LDAP/AD** (search-then-bind, group →
+  role mapping).
 
 ---
 
-## Démarrage rapide (Docker)
+## Quick start (Docker)
 
 ```bash
-docker compose up -d --build       # Postgres + Postgres de test + OpenLDAP + l'app
+docker compose up -d --build       # Postgres + test Postgres + OpenLDAP + the app
 ```
 
-- L'app écoute sur **http://localhost:3000**
-- La base est migrée automatiquement au démarrage (`docker-entrypoint.sh`).
+- The app listens on **http://localhost:3000**
+- The database is migrated on startup (`docker-entrypoint.sh`).
 
-Seed de données de démonstration :
+Seed the demo data:
 
 ```bash
 npm install
 npm run db:seed:demo
 ```
 
-Connexion admin de démo : **`admin` / `admin`** (à changer — voir
-[Authentification](#authentification--rôles)).
+Demo admin login: **`admin` / `admin`** (change it — see
+[Authentication](#authentication--roles)).
 
 ---
 
-## Jeux de données
+## Datasets
 
-Deux jeux, volontairement séparés.
+Two datasets, deliberately kept apart.
 
-| Commande | Contenu |
+| Command | Contents |
 |---|---|
-| `npm run db:seed:demo` | **Yabison**, 90 jours d'activité générés relativement à *maintenant*. Commité, publiable, c'est le jeu par défaut. |
-| `npm run db:seed:private` | Vos vraies données. Lit `private/`, qui est **gitignoré** — le dépôt ne contient aucune donnée client. |
+| `npm run db:seed:demo` | **Yabison**, 90 days of activity generated relative to *now*. Committed, publishable, and the default. |
+| `npm run db:seed:private` | Your real data. Reads `private/`, which is **gitignored** — the repository holds no customer data. |
 
-Le jeu de démo couvre délibérément toutes les fonctionnalités de l'UI : lots
-multi-services, rollback détecté par numéro de build, hotfix avec ses phases PRE et
-POST MEP, HO/HNO, incidents ouverts et résolus, maintenance à venir, dérive de build,
-et des déploiements en cours au moment du seed. La compagnie **Yabison** est publique
-et **Kaleido** ne l'est pas, ce qui rend le mode public visible sans se connecter.
-Le produit *Release Chronicle* rejoue l'historique git réel de ce projet.
+The demo dataset deliberately covers every UI feature: multi-service batches, a
+rollback detected by build number, a hotfix with its PRE and POST phases, in-hours /
+out-of-hours, open and resolved incidents, an upcoming maintenance, build drift, and
+deployments in flight at seeding time. The **Yabison** company is public and
+**Kaleido** is not, which makes the public mode visible without signing in. The
+*Release Chronicle* product replays this project's real git history.
 
-Le seeder privé attend `private/hierarchy.yml` (noms compagnies/produits/services) et
-`private/deployments.xlsx` (export de déploiements au format de l'export Excel de
-l'app). Chemins surchargeables par `RC_PRIVATE_HIERARCHY` et `RC_PRIVATE_IMPORT`.
+The private seeder expects `private/hierarchy.yml` (company/product/service names)
+and one deployment export in `private/import/` — either a raw rundeck execution
+`.csv` or an `.xlsx` already using the app's own column names. An optional MEP
+tracking sheet alongside it says which releases were hotfixes. Paths are overridable
+with `RC_PRIVATE_HIERARCHY`, `RC_PRIVATE_IMPORT` and `RC_PRIVATE_MEP_TRACKING`; see
+`docs/dev-environment.md` for what the import derives from them.
 
-## Instance de démo vivante
+---
 
-Une pile autonome, base et port dédiés, pilotée par une boucle qui fait avancer le
-monde toutes les quelques minutes et le reconstruit à **00:00 UTC** :
+## Live demo instance
+
+Running at **https://releasechronicle.yabison.com** — no sign-in needed for the public
+view. To run the same stack locally: a self-contained stack, with its own database and
+port, driven by a loop that moves the world forward every few minutes and rebuilds it
+at **00:00 UTC**:
 
 ```bash
-docker compose --profile demo up -d    # app sur http://localhost:3001
-docker compose logs -f demo_driver     # voir les déploiements avancer
+docker compose --profile demo up -d    # app on http://localhost:3001
+docker compose logs -f demo_driver     # watch the deployments progress
 ```
 
-Comptes : `demo` (devops), `demo-qa` (qa), `demo-admin` (admin) — mot de passe `demo`
-pour les trois, définis dans `config/auth-users.demo.yml`. Deux rôles distincts pour
-que le workflow de validation soit réellement essayable : un QA valide
-TESTING → VALIDATE, un devops fait le reste. Les visiteurs anonymes ont la vue
-publique en lecture seule.
+Accounts: `demo` (devops), `demo-qa` (qa), `demo-admin` (admin) — password `demo` for
+all three, defined in `config/auth-users.demo.yml`. Two distinct roles so the
+validation workflow is actually worth trying: a QA moves TESTING → VALIDATE, a devops
+does the rest. The login page lists them, password included, and a click fills the
+form — only where `RC_DEMO_MODE=true`, never on an ordinary instance. Anonymous
+visitors get the read-only public view.
 
-Le ticker et le reset **refusent de s'exécuter** si `RC_DEMO_MODE` n'est pas à `true`
-*et* si le nom de la base ne contient pas `demo` : un `DATABASE_URL` mal saisi ne peut
-pas effacer autre chose. Exécution manuelle : `npm run demo:tick` / `npm run demo:reset`.
+The ticker and the reset **refuse to run** unless `RC_DEMO_MODE` is `true` *and* the
+database name contains `demo`: a mistyped `DATABASE_URL` cannot wipe anything else.
+Run them by hand with `npm run demo:tick` / `npm run demo:reset`.
+
+To publish this instance on a server (GHCR images + Traefik), see
+[docs/demo-deploy.md](docs/demo-deploy.md). For the branch flow and the release
+pipeline, see [docs/ci-cd.md](docs/ci-cd.md).
 
 ---
 
-## Développement local
+## Local development
 
-Prérequis : Node 20+, une base PostgreSQL.
+Requirements: Node 20+, a PostgreSQL database.
 
 ```bash
 npm install
-# renseigner DATABASE_URL dans .env (ex: postgresql://rc:rc@localhost:5432/releasechronicle)
-npm run db:deploy            # applique les migrations
-npm run db:seed:demo         # (optionnel) jeu de démo Yabison
+# set DATABASE_URL in .env (e.g. postgresql://rc:rc@localhost:5432/releasechronicle)
+npm run db:deploy            # apply the migrations
+npm run db:seed:demo         # (optional) the Yabison demo dataset
 npm run dev                  # http://localhost:3000
 ```
 
-Les conteneurs `db` (5432) et `db_test` (5433) du `docker-compose.yml` fournissent les
-bases de dev et de test.
+The `db` (5432) and `db_test` (5433) containers in `docker-compose.yml` provide the
+development and test databases. Full walkthrough: [docs/dev-environment.md](docs/dev-environment.md).
 
 ---
 
-## Configuration (variables d'environnement)
+## Configuration (environment variables)
 
-| Variable | Rôle | Défaut |
+| Variable | Purpose | Default |
 |---|---|---|
-| `DATABASE_URL` | Chaîne de connexion PostgreSQL | — (requis) |
-| `RC_WRITE_TOKEN` | Jeton `Bearer` de l'API d'ingestion REST (CI/scripts) | `change-me` *(refusé en production)* |
-| `AUTH_SECRET` | Clé de signature des sessions JWT + jetons d'action | *(fallback dev, refusé en production)* |
-| `AUTH_PROVIDER` | `local` (défaut) ou `ldap` | `local` |
-| `AUTH_USERS_FILE` | Chemin du fichier d'utilisateurs locaux | `config/auth-users.yml` |
-| `LDAP_URL` / `LDAP_BASE_DN` / `LDAP_BIND_DN` / `LDAP_BIND_PASSWORD` | Connexion LDAP/AD (mode `ldap`) | — |
-| `LDAP_CONFIG_FILE` | Filtres + mapping groupes→rôles | `config/ldap.yml` |
-| `DEPLOY_CONFIG_FILE` | Config du délai de promotion planifiée | `config/deploy.yml` |
-| `APP_BASE_URL` | Origine des liens one-click dans les messages | `http://localhost:3000` |
-| `RC_WEBHOOK_BLOCK_PRIVATE` | Refuse aussi les webhooks vers des adresses privées/loopback | `false` |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Envoi des emails (connecteur `email`) | — |
+| `DATABASE_URL` | PostgreSQL connection string | — (required) |
+| `RC_WRITE_TOKEN` | `Bearer` token of the REST ingestion API (CI/scripts) | `change-me` *(refused in production)* |
+| `AUTH_SECRET` | Signing key for JWT sessions and action tokens | *(dev fallback, refused in production)* |
+| `AUTH_PROVIDER` | `local` (default) or `ldap` | `local` |
+| `AUTH_USERS_FILE` | Path to the local users file | `config/auth-users.yml` |
+| `LDAP_URL` / `LDAP_BASE_DN` / `LDAP_BIND_DN` / `LDAP_BIND_PASSWORD` | LDAP/AD connection (`ldap` mode) | — |
+| `LDAP_CONFIG_FILE` | Filters + group→role mapping | `config/ldap.yml` |
+| `DEPLOY_CONFIG_FILE` | Scheduled-promotion lead time | `config/deploy.yml` |
+| `APP_BASE_URL` | Origin of the one-click links in messages | `http://localhost:3000` |
+| `RC_WEBHOOK_BLOCK_PRIVATE` | Also refuse webhooks to private/loopback addresses | `false` |
+| `RC_HOOK_DELIVERY_RETENTION_DAYS` | How long terminal hook-delivery rows are kept before the sweeper purges them | `90` |
+| `RC_DEMO_MODE` | Public demo instance: shows the demo accounts on the login page | `false` |
+| `RC_MAILPIT_URL` | Link to the catch-all mailbox from `/admin/logs`. Development only | *(unset — no link)* |
+| `RC_IP_ALLOWLIST` | Comma-separated CIDRs; anything else gets a 403 | *(unset — no restriction)* |
+| `RC_LOG_LEVEL` | Verbosity of the application log, one JSON object per line: `debug`, `info`, `warn`, `error` or `silent` | `info` |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Sending email (the `email` connector) | — |
 
-> En production, définir impérativement `AUTH_SECRET`, `RC_WRITE_TOKEN`, `APP_BASE_URL`
-> et le SMTP si l'email est utilisé.
+> In production you must set `AUTH_SECRET`, `RC_WRITE_TOKEN`, `APP_BASE_URL`, and the
+> SMTP settings if email is used.
 >
-> `AUTH_SECRET` et `RC_WRITE_TOKEN` ont des valeurs publiques par défaut (celles de
-> `.env.example`). Sous `NODE_ENV=production` — ce qui inclut l'image Docker — elles
-> sont **refusées** : l'app ne démarre pas sans `AUTH_SECRET` privé, et un
-> `RC_WRITE_TOKEN` resté sur `change-me` fait échouer l'ingestion en 401. Générer
-> les deux avec `openssl rand -base64 32`.
+> `AUTH_SECRET` and `RC_WRITE_TOKEN` ship with public defaults (the ones in
+> `.env.example`). Under `NODE_ENV=production` — which includes the Docker image —
+> they are **refused**: the app will not start without a private `AUTH_SECRET`, and an
+> `RC_WRITE_TOKEN` left at `change-me` makes ingestion fail with a 401. Generate both
+> with `openssl rand -base64 32`.
 
 ---
 
-## Fichiers de configuration (`config/`)
+## Configuration files (`config/`)
 
-`config/` est copié dans l'image Docker. Il contient :
+`config/` is copied into the Docker image. It holds:
 
-- **`auth-users.yml`** — utilisateurs de l'auth locale (username, name, email, roles,
-  `passwordHash` scrypt). Générer un hash :
+- **`auth-users.yml`** — local authentication users (username, name, email, roles,
+  scrypt `passwordHash`). Generate a hash with:
   ```bash
-  npx tsx -e "import {hashPassword} from './src/lib/auth/localProvider'; console.log(hashPassword('MON_MDP'))"
+  npx tsx -e "import {hashPassword} from './src/lib/auth/localProvider'; console.log(hashPassword('MY_PASSWORD'))"
   ```
-- **`ldap.yml`** — `userSearchFilter`, attributs, `groupSearchFilter`, table
-  `groupRoles` (CN de groupe → rôle).
-- **`deploy.yml`** — `scheduledLeadMinutes` (défaut 15) : délai avant la date planifiée
-  où une MEP `SCHEDULED` passe en `PENDING`.
-- **`hook-templates/{red,orange,green}.yml`** — templates de message par sévérité
-  (email `subject`/`body`, teams `title`/`text`), avec variables `{product}`,
+- **`ldap.yml`** — `userSearchFilter`, attributes, `groupSearchFilter`, and the
+  `groupRoles` table (group CN → role).
+- **`deploy.yml`** — `scheduledLeadMinutes` (default 15): how long before its planned
+  date a `SCHEDULED` release moves to `PENDING`.
+- **`hook-templates/{red,orange,green}.yml`** — message templates per severity (email
+  `subject`/`body`, teams `title`/`text`), with the variables `{product}`,
   `{service}`, `{environment}`, `{version}`, `{status}`, `{actor}`, `{fromStatus}`,
   `{toStatus}`, `{comment}`, `{actionUrl}`, …
-  Localisés : `{couleur}.{locale}.yml` (ex. `red.en.yml`) est utilisé quand la cible de
-  notification est configurée dans cette langue ; le fichier sans locale reste le
-  français par défaut. Un fichier manquant retombe sur les templates intégrés.
+  Localised: `{colour}.{locale}.yml` (e.g. `red.en.yml`) is used when the notification
+  target is configured in that language; the file without a locale stays the French
+  default. A missing file falls back to the built-in templates.
 
 ---
 
-## Authentification & rôles
+## Authentication & roles
 
-- **Rôles** : `admin`, `devops`, `qa`, `viewer`.
-- **Sessions** : JWT signé (HS256) dans un cookie `httpOnly` (`rc_session`), 8 h.
-- **Login** : page `/login` → `POST /api/auth/login`. Logout : `POST /api/auth/logout`.
-  Session courante : `GET /api/auth/me`.
-- **Provider local** (défaut) : lit `config/auth-users.yml` (mots de passe scrypt).
-- **Provider LDAP/AD** (`AUTH_PROVIDER=ldap`) : bind d'un compte de service → recherche
-  de l'utilisateur → re-bind pour vérifier le mot de passe → lecture des groupes →
-  mapping en rôles via `config/ldap.yml`.
+- **Roles**: `admin`, `devops`, `qa`, `viewer`.
+- **Sessions**: signed JWT (HS256) in an `httpOnly` cookie (`rc_session`), 8 h.
+- **Login**: the `/login` page → `POST /api/auth/login`. Logout:
+  `POST /api/auth/logout`. Current session: `GET /api/auth/me`.
+- **Local provider** (default): reads `config/auth-users.yml` (scrypt passwords).
+- **LDAP/AD provider** (`AUTH_PROVIDER=ldap`): bind a service account → search for the
+  user → re-bind to verify the password → read the groups → map them to roles through
+  `config/ldap.yml`.
 
-**Enforcement** :
+**Enforcement**:
 
-- Les routes de **configuration** (companies, produits, services, environnements,
-  hooks, cibles, sources d'ingestion) exigent une **session `admin`**.
-- Les **transitions de déploiement** exigent une session : rôle `qa` pour
-  TESTING/VALIDATE, `devops` sinon, `admin` partout ; l'acteur = l'utilisateur connecté.
-- L'**API d'ingestion REST** (`/api/v1/deployments|incidents|maintenances`) reste
-  protégée par `RC_WRITE_TOKEN` (pour la CI).
-- Les **server actions** (création/édition depuis l'UI, import/export Excel) exigent
-  une session. Une server action est un endpoint POST ordinaire : « côté serveur »
-  n'est pas un contrôle d'accès.
-- **Brute force** : 5 échecs de login pour un couple (IP, identifiant) déclenchent une
-  pause de 15 minutes (`429` + `Retry-After`). Le compteur est en mémoire du process,
-  donc derrière *N* replicas la limite effective est 5×N.
-
----
-
-## Sécurité
-
-**En-têtes** — le middleware pose une CSP par requête avec un *nonce* : seuls les
-scripts estampillés par Next s'exécutent, un `<script>` injecté est inerte.
-S'y ajoutent HSTS (production uniquement), `nosniff`, `frame-ancestors 'none'` /
-`X-Frame-Options: DENY`, `Referrer-Policy` et `Permissions-Policy`.
-`style-src` garde `'unsafe-inline'` : un nonce ne peut pas couvrir un attribut
-`style="…"`, que l'UI utilise pour les couleurs de statut et d'environnement.
-
-**Webhooks sortants** — les URLs de hooks et de cibles sont vérifiées à la création
-*et* à l'envoi : schéma `http(s)` obligatoire, adresses link-local (métadonnées cloud
-`169.254.x`, `fd00:ec2::254`) toujours refusées, redirections non suivies. Les
-adresses privées restent autorisées par défaut (une instance auto-hébergée notifie
-des endpoints internes) ; `RC_WEBHOOK_BLOCK_PRIVATE=true` les refuse aussi.
-Limite connue : seules les IP littérales sont inspectées, un nom d'hôte qui *résout*
-vers une adresse privée passe — le vrai contrôle reste le filtrage réseau sortant.
-
-**Liens one-click** (`/go/<token>`) — le token *est* l'autorisation, puisque le
-destinataire n'a pas de session. Il est donc à **usage unique** (un `jti` consommé en
-base, une seule fois même en cas de double clic simultané) et expire en **48 h**, de
-sorte qu'un mail transféré ou archivé ne rejoue rien.
-
-**Journal d'audit** — table `AuditLog`, consultable dans `/admin/audit` ou via
-`GET /api/v1/audit` (admin). Sont tracés : connexions réussies, échouées et bloquées,
-création/suppression de sources d'ingestion, de hooks et de cibles de notification,
-et chaque usage d'un lien one-click (y compris les tentatives de rejeu). Les secrets
-n'y sont jamais recopiés : on enregistre le label, le type et l'hôte, jamais le token
-ni l'URL complète.
+- **Configuration** routes (companies, products, services, environments, hooks,
+  targets, ingestion sources) require an **`admin` session**.
+- **Deployment transitions** require a session: the `qa` role for TESTING/VALIDATE,
+  `devops` otherwise, `admin` everywhere; the actor is the signed-in user.
+- The **REST ingestion API** (`/api/v1/deployments|incidents|maintenances`) stays
+  protected by `RC_WRITE_TOKEN` (for CI).
+- **Server actions** (creating/editing from the UI, Excel import/export) require a
+  session. A server action is an ordinary POST endpoint: "server-side" is not an
+  access control.
+- **Brute force**: 5 failed logins for an (IP, username) pair trigger a 15-minute
+  pause (`429` + `Retry-After`). The counter lives in the process memory, so behind
+  *N* replicas the effective limit is 5×N.
 
 ---
 
-## Workflow de déploiement
+## Security
+
+**Headers** — the middleware sets a per-request CSP carrying a nonce: only the
+scripts Next stamps execute, so an injected `<script>` is inert. Alongside it: HSTS
+(production only), `nosniff`, `frame-ancestors 'none'` / `X-Frame-Options: DENY`,
+`Referrer-Policy` and `Permissions-Policy`. `style-src` keeps `'unsafe-inline'`: a
+nonce cannot cover a `style="…"` attribute, which the UI uses for status and
+environment colours.
+
+**Outbound webhooks** — hook and target URLs are checked both at creation *and* at
+send time: an `http(s)` scheme is required, link-local addresses (cloud metadata
+`169.254.x`, `fd00:ec2::254`) are always refused, and redirects are not followed.
+Private addresses stay allowed by default (a self-hosted instance notifies internal
+endpoints); `RC_WEBHOOK_BLOCK_PRIVATE=true` refuses those too. Known limit: only
+literal IPs are inspected, so a hostname that *resolves* to a private address gets
+through — the real control remains outbound network filtering.
+
+**One-click links** (`/go/<token>`) — the token *is* the authorisation, since the
+recipient has no session. It is therefore **single-use** (a `jti` consumed in the
+database, once only, even on a simultaneous double click) and expires after **48 h**,
+so a forwarded or archived email replays nothing.
+
+**Audit log** — the `AuditLog` table, readable at `/admin/audit` or through
+`GET /api/v1/audit` (admin). Tracked: successful, failed and blocked logins, creation
+and deletion of ingestion sources, hooks and notification targets, and every use of a
+one-click link (replay attempts included). Secrets are never copied into it: the
+label, the type and the host are recorded, never the token or the full URL.
+
+---
+
+## Deployment workflow
 
 ```
 SCHEDULED → PENDING → IN_PROGRESS → DEPLOYED → TESTING → VALIDATE
 ```
 
-- Chaque transition est enregistrée (from/to, acteur, commentaire ; commentaire requis
-  pour VALIDATE) et peut déclencher des hooks.
-- **Rollback** : barre le déploiement, ajoute une entrée ROLLBACK ; la durée de
-  déploiement se termine alors à la date du rollback.
-- **MEP planifiée** : créer avec le statut `SCHEDULED` + une date planifiée ;
-  `POST /api/v1/deployments/promote-scheduled` (cron) promeut en `PENDING` celles dont
-  l'échéance est proche (délai `scheduledLeadMinutes`).
+- Every transition is recorded (from/to, actor, comment; a comment is required for
+  VALIDATE) and can fire hooks.
+- **Rollback**: strikes the deployment through and adds a ROLLBACK entry; the
+  deployment duration then ends at the rollback date.
+- **Scheduled release**: create it with the `SCHEDULED` status and a planned date;
+  `POST /api/v1/deployments/promote-scheduled` (cron) promotes to `PENDING` the ones
+  that are close to due (`scheduledLeadMinutes`). The response reports `promoted`
+  and `ids` for the deployments that moved, plus `notifyFailed` — the subset that
+  moved but whose hooks could not be enqueued, so nobody was told. A cron job that
+  reads only the status code cannot tell the two apart.
 
 ---
 
-## Environnements
+## Environments
 
-Gérés dynamiquement dans **Admin → Environnements** : nom, slug (immuable), couleur,
-ordre, soft-delete. Le workflow d'environnements par produit (ex `DEV → QA → PROD`) est
-éditable par produit et affiché sur le drawer d'un déploiement.
+Managed dynamically under **Admin → Environments**: name, slug (immutable), colour,
+order, soft-delete. The per-product environment workflow (e.g. `DEV → QA → PROD`) is
+editable per product and shown on a deployment's drawer.
 
 ---
 
-## Ingestion depuis la CI
+## Ingesting from CI
 
-Créer une **source d'ingestion** dans **Admin → Sources** (portée **Service**,
-**Company** ou **Global**). Chaque source a un jeton. La CI poste :
+Create an **ingestion source** under **Admin → Sources** (**Service**, **Company** or
+**Global** scope). Each source has a token. CI posts:
 
 ```bash
 curl -X POST "$APP/api/v1/ingest/deployments" \
-  -H "authorization: Bearer <TOKEN_DE_LA_SOURCE>" \
+  -H "authorization: Bearer <SOURCE_TOKEN>" \
   -H "content-type: application/json" \
   -d '{
     "version": "1.2.3",
@@ -294,147 +320,168 @@ curl -X POST "$APP/api/v1/ingest/deployments" \
   }'
 ```
 
-- **Service** : le service est implicite (lié au jeton).
-- **Company** : le payload précise `product` + `service`.
-- **Global** : le payload précise `company` + `product` + `service`.
-- `defaultEnvironment` de la source peut être `ALL` (aucun défaut) → le payload doit
-  alors fournir `environment`.
+- **Service**: the service is implicit (tied to the token).
+- **Company**: the payload names `product` + `service`.
+- **Global**: the payload names `company` + `product` + `service`.
+- A source's `defaultEnvironment` may be `ALL` (no default) → the payload must then
+  provide `environment`.
 
 ---
 
-## Hooks de notification
+## Notification hooks
 
-Par produit (**Admin → Hooks**) :
+Per product (**Admin → Hooks**):
 
-- **Types** : `webhook`, `teams`, `email`.
-- **Événements** : `deploy.created`, `deploy.status_changed`, `deploy.status_undone`,
-  `deploy.rolled_back`, `incident.created`, `maintenance.created` (ou `*`).
-- **Transitions ciblées** (pour `deploy.status_changed`) : ex `DEPLOYED → TESTING`.
-- **Cibles réutilisables** (**Admin → Cibles**) : définir une fois un groupe de mails,
-  une URL Teams ou webhook, puis la **réutiliser** dans plusieurs hooks — l'éditer met à
-  jour tous les hooks qui la référencent (référence vivante).
-- **Templates** par sévérité dans `config/hook-templates/` (rouge : incident/rollback ;
-  orange : MEP en cours ; vert : terminé), en français et en anglais
-  (`{couleur}.en.yml`). La langue se choisit par cible dans **Admin → Cibles**.
-- **Journal des livraisons** : **Admin → Logs** (`/admin/logs`), filtrable
-  (kind, type, ok/échec, code, erreur, date) + pagination.
-- **Intégration sans code** : un hook `webhook` peut pointer vers un flux
-  **Power Automate / Logic Apps** (déclencheur *HTTP request* → *Créer un événement
-  Outlook*). Le payload inclut `scheduledAt`, `windowStart`, `windowEnd`.
-
----
-
-## Lien d'action « one-click »
-
-Les messages (template orange) peuvent inclure `{actionUrl}` : un lien signé, scopé à
-**une** transition d'**un** événement. Le destinataire ouvre `/go/<token>`, confirme, et
-le statut avance (acteur « lien ») — sans connexion. Usage unique garanti par la machine
-à états (un second clic est sans effet) ; expiration 7 jours. Définir `APP_BASE_URL`
-pour que les liens pointent vers le bon hôte.
+- **Types**: `webhook`, `teams`, `email`.
+- **Events**: `deploy.created`, `deploy.status_changed`, `deploy.status_undone`,
+  `deploy.rolled_back`, `incident.created`, `maintenance.created` (or `*`).
+- **Targeted transitions** (for `deploy.status_changed`): e.g. `DEPLOYED → TESTING`.
+- **Reusable targets** (**Admin → Targets**): define a mail group, a Teams URL or a
+  webhook once, then **reuse** it across several hooks — editing it updates every hook
+  that references it (a live reference).
+- **Templates** per severity in `config/hook-templates/` (red: incident/rollback;
+  orange: release in progress; green: done), in French and English
+  (`{colour}.en.yml`). The language is chosen per target under **Admin → Targets**.
+- **Delivery log**: **Admin → Logs** (`/admin/logs`), filterable (kind, type,
+  status — `PENDING`/`OK`/`FAILED`/`DEAD` —, code, error, date) with pagination.
+- **No-code integration**: a `webhook` hook can point at a **Power Automate / Logic
+  Apps** flow (*HTTP request* trigger → *Create an Outlook event*). The payload
+  includes `scheduledAt`, `windowStart`, `windowEnd`.
+- **Delivery queue & retries**: deliveries are queued and retried with exponential
+  backoff (1 min → 6 h, 6 attempts max). Exhausted deliveries stay visible in the log
+  with status `DEAD` rather than disappearing. An in-process 60 s sweeper is the
+  primary trigger; `POST /api/v1/hooks/deliveries/sweep` is the fallback trigger for
+  cron-driven or scale-to-zero deployments. Terminal rows (`OK`/`DEAD`) are purged
+  after `RC_HOOK_DELIVERY_RETENTION_DAYS` (see the environment variables table).
 
 ---
 
-## Calendrier iCalendar
+## One-click action link
 
-Flux abonnable des MEP planifiées et fenêtres de maintenance :
+Messages (the orange template) can include `{actionUrl}`: a signed link, scoped to
+**one** transition of **one** event. The recipient opens `/go/<token>`, confirms, and
+the status moves forward (actor "link") — without signing in. Single use is guaranteed
+by a consumed `jti`, so a second click does nothing; the token expires after 48 h. Set
+`APP_BASE_URL` so the links point at the right host.
+
+---
+
+## iCalendar feed
+
+A subscribable feed of scheduled releases and maintenance windows:
 
 ```
 GET /api/v1/calendar.ics?company=&product=&service=&environment=
 ```
 
-`Content-Type: text/calendar`. S'abonner depuis Outlook / Google / Apple Calendar via
-l'URL. Les déploiements utilisent `scheduledAt` (sinon `occurredAt`) ; les maintenances
-la fenêtre `windowStart → windowEnd`.
+`Content-Type: text/calendar`. Subscribe from Outlook / Google / Apple Calendar with
+the URL. Deployments use `scheduledAt` (falling back to `occurredAt`); maintenance
+uses the `windowStart → windowEnd` window.
 
 ---
 
-## Métriques DORA
+## DORA metrics
 
-Page **/metrics** (lien dans la sidebar). Filtres company / produit / service /
-environnement + fenêtre (30/90/180 j). Quatre cartes :
+The **/metrics** page (linked from the sidebar). Company / product / service /
+environment filters plus a window (30/90/180 days). Four cards:
 
-- **Deployment frequency** (nb + par jour)
-- **Lead time for changes** (médiane occurredAt → DEPLOYED)
-- **Change failure rate** (déploiements rollbackés / total)
-- **MTTR** (médiane des incidents résolus)
+- **Deployment frequency** (count + per day)
+- **Lead time for changes** (median occurredAt → DEPLOYED)
+- **Change failure rate** (rolled-back deployments / total)
+- **MTTR** (median across resolved incidents)
 
-Chaque métrique est classée en bande DORA (Elite / High / Medium / Low). API :
+Each metric is placed in a DORA band (Elite / High / Medium / Low). API:
 `GET /api/v1/metrics/dora?…&days=30`.
 
 ---
 
-## API REST
+## REST API
 
-Base : `/api/v1`. **Écritures de config** = session admin ; **ingestion** =
-`Bearer RC_WRITE_TOKEN`. Spécification OpenAPI : `/api/v1/openapi.json`
-(Swagger UI : `/api/docs`).
+Base: `/api/v1`. **Config writes** = admin session; **ingestion** =
+`Bearer RC_WRITE_TOKEN`. OpenAPI specification: `/api/v1/openapi.json`
+(Swagger UI: `/api/docs`).
 
-**Lectures** — une session voit tout. Sans session, l'API applique exactement les
-mêmes règles que le mode public de l'UI : compagnie, produit *et* service doivent
-être marqués publics, le type d'événement doit figurer dans les types publics, et
-l'environnement doit être public. Un service privé renvoie **404**, pas 403 :
-confirmer son existence serait déjà la fuite. Concerné : `companies`, `products`,
-`services`, `services/*/events`, `services/*/current`, `environments`,
-`metrics/dora` et `calendar.ics`.
+**Dates** — every date field (`occurredAt`, `scheduledAt`, `startedAt`, `resolvedAt`,
+`windowStart`, `windowEnd`) accepts ISO 8601 with **any offset**, not only UTC:
+`2026-06-25T12:00:00+02:00` and `2026-06-25T10:00:00Z` name the same instant and are
+stored identically. Avoid dates *without* a timezone (`2026-06-25T12:00`): they are
+read in the server's timezone. The UI then shows each instant in the visitor's
+timezone, or in UTC through the sidebar's `local / UTC` selector.
 
-Certaines lectures exigent en plus une **session admin**, parce qu'elles
-transportent un secret ou permettent d'énumérer des comptes : `ingest-sources`
-(jetons CI en clair), `notification-targets` et `products/*/hooks` (URLs de
-webhook), `hooks/deliveries` (payloads envoyés), `directory` (comptes LDAP) et
-`audit`. `lots/candidates` exige une session simple : il liste les MEP de toute la
-compagnie et ne sert qu'au modal de création de lot.
+**Reads** — a session sees everything. Without one, the API applies exactly the rules
+of the UI's public mode: the company, the product *and* the service must all be marked
+public, the event type must be among the public types, and the environment must be
+public. A private service returns **404**, not 403: confirming it exists would already
+be the leak. This covers `companies`, `products`, `services`, `services/*/events`,
+`services/*/current`, `environments`, `metrics/dora` and `calendar.ics`.
 
-Principales routes :
+Some reads additionally require an **admin session**, because they carry a secret or
+allow account enumeration: `ingest-sources` (CI tokens in the clear),
+`notification-targets` and `products/*/hooks` (webhook URLs), `hooks/deliveries` (the
+payloads that were sent), `directory` (LDAP accounts) and `audit`. `lots/candidates`
+requires a plain session: it lists the whole company's releases and only serves the
+batch-creation modal.
 
-| Méthode | Route | Auth |
+Main routes:
+
+| Method | Route | Auth |
 |---|---|---|
 | GET | `/companies`, `/products`, `/services`, `/environments` | public |
-| POST/PUT/DELETE | idem + `/products/[slug]/hooks`, `/notification-targets`, `/…/ingest-sources` | session admin |
-| POST/PUT | `/deployments`, `/incidents`, `/maintenances` (+ `/[externalId]`) | write-token |
-| POST | `/ingest/deployments` | jeton de source |
-| POST | `/deployments/promote-scheduled` | write-token (cron) |
+| POST/PUT/DELETE | same + `/products/[slug]/hooks`, `/notification-targets`, `/…/ingest-sources` | admin session |
+| POST/PUT | `/deployments`, `/incidents`, `/maintenances` (+ `/[externalId]`) | write token |
+| POST | `/ingest/deployments` | source token |
+| POST | `/deployments/promote-scheduled` | write token (cron) |
+| POST | `/hooks/deliveries/sweep` | write token (cron) |
 | GET | `/metrics/dora` | public |
 | GET | `/calendar.ics` | public |
 | GET/POST | `/auth/login`, `/auth/logout`, `/auth/me` | — |
 
 ---
 
-## Interface admin
+## Admin interface
 
-`/admin` (réservé au rôle `admin`), navigation latérale :
+`/admin` (the `admin` role only), with a side navigation:
 
-- **Companies** — création / liste.
-- **Environnements** — CRUD couleurs + ordre.
-- **Produits** — template d'URL de build + workflow d'environnements.
-- **Hooks** — création (type, événements, transitions, cible ou config inline), liste,
-  suppression ; lien vers les **Logs**.
-- **Cibles** — CRUD des cibles de notification réutilisables.
-- **Sources** — sources d'ingestion (service / company / global) + exemple `curl`.
-- **Logs** (`/admin/logs`) — journal filtrable des livraisons de hooks.
+- **Companies** — create / list.
+- **Environments** — CRUD over colours and order.
+- **Products** — build URL template + environment workflow.
+- **Hooks** — create (type, events, transitions, target or inline config), list,
+  delete; links through to the **Logs**.
+- **Targets** — CRUD over the reusable notification targets.
+- **Sources** — ingestion sources (service / company / global) + a `curl` example.
+- **Logs** (`/admin/logs`) — the filterable hook delivery log.
 
 ---
 
 ## Tests
 
 ```bash
-npm test            # vitest (une fois)
-npm run test:watch  # mode watch
+npm test            # vitest (single run)
+npm run test:watch  # watch mode
 ```
 
-La suite nécessite Postgres de test (port 5433) et, pour le test d'intégration LDAP, le
-conteneur `ldap` (`docker compose up -d db_test ldap`).
+The suite needs the test Postgres (port 5433) and, for the LDAP integration test, the
+`ldap` container (`docker compose up -d db_test ldap`).
 
 ---
 
 ## Architecture
 
-- **Next.js 15** (App Router) — pages serveur + route handlers + server actions.
-- **Prisma 6 / PostgreSQL** — modèle événementiel (`Event` : DEPLOYMENT / INCIDENT /
-  MAINTENANCE) + `StatusTransition`, `Rollback`, `Hook`, `NotificationTarget`,
+- **Next.js 15** (App Router) — server pages + route handlers + server actions.
+- **Prisma 6 / PostgreSQL** — an event model (`Event`: DEPLOYMENT / INCIDENT /
+  MAINTENANCE) plus `StatusTransition`, `Rollback`, `Hook`, `NotificationTarget`,
   `EnvironmentConfig`, `IngestSource`, `HookDelivery`.
-- **jose** — sessions et jetons d'action signés. **ldapts** — provider LDAP.
+- **jose** — signed sessions and action tokens. **ldapts** — the LDAP provider.
   **nodemailer** — email. **exceljs** — import/export.
-- **Logique pure et testable** isolée (`src/lib/*`) : workflow de statut, métriques
-  DORA, mapping de rôles, templates, ICS — testée en node ; les composants React sont
-  vérifiés manuellement.
-- Conteneurs : `db`, `db_test`, `ldap`, `app` (`docker-compose.yml`).
+- **Pure, testable logic** kept apart (`src/lib/*`): the status workflow, DORA
+  metrics, role mapping, templates, ICS — tested under node; React components are
+  checked by hand.
+- Containers: `db`, `db_test`, `ldap`, `app` (`docker-compose.yml`).
+
+---
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Copyright 2026 Yabison.

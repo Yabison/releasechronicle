@@ -17,5 +17,9 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  // `private/` is gitignored real-data input, and may hold reference copies of old
+  // scripts that no longer compile against the current schema. Type-checking them
+  // breaks `tsc`/`next build` locally while the CI, which never sees the directory,
+  // stays green — so the two disagree for no useful reason.
+  "exclude": ["node_modules", "private"]
 }

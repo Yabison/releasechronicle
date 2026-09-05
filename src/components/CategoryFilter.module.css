@@ -1,0 +1,30 @@
+.filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: var(--space) 0 calc(var(--space) * 3); }
+.label { color: var(--muted); }
+
+/* Outlined pills. */
+.filters button {
+  font: inherit; font-size: 0.82em; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 14px;
+}
+.filters button:hover { border-color: var(--muted); color: var(--text); }
+
+/* Selected is the check plus a heavier outline, not a fill. The weight comes
+   from a box-shadow rather than a 2px border: changing border-width would
+   resize the pill and shuffle the whole row on every click. */
+.filters button[data-active="true"] {
+  color: var(--text-soft); border-color: var(--text-soft); font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--text-soft);
+}
+
+/* The two categories the type column also colours: incident and maintenance,
+   where the category is itself the information. The release family — hotfix
+   included — stays neutral, so the chips and the rows tell the same story. */
+.filters button[data-cat="INCIDENT"]:not([data-active="true"]) { color: var(--cat-incident); border-color: var(--cat-incident); }
+.filters button[data-cat="MAINTENANCE"]:not([data-active="true"]) { color: var(--cat-maint); border-color: var(--cat-maint); }
+.filters button[data-cat="INCIDENT"][data-active="true"] { color: var(--cat-incident); border-color: var(--cat-incident); box-shadow: inset 0 0 0 1px var(--cat-incident); }
+.filters button[data-cat="MAINTENANCE"][data-active="true"] { color: var(--cat-maint); border-color: var(--cat-maint); box-shadow: inset 0 0 0 1px var(--cat-maint); }
+
+.check { font-size: 0.85em; line-height: 1; }

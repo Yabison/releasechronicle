@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -18,6 +18,26 @@ beforeEach(async () => { await resetDb(); });
 afterAll(async () => { await prisma.$disconnect(); });
 
 describe("createLotAction", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("resolves the items' services in one query, not one per item", async () => {
+    await seed();
+    const findFirst = vi.spyOn(prisma.service, "findFirst");
+    const findMany = vi.spyOn(prisma.service, "findMany");
+
+    const r = await createLotAction({ path: "/", common, items: [
+      { company: "acme", product: "checkout", service: "api", version: "1.0.0" },
+      { company: "acme", product: "checkout", service: "worker", version: "2.0.0" },
+      { company: "acme", product: "checkout", service: "api", version: "1.0.1" },
+      { company: "acme", product: "checkout", service: "worker", version: "2.0.1" },
+    ] });
+
+    expect(r).toEqual({ ok: true, created: 4 });
+    expect(findFirst.mock.calls.length + findMany.mock.calls.length).toBeLessThanOrEqual(1);
+  });
+
   it("creates one deployment per item, all sharing the lot", async () => {
     await seed();
     const r = await createLotAction({ path: "/", common, items: [

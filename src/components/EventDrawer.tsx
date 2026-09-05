@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { ChangelogBody } from "./ChangelogBody";
 
 import { useRef, useState, useTransition, useMemo, useEffect } from "react";
 import { slugify } from "@/lib/slug";
@@ -6,27 +8,16 @@ import { traceRelease } from "@/lib/releaseTrace";
 import { useRouter } from "next/navigation";
 import { useModalDismiss } from "@/lib/useModalDismiss";
 import type { ClientEvent } from "@/lib/timeline";
-import { resolveCausal } from "@/lib/timeline";
 import { durationParts } from "@/lib/derive";
-import { updateIncidentAction, updateEventLotAction, updateEventChangeTypeAction, addEventCommentAction, updateEventTagsAction, updateEventDateAction, updateEventHourTypeAction } from "@/app/actions/events";
+import { updateIncidentAction, updateEventLotAction, updateEventChangeTypeAction, addEventCommentAction, updateEventTagsAction, updateEventDateAction, updateEventHourTypeAction, updateEventCausedByAction } from "@/app/actions/events";
 import { buildUrl } from "@/lib/buildUrl";
 import { STATUS_META } from "@/lib/deployStatusMeta";
 import type { DeployStatus } from "@prisma/client";
 import { DeployTimeline } from "./DeployTimeline";
 import { useI18n } from "@/i18n/useI18n";
-import { actionMessage, changeTypeLabel, phaseLabel, rollbackText } from "@/i18n/labels";
+import { useTimeFormat } from "@/lib/useTimeFormat";
+import { actionMessage, changeTypeLabel, phaseLabel, releaseIssueLabel, rollbackText } from "@/i18n/labels";
 import styles from "./EventDrawer.module.css";
-
-function toLocalInput(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-function traceStamp(iso: string): string {
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
-}
 
 function truncate(s: string, n = 48): string {
   return s.length > n ? `${s.slice(0, n)}…` : s;
@@ -39,6 +30,7 @@ function Comments({ event, path, canWrite = true }: { event: ClientEvent; path: 
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { t } = useI18n();
+  const { stampShort } = useTimeFormat();
   return (
     <div className={styles.section}>
       <h2 className={styles.secTitle}>{t("drawer.comments")}</h2>
@@ -51,7 +43,7 @@ function Comments({ event, path, canWrite = true }: { event: ClientEvent; path: 
         )}
         {event.comments.map((c) => (
           <div key={c.id} className={styles.commentItem}>
-            <span className={styles.commentMeta}>{c.author ?? "—"} · {traceStamp(c.createdAt)}</span>
+            <span className={styles.commentMeta}>{c.author ?? "—"} · {stampShort(c.createdAt)}</span>
             <div>{c.body}</div>
           </div>
         ))}
@@ -94,6 +86,7 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
       const m: Record<string, string> = {};
       for (const t of rows) { m[t.slug] = t.color; m[t.name] = t.color; }
       setTagColors(m);
+      // Cosmetic on purpose: a failure here only means uncoloured tag chips.
     }).catch(() => {});
   }, []);
   const colorOf = (t: string) => tagColors[t] ?? tagColors[slugify(t)] ?? null;
@@ -152,11 +145,12 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
 /** Edit an event's date (occurredAt). */
 function DateEdit({ event, path }: { event: ClientEvent; path: string }) {
   const router = useRouter();
-  const [val, setVal] = useState(toLocalInput(new Date(event.occurredAt)));
+  const { toInput, fromInput } = useTimeFormat();
+  const [val, setVal] = useState(toInput(event.occurredAt));
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { t } = useI18n();
-  const dirty = val !== toLocalInput(new Date(event.occurredAt));
+  const dirty = val !== toInput(event.occurredAt);
   return (
     <div className={styles.dateEdit}>
       <span className={styles.key}>{t("common.date")}</span>
@@ -167,7 +161,7 @@ function DateEdit({ event, path }: { event: ClientEvent; path: string }) {
         onClick={() => {
           setErr(null);
           startTransition(async () => {
-            const res = await updateEventDateAction({ eventId: event.id, occurredAt: new Date(val).toISOString(), path });
+            const res = await updateEventDateAction({ eventId: event.id, occurredAt: fromInput(val), path });
             if (res.ok) router.refresh();
             else setErr(actionMessage(t, res));
           });
@@ -213,6 +207,136 @@ function HourEdit({ event, path }: { event: ClientEvent; path: string }) {
   );
 }
 
+/** A candidate cause fetched for the "caused by" picker (same product, before this event). */
+type CausalOption = { id: string; type: string; environment: string; version: string | null; occurredAt: string; serviceSlug: string };
+
+/** One resolved end of a causal link — always carries its service, since a cause
+ *  or effect may live on a sibling service of the same product. */
+export type CausalEntry = { id: string; type: string; environment: string; version: string | null; occurredAt: string; serviceSlug: string };
+export type CausalInfo = { causedBy?: CausalEntry; led: CausalEntry[] };
+
+/** Read-only causal links, plus (when editable) a select to set/clear the cause.
+ *  `causal` is resolved product-wide against the database by the page's data path
+ *  (see getCausalSummaries in @/lib/causal) — never derived from `all`, which is
+ *  only this service's own events and would silently miss any cross-service link.
+ *  Candidates for the picker are still fetched lazily on first focus, mirroring the
+ *  Tags component's `fetch("/api/v1/tags")` on-demand pattern rather than paying
+ *  that query for every event in the feed whether or not anyone edits it. */
+function Causal({
+  event,
+  all,
+  causal,
+  path,
+  editable,
+  onOpenEvent,
+}: {
+  event: ClientEvent;
+  all: ClientEvent[];
+  causal: CausalInfo;
+  path?: string;
+  editable: boolean;
+  onOpenEvent?: (id: string) => void;
+}) {
+  const router = useRouter();
+  const { t } = useI18n();
+  const { stampShort } = useTimeFormat();
+  const [options, setOptions] = useState<CausalOption[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [val, setVal] = useState(event.causedById ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function loadOptions() {
+    if (options || loading) return;
+    setLoading(true);
+    fetch(`/api/v1/events/by-id/${event.id}/causal-candidates`)
+      .then((r) => r.json())
+      .then((rows: CausalOption[]) => setOptions(rows))
+      .catch(() => setOptions([]))
+      .finally(() => setLoading(false));
+  }
+
+  const optionLabel = (o: CausalOption) =>
+    `${o.serviceSlug} · ${o.type} · ${o.environment}${o.version ? ` v${o.version}` : ""} · ${stampShort(o.occurredAt)}`;
+  const entryLabel = (e: CausalEntry) => `${e.serviceSlug} · ${e.type} (${e.environment})`;
+  // The currently-linked cause may fall outside the candidate window (e.g. an
+  // older link) — keep it selectable even when it's missing from `options`.
+  const currentUnlisted = val && !options?.some((o) => o.id === val);
+  // A causal reference only opens in this drawer when it's one of the events this
+  // page already loaded (same service, in-window); a cross-service or out-of-window
+  // one still displays fully, just not as a dead/no-op click into nothing.
+  const openable = (id: string) => all.some((e) => e.id === id);
+
+  return (
+    <div className={styles.section}>
+      <h2>{t("drawer.causality")}</h2>
+      {causal.causedBy && (
+        <p className={styles.causal}>
+          caused by →{" "}
+          {openable(causal.causedBy.id) ? (
+            <button type="button" className={styles.linkBtn} onClick={() => onOpenEvent?.(causal.causedBy!.id)}>
+              {entryLabel(causal.causedBy)}
+            </button>
+          ) : (
+            <span>{entryLabel(causal.causedBy)}</span>
+          )}
+        </p>
+      )}
+      {causal.led.map((l) => (
+        <p key={l.id} className={styles.causal}>
+          led to ←{" "}
+          {openable(l.id) ? (
+            <button type="button" className={styles.linkBtn} onClick={() => onOpenEvent?.(l.id)}>
+              {entryLabel(l)}
+            </button>
+          ) : (
+            <span>{entryLabel(l)}</span>
+          )}
+        </p>
+      ))}
+      {editable && (
+        <div className={styles.dateEdit}>
+          <span className={styles.key}>{t("drawer.causedBySelect")}</span>
+          <select
+            value={val}
+            disabled={pending}
+            onFocus={loadOptions}
+            onChange={(e) => {
+              const next = e.target.value;
+              setVal(next);
+              setErr(null);
+              if (next === (event.causedById ?? "")) return;
+              startTransition(async () => {
+                const res = await updateEventCausedByAction({ eventId: event.id, causeId: next || null, path: path! });
+                if (res.ok) {
+                  router.refresh();
+                } else {
+                  setErr(actionMessage(t, res));
+                  setVal(event.causedById ?? ""); // server rejected it — don't leave an optimistic value that didn't stick
+                }
+              });
+            }}
+          >
+            <option value="">{t("drawer.causeNone")}</option>
+            {currentUnlisted && (
+              // Resolved via `causal.causedBy` whenever the link is visible to us; the
+              // only way to land here without it is a link to a row we may not see
+              // (soft-deleted, or hidden by visibility rules) — never show the raw id.
+              <option value={val}>{causal.causedBy ? entryLabel(causal.causedBy) : t("drawer.causeUnknown")}</option>
+            )}
+            {loading && <option disabled>{t("common.loading")}</option>}
+            {options?.map((o) => (
+              <option key={o.id} value={o.id}>{optionLabel(o)}</option>
+            ))}
+          </select>
+          {pending && <span className={styles.typeSaving}>…</span>}
+        </div>
+      )}
+      {err && <p className={styles.error}>{err}</p>}
+    </div>
+  );
+}
+
 function Row({ k, v }: { k: string; v: React.ReactNode }) {
   if (v === null || v === undefined || v === "") return null;
   return (
@@ -236,6 +360,8 @@ export function EventDrawer({
   onNewPhase,
   onOpenEvent,
   canWrite = true,
+  causal = { led: [] },
+  changelogHtml = null,
 }: {
   event: ClientEvent;
   all: ClientEvent[];
@@ -250,10 +376,16 @@ export function EventDrawer({
   onNewPhase?: (changeType: string, parentId: string) => void;
   onOpenEvent?: (id: string) => void;
   canWrite?: boolean;
+  /** Product-wide causal resolution for this event, computed server-side (see
+   *  getCausalSummaries in @/lib/causal). Defaults to "no links" so callers that
+   *  haven't wired it through yet degrade to "block hidden", not a crash. */
+  causal?: CausalInfo;
+  /** Note de release de la version deployee, deja rendue et assainie au serveur.
+   *  null quand il n'y en a pas -- ou quand le reglage de visibilite la retire. */
+  changelogHtml?: string | null;
 }) {
   // Anonymous / read-only visitors see the full detail but no mutating controls.
   const editable = canWrite && !!path;
-  const causal = resolveCausal(event, all);
   // Follow this build across environments + check the env workflow.
   const trace = useMemo(
     () => (event.type === "DEPLOYMENT" && event.version ? traceRelease(all, event.version, envWorkflow) : null),
@@ -262,6 +394,7 @@ export function EventDrawer({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const { t } = useI18n();
+  const { stampShort, stampFull, toInput, fromInput } = useTimeFormat();
 
   // Incident editing (status + end time)
   const INCIDENT_STATUSES = ["INVESTIGATING", "IDENTIFIED", "MONITORING", "RESOLVED"] as const;
@@ -269,7 +402,7 @@ export function EventDrawer({
     (event.incidentStatus as (typeof INCIDENT_STATUSES)[number] | null) ??
     (event.resolvedAt ? "RESOLVED" : "INVESTIGATING");
   const [incStatus, setIncStatus] = useState<(typeof INCIDENT_STATUSES)[number]>(initialStatus);
-  const [endInput, setEndInput] = useState(event.resolvedAt ? toLocalInput(new Date(event.resolvedAt)) : "");
+  const [endInput, setEndInput] = useState(event.resolvedAt ? toInput(event.resolvedAt) : "");
   const [incError, setIncError] = useState<string | null>(null);
   const [lotInput, setLotInput] = useState(event.lot ?? "");
   const [lotErr, setLotErr] = useState<string | null>(null);
@@ -297,7 +430,7 @@ export function EventDrawer({
     if (!path) return;
     setIncError(null);
     const resolvedAt =
-      incStatus === "RESOLVED" ? new Date(endInput || Date.now()).toISOString() : undefined;
+      incStatus === "RESOLVED" ? (endInput ? fromInput(endInput) : new Date().toISOString()) : undefined;
     startTransition(async () => {
       const res = await updateIncidentAction({ eventId: event.id, path, status: incStatus, resolvedAt });
       if (res.ok) {
@@ -320,9 +453,7 @@ export function EventDrawer({
         {event.type === "DEPLOYMENT" ? (
           <div className={styles.hdr}>
             <span className={styles.hdrEnv} style={{ background: envColors[event.environment] ?? "#64748b" }}>{event.environment}</span>
-            {isPhase ? (
-              <span className={styles.hdrPhase}>{changeTypeLabel(t, event.changeType)}</span>
-            ) : editable ? (
+            {editable ? (
               <select
                 className={styles.typeSelect}
                 value={changeInput}
@@ -341,12 +472,17 @@ export function EventDrawer({
                 <option value="NORMAL">{changeTypeLabel(t, "NORMAL")}</option>
                 <option value="HOTFIX">{changeTypeLabel(t, "HOTFIX")}</option>
                 {event.changeType === "POSTMEP_SQL" && <option value="POSTMEP_SQL">{changeTypeLabel(t, "POSTMEP_SQL")}</option>}
+                {/* PRE_MEP/POST_MEP can only be entered by reclassifying an event that is
+                    already a phase (see setEventChangeType) — offering them otherwise would
+                    just produce a server rejection, so they're only listed here when isPhase. */}
+                {isPhase && <option value="PRE_MEP">{changeTypeLabel(t, "PRE_MEP")}</option>}
+                {isPhase && <option value="POST_MEP">{changeTypeLabel(t, "POST_MEP")}</option>}
               </select>
             ) : (
               <span className={styles.hdrPhase}>{changeTypeLabel(t, event.changeType)}</span>
             )}
             {event.externalLink && (
-              <a className={styles.hdrLink} href={event.externalLink} target="_blank" rel="noreferrer" title="Lien externe">{t("drawer.link")}</a>
+              <a className={styles.hdrLink} href={event.externalLink} target="_blank" rel="noreferrer" title={t("drawer.externalLink")}>{t("drawer.link")}</a>
             )}
             {pending && <span className={styles.typeSaving}>…</span>}
             {changeErr && <span className={styles.error}>{changeErr}</span>}
@@ -359,7 +495,7 @@ export function EventDrawer({
           <>
             <div className={styles.metaLine}>
               <b>{event.deployStatus ?? event.derived.status ?? "—"}</b>
-              {" · "}{traceStamp(event.occurredAt)}
+              {" · "}{stampShort(event.occurredAt)}
               {event.requester ? ` · ${event.requester}` : ""}
               {event.version ? ` · v${event.version}` : ""}
               {event.hourType ? ` · ${t(`hour.${event.hourType}`)}` : ""}
@@ -392,6 +528,22 @@ export function EventDrawer({
             <div className={styles.section}>
               <DeployTimeline event={event} path={path} canWrite={editable} />
             </div>
+
+            {changelogHtml && (
+              <div className={styles.section}>
+                {/* Repliee : la note peut etre longue, et le drawer sert d'abord a
+                    lire l'etat du deploiement. */}
+                <details>
+                  <summary className={styles.secTitle}>{t("changelog.title")}</summary>
+                  <ChangelogBody html={changelogHtml} />
+                  {path && (
+                    <Link href={`${path}/changelog`} className={styles.changelogAll}>
+                      {t("changelog.viewAll")}
+                    </Link>
+                  )}
+                </details>
+              </div>
+            )}
 
             {isMepParent && phases.length > 0 && (
               <div className={styles.section}>
@@ -436,7 +588,7 @@ export function EventDrawer({
                               href={`${path}?event=${step.eventId}`}
                               target="_blank"
                               rel="noreferrer"
-                              title={`${env} — ${new Date(step.occurredAt).toUTCString()} · ouvrir la MEP`}
+                              title={`${env} — ${stampFull(step.occurredAt)} · ${t("drawer.openMep")}`}
                             >
                               {env}
                             </a>
@@ -452,7 +604,7 @@ export function EventDrawer({
                 )}
 
                 {trace.respected === false ? (
-                  <p className={styles.traceBad}>{t("drawer.workflowBad")} {trace.issues.join(" ; ")}</p>
+                  <p className={styles.traceBad}>{t("drawer.workflowBad")} {trace.issues.map((i) => releaseIssueLabel(t, i)).join(" ; ")}</p>
                 ) : trace.respected ? (
                   <p className={styles.traceOk}>{t("drawer.workflowOk")}</p>
                 ) : null}
@@ -462,7 +614,7 @@ export function EventDrawer({
                     {buildMeps.map((e) => (
                       <a key={e.id} className={styles.buildRow} href={`${path}?event=${e.id}`} target="_blank" rel="noreferrer">
                         <span className={styles.buildEnv} style={{ background: envColors[e.environment] ?? "#64748b" }}>{e.environment}</span>
-                        <span className={styles.buildDate}>{traceStamp(e.occurredAt)}</span>
+                        <span className={styles.buildDate}>{stampShort(e.occurredAt)}</span>
                         <span className={styles.buildComment}>{truncate(e.comment ?? "")}</span>
                       </a>
                     ))}
@@ -520,12 +672,15 @@ export function EventDrawer({
           </>
         ) : (
           <>
-            <Row k="Environment" v={event.environment} />
-            <Row k="When" v={new Date(event.occurredAt).toUTCString()} />
+            <Row k={t("drawer.env")} v={event.environment} />
+            <Row k={t("drawer.when")} v={stampFull(event.occurredAt)} />
             {editable && <DateEdit event={event} path={path!} />}
             <Row k="Incident" v={event.incidentType} />
-            <Row k="Duration (min)" v={event.derived.minutes} />
-            <Row k="Window" v={event.windowStart ? `${event.windowStart} → ${event.windowEnd}` : null} />
+            <Row k={t("drawer.durationMin")} v={event.derived.minutes} />
+            <Row
+              k={t("drawer.window")}
+              v={event.windowStart ? `${stampFull(event.windowStart)} → ${event.windowEnd ? stampFull(event.windowEnd) : "?"}` : null}
+            />
             {event.externalLink && (
               <Row k="Link" v={<a href={event.externalLink} target="_blank" rel="noreferrer">open</a>} />
             )}
@@ -542,8 +697,8 @@ export function EventDrawer({
           <div className={styles.section}>
             <h2>{t("drawer.incident")}</h2>
             <Row k={t("common.status")} v={event.incidentStatus ?? (event.resolvedAt ? "RESOLVED" : "INVESTIGATING")} />
-            <Row k={t("drawer.incStart")} v={incStart ? incStart.toUTCString() : null} />
-            <Row k={t("drawer.incEnd")} v={event.resolvedAt ? new Date(event.resolvedAt).toUTCString() : t("drawer.ongoing")} />
+            <Row k={t("drawer.incStart")} v={incStart ? stampFull(incStart) : null} />
+            <Row k={t("drawer.incEnd")} v={event.resolvedAt ? stampFull(event.resolvedAt) : t("drawer.ongoing")} />
             {dur && <Row k={t("drawer.duration")} v={dur.label} />}
 
             {editable && (
@@ -571,14 +726,8 @@ export function EventDrawer({
           </div>
         )}
 
-        {(causal.causedBy || causal.led.length > 0) && (
-          <div className={styles.section}>
-            <h2>Causality</h2>
-            {causal.causedBy && <p className={styles.causal}>caused by → {causal.causedBy.type} ({causal.causedBy.environment})</p>}
-            {causal.led.map((l) => (
-              <p key={l.id} className={styles.causal}>led to ← {l.type} ({l.environment})</p>
-            ))}
-          </div>
+        {(causal.causedBy || causal.led.length > 0 || editable) && (
+          <Causal event={event} all={all} causal={causal} path={path} editable={editable} onOpenEvent={onOpenEvent} />
         )}
 
         {event.rollbacks.length + event.qaValidations.length + event.observations.length > 0 && (

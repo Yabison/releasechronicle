@@ -12,6 +12,12 @@ afterAll(async () => { await prisma.$disconnect(); });
 const req = (method: string, body: unknown, headers: Record<string, string> = {}) =>
   new Request("http://x/api/v1/tags", { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
+/** DELETE request with an explicit URL (for query-string cases) and an optional body (omit for "no body"). */
+const delReq = (url: string, body: unknown | undefined, headers: Record<string, string> = {}) =>
+  body === undefined
+    ? new Request(url, { method: "DELETE", headers })
+    : new Request(url, { method: "DELETE", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+
 async function deployWithTags(tags: string[]) {
   const c = await createCompany({ name: "Acme" });
   const p = await createProduct({ companyId: c.id, name: "Checkout" });
@@ -48,6 +54,32 @@ describe("tags API (union of event-used and configured)", () => {
     const ev = await deployWithTags(["temp", "keep"]);
     await DELETE(req("DELETE", { name: "temp" }, AUTH));
     expect((await prisma.event.findUnique({ where: { id: ev.id } }))?.tags).toEqual(["keep"]);
+  });
+
+  it("DELETE: a body name (even blank) wins over the query fallback, and 400s when blank", async () => {
+    const ev = await deployWithTags(["foo"]);
+    const res = await DELETE(delReq("http://x/api/v1/tags?name=foo", { name: "" }, AUTH));
+    expect(res.status).toBe(400);
+    expect((await prisma.event.findUnique({ where: { id: ev.id } }))?.tags).toEqual(["foo"]);
+  });
+
+  it("DELETE: rejects a whitespace-only body name with no query present", async () => {
+    const res = await DELETE(delReq("http://x/api/v1/tags", { name: "  " }, AUTH));
+    expect(res.status).toBe(400);
+  });
+
+  it("DELETE: falls back to the query string when the body has no name", async () => {
+    const ev = await deployWithTags(["foo"]);
+    const res = await DELETE(delReq("http://x/api/v1/tags?name=foo", undefined, AUTH));
+    expect(res.status).toBe(200);
+    expect((await prisma.event.findUnique({ where: { id: ev.id } }))?.tags).toEqual([]);
+  });
+
+  it("DELETE: deletes via a plain body name", async () => {
+    const ev = await deployWithTags(["foo"]);
+    const res = await DELETE(delReq("http://x/api/v1/tags", { name: "foo" }, AUTH));
+    expect(res.status).toBe(200);
+    expect((await prisma.event.findUnique({ where: { id: ev.id } }))?.tags).toEqual([]);
   });
 
   it("rejects mutations without a token", async () => {

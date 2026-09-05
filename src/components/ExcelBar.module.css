@@ -1,5 +1,5 @@
 .bar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .bar button { font: inherit; background: transparent; border: 1px solid var(--line); color: var(--text); border-radius: var(--radius); padding: 6px 12px; cursor: pointer; }
 .bar button:disabled { opacity: 0.6; cursor: default; }
-.ok { color: var(--cat-deploy, #16a34a); font-size: 0.85rem; }
-.errors { margin: 0; padding-left: 1rem; color: var(--cat-incident, #dc2626); font-size: 0.8rem; }
+.ok { color: var(--cat-deploy); font-size: 0.85rem; }
+.errors { margin: 0; padding-left: 1rem; color: var(--cat-incident); font-size: 0.8rem; }

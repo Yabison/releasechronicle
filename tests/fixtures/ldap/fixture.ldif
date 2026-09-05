@@ -1,0 +1,77 @@
+# Directory for the dev LDAP container and the ldapProvider integration test.
+#
+# One account per role, password identical to the username, so the login page can
+# advertise them without anyone having to look them up — see src/lib/auth/devAccounts.ts,
+# whose list is pinned to this file by tests/lib/auth/devAccounts.test.ts.
+#
+# Roles come from group membership, mapped in config/ldap.yml. Everyone belongs to
+# `everyone`, which grants the baseline `viewer` role; the other groups add to it.
+#
+# osixia/openldap only applies this file on the container's FIRST start. After
+# editing, recreate it:  docker compose rm -sf ldap && docker compose up -d ldap
+
+dn: ou=users,dc=example,dc=org
+objectClass: organizationalUnit
+ou: users
+
+dn: ou=groups,dc=example,dc=org
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=admin,ou=users,dc=example,dc=org
+objectClass: inetOrgPerson
+uid: admin
+cn: Admin
+sn: Admin
+mail: admin@example.org
+userPassword: admin
+
+dn: uid=devops,ou=users,dc=example,dc=org
+objectClass: inetOrgPerson
+uid: devops
+cn: Devops
+sn: Devops
+mail: devops@example.org
+userPassword: devops
+
+dn: uid=qa,ou=users,dc=example,dc=org
+objectClass: inetOrgPerson
+uid: qa
+cn: QA
+sn: QA
+mail: qa@example.org
+userPassword: qa
+
+dn: uid=viewer,ou=users,dc=example,dc=org
+objectClass: inetOrgPerson
+uid: viewer
+cn: Viewer
+sn: Viewer
+mail: viewer@example.org
+userPassword: viewer
+
+dn: cn=admins,ou=groups,dc=example,dc=org
+objectClass: groupOfNames
+cn: admins
+member: uid=admin,ou=users,dc=example,dc=org
+
+dn: cn=devops-team,ou=groups,dc=example,dc=org
+objectClass: groupOfNames
+cn: devops-team
+member: uid=admin,ou=users,dc=example,dc=org
+member: uid=devops,ou=users,dc=example,dc=org
+
+dn: cn=qa-team,ou=groups,dc=example,dc=org
+objectClass: groupOfNames
+cn: qa-team
+member: uid=admin,ou=users,dc=example,dc=org
+member: uid=qa,ou=users,dc=example,dc=org
+
+# Baseline membership: grants `viewer` to every account.
+dn: cn=everyone,ou=groups,dc=example,dc=org
+objectClass: groupOfNames
+cn: everyone
+member: uid=admin,ou=users,dc=example,dc=org
+member: uid=devops,ou=users,dc=example,dc=org
+member: uid=qa,ou=users,dc=example,dc=org
+member: uid=viewer,ou=users,dc=example,dc=org

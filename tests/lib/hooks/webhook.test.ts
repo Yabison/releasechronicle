@@ -18,7 +18,7 @@ describe("webhookConnector", () => {
     expect(url).toBe("https://hook.example/x");
     expect((init as RequestInit).method).toBe("POST");
     expect(JSON.parse((init as RequestInit).body as string).kind).toBe("deploy.created");
-    expect((init as any).headers["x-secret"]).toBe("s");
+    expect(((init as RequestInit).headers as Record<string, string>)["x-secret"]).toBe("s");
   });
   it("reports non-2xx as not ok with the status code", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));

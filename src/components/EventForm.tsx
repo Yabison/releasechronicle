@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createEventAction, type CreateEventInput } from "@/app/actions/events";
 import { useI18n } from "@/i18n/useI18n";
+import { useTimeFormat } from "@/lib/useTimeFormat";
 import { actionMessage, changeTypeLabel } from "@/i18n/labels";
 import styles from "./EventForm.module.css";
 
@@ -11,6 +12,7 @@ const EVENT_TYPES = ["DEPLOYMENT", "INCIDENT", "MAINTENANCE"] as const;
 const CHANGE_TYPES = ["NORMAL", "HOTFIX", "PRE_MEP", "POST_MEP"];
 const DEPLOY_STATUSES = [
   "SCHEDULED",
+  "GO_CONFIRMED",
   "PENDING",
   "IN_PROGRESS",
   "DEPLOYED",
@@ -26,19 +28,9 @@ const INCIDENT_STATUSES = [
 
 type EventType = (typeof EVENT_TYPES)[number];
 
-// datetime-local value (YYYY-MM-DDTHH:mm) for "now" in the local timezone.
-function nowLocal(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-function toLocal(iso: string): string {
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-// A deployment defaults to SCHEDULED with the planned date prefilled to now.
-const deployDefaults = (): Record<string, string> => ({ deployStatus: "SCHEDULED", scheduledAt: nowLocal() });
+// A deployment defaults to SCHEDULED with the planned date prefilled to now
+// (expressed in the user's display timezone by the caller).
+const deployDefaults = (now: string): Record<string, string> => ({ deployStatus: "SCHEDULED", scheduledAt: now });
 
 export type MepCandidate = { id: string; label: string };
 
@@ -67,16 +59,17 @@ export function EventForm({
 }) {
   const router = useRouter();
   const { t } = useI18n();
+  const { toInput, fromInput } = useTimeFormat();
   const [type, setType] = useState<EventType>("DEPLOYMENT");
   const isPhase = defaultChangeType === "PRE_MEP" || defaultChangeType === "POST_MEP";
   const [environment, setEnvironment] = useState(defaultEnvironment || "PROD");
   const [envs, setEnvs] = useState<string[]>([]);
   const [fields, setFields] = useState<Record<string, string>>(() => ({
-    ...deployDefaults(),
+    ...deployDefaults(toInput(new Date())),
     ...(defaultChangeType ? { changeType: defaultChangeType } : {}),
     ...(defaultParentId ? { parentId: defaultParentId } : {}),
     ...(isPhase && parentOccurredAt
-      ? { occurredAt: toLocal(new Date(new Date(parentOccurredAt).getTime() + (defaultChangeType === "PRE_MEP" ? -3600_000 : 3600_000)).toISOString()) }
+      ? { occurredAt: toInput(new Date(new Date(parentOccurredAt).getTime() + (defaultChangeType === "PRE_MEP" ? -3600_000 : 3600_000))) }
       : {}),
   }));
   const [tags, setTags] = useState<string[]>([]);
@@ -93,25 +86,29 @@ export function EventForm({
   );
 
   useEffect(() => {
+    // The environment select is unusable without this list: surface the failure.
     fetch("/api/v1/environments")
-      .then((r) => r.json())
-      .then((rows: { slug: string }[]) => setEnvs(rows.map((e) => e.slug)));
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((rows: { slug: string }[]) => setEnvs(rows.map((e) => e.slug)))
+      .catch(() => setMessage({ ok: false, text: t("common.loadFailed") }));
+    // Cosmetic on purpose: no tag suggestions is a degraded experience, not a broken form.
     fetch("/api/v1/tags")
       .then((r) => r.json())
       .then((rows: { name: string }[]) => setTagSug(rows.map((t) => t.name)))
       .catch(() => {});
-    // Default the requester to the logged-in user.
+    // Default the requester to the logged-in user; the field stays editable either way.
     fetch("/api/auth/me")
       .then((r) => r.json())
       .then((d: { user?: { name?: string } | null }) => {
         if (d.user?.name) setFields((f) => (f.requester ? f : { ...f, requester: d.user!.name! }));
       })
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!defaultEnvironment && envs.length && !envs.includes(environment)) setEnvironment(envs[0]);
-  }, [envs]);
+  }, [envs, environment, defaultEnvironment]);
 
   function set(name: string, value: string) {
     setFields((f) => ({ ...f, [name]: value }));
@@ -119,7 +116,7 @@ export function EventForm({
 
   function reset() {
     setFields({
-      ...deployDefaults(),
+      ...deployDefaults(toInput(new Date())),
       ...(defaultChangeType ? { changeType: defaultChangeType } : {}),
       ...(defaultParentId ? { parentId: defaultParentId } : {}),
     });
@@ -143,6 +140,13 @@ export function EventForm({
 
     // Only include non-empty optional fields; validators treat "" as absent.
     const f = (k: string) => (fields[k]?.trim() ? fields[k] : undefined);
+    // datetime-local values are naive: convert them to ISO instants HERE, where the
+    // display timezone is known. Sending the naive string lets the server reinterpret
+    // it in its own timezone (10:00 Paris used to be stored as 10:00 UTC).
+    const dt = (k: string) => {
+      const v = f(k);
+      return v ? fromInput(v) : undefined;
+    };
     let body: CreateEventInput = base;
     if (type === "DEPLOYMENT") {
       body = {
@@ -152,12 +156,12 @@ export function EventForm({
         changeType: f("changeType") ?? "NORMAL",
         deployStatus: f("deployStatus") ?? "SCHEDULED",
         externalLink: f("externalLink"),
-        occurredAt: f("occurredAt"),
+        occurredAt: dt("occurredAt"),
         ...(f("hourType") ? { hourType: f("hourType") } : {}),
         ...(f("comment") ? { comment: f("comment") } : {}),
         ...(f("parentId") ? { parentId: f("parentId") } : {}),
         ...(f("deployStatus") === "SCHEDULED" && f("scheduledAt")
-          ? { scheduledAt: new Date(f("scheduledAt")!).toISOString() }
+          ? { scheduledAt: dt("scheduledAt") }
           : {}),
       };
     } else if (type === "INCIDENT") {
@@ -165,15 +169,15 @@ export function EventForm({
         ...base,
         incidentType: f("incidentType"),
         incidentStatus: f("incidentStatus") ?? "INVESTIGATING",
-        startedAt: f("startedAt"),
-        resolvedAt: f("resolvedAt"),
+        startedAt: dt("startedAt"),
+        resolvedAt: dt("resolvedAt"),
         comment: f("comment"),
       };
     } else {
       body = {
         ...base,
-        windowStart: f("windowStart"),
-        windowEnd: f("windowEnd"),
+        windowStart: dt("windowStart"),
+        windowEnd: dt("windowEnd"),
         version: f("version"),
       };
     }
@@ -297,7 +301,7 @@ export function EventForm({
               onChange={(e) => {
                 const v = e.target.value;
                 set("deployStatus", v);
-                if (v === "SCHEDULED" && !fields.scheduledAt) set("scheduledAt", nowLocal());
+                if (v === "SCHEDULED" && !fields.scheduledAt) set("scheduledAt", toInput(new Date()));
               }}
             >
               {DEPLOY_STATUSES.map((x) => (
@@ -339,8 +343,8 @@ export function EventForm({
               type="datetime-local"
               value={fields.occurredAt ?? ""}
               onChange={(e) => set("occurredAt", e.target.value)}
-              min={isPhase && defaultChangeType === "POST_MEP" && parentOccurredAt ? toLocal(parentOccurredAt) : undefined}
-              max={isPhase && defaultChangeType === "PRE_MEP" && parentOccurredAt ? toLocal(parentOccurredAt) : undefined}
+              min={isPhase && defaultChangeType === "POST_MEP" && parentOccurredAt ? toInput(parentOccurredAt) : undefined}
+              max={isPhase && defaultChangeType === "PRE_MEP" && parentOccurredAt ? toInput(parentOccurredAt) : undefined}
             />
           </label>
           <label className={styles.wide}>
