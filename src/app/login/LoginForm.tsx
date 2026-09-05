@@ -7,8 +7,18 @@ import { APP_NAME, APP_VERSION } from "@/lib/appMeta";
 import type { DemoAccount } from "@/lib/auth/demoAccounts";
 import styles from "./login.module.css";
 
-/** `demo` is null on every instance but the public demo — see demoAccounts(). */
-export default function LoginForm({ demo }: { demo: DemoAccount[] | null }) {
+/**
+ * `accounts` is null on any real deployment: only the public demo (demoAccounts())
+ * and a local dev instance (devAccounts()) advertise credentials, and `kind` says
+ * which, since the two need different wording.
+ */
+export default function LoginForm({
+  accounts,
+  kind,
+}: {
+  accounts: DemoAccount[] | null;
+  kind: "demo" | "dev";
+}) {
   const { t } = useI18n();
   const router = useRouter();
   const params = useSearchParams();
@@ -58,12 +68,16 @@ export default function LoginForm({ demo }: { demo: DemoAccount[] | null }) {
           {error && <p className={styles.error} role="alert">{error}</p>}
         </form>
 
-        {demo && (
+        {accounts && (
           <section className={styles.demo} aria-labelledby="demo-accounts">
-            <h2 id="demo-accounts" className={styles.demoTitle}>{t("login.demoTitle")}</h2>
-            <p className={styles.demoHint}>{t("login.demoHint")}</p>
+            <h2 id="demo-accounts" className={styles.demoTitle}>
+              {t(kind === "dev" ? "login.devTitle" : "login.demoTitle")}
+            </h2>
+            <p className={styles.demoHint}>
+              {t(kind === "dev" ? "login.devHint" : "login.demoHint")}
+            </p>
             <ul className={styles.demoList}>
-              {demo.map((a) => (
+              {accounts.map((a) => (
                 <li key={a.username}>
                   <button
                     type="button"
@@ -76,9 +90,13 @@ export default function LoginForm({ demo }: { demo: DemoAccount[] | null }) {
                 </li>
               ))}
             </ul>
-            <p className={styles.demoPassword}>
-              {t("login.demoPassword")} <code>{demo[0].password}</code>
-            </p>
+            {/* Only truthful when there is in fact one password: the dev accounts
+                each carry their own, and the buttons above already fill it in. */}
+            {accounts.every((a) => a.password === accounts[0].password) && (
+              <p className={styles.demoPassword}>
+                {t("login.demoPassword")} <code>{accounts[0].password}</code>
+              </p>
+            )}
           </section>
         )}
       </div>

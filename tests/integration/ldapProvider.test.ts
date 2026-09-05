@@ -8,23 +8,33 @@ beforeAll(() => {
   process.env.LDAP_BIND_PASSWORD = "adminpassword";
 });
 
+/**
+ * Accounts come from tests/fixtures/ldap/fixture.ldif: one per role, password equal
+ * to the username. What is checked here is the group -> role mapping of
+ * config/ldap.yml resolving against a real directory.
+ */
 describe("ldapProvider (integration, needs the ldap container)", () => {
-  it("authenticates alice → qa", async () => {
-    const u = await ldapProvider.authenticate("alice", "alicepw");
+  it("authenticates qa → qa, plus the baseline viewer", async () => {
+    const u = await ldapProvider.authenticate("qa", "qa");
     expect(u).not.toBeNull();
-    expect(u!.sub).toBe("alice");
-    expect(u!.name).toBe("Alice Martin");
-    expect(u!.roles).toContain("qa");
+    expect(u!.sub).toBe("qa");
+    expect(u!.name).toBe("QA");
+    expect(u!.roles.sort()).toEqual(["qa", "viewer"]);
   });
-  it("carol → devops + qa", async () => {
-    const u = await ldapProvider.authenticate("carol", "carolpw");
-    expect(u!.roles.sort()).toEqual(["devops", "qa"]);
+  it("devops → devops + viewer", async () => {
+    const u = await ldapProvider.authenticate("devops", "devops");
+    expect(u!.roles.sort()).toEqual(["devops", "viewer"]);
   });
-  it("bob → admin", async () => {
-    expect((await ldapProvider.authenticate("bob", "bobpw"))!.roles).toContain("admin");
+  it("admin → every role, from its three group memberships", async () => {
+    const u = await ldapProvider.authenticate("admin", "admin");
+    expect(u!.roles.sort()).toEqual(["admin", "devops", "qa", "viewer"]);
+  });
+  it("viewer → the everyone group alone", async () => {
+    const u = await ldapProvider.authenticate("viewer", "viewer");
+    expect(u!.roles).toEqual(["viewer"]);
   });
   it("wrong password → null", async () => {
-    expect(await ldapProvider.authenticate("alice", "nope")).toBeNull();
+    expect(await ldapProvider.authenticate("qa", "nope")).toBeNull();
   });
   it("unknown user → null", async () => {
     expect(await ldapProvider.authenticate("ghost", "x")).toBeNull();
