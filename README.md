@@ -106,8 +106,11 @@ deployments in flight at seeding time. The **Yabison** company is public and
 *Release Chronicle* product replays this project's real git history.
 
 The private seeder expects `private/hierarchy.yml` (company/product/service names)
-and `private/deployments.xlsx` (a deployment export in the app's own Excel format).
-Both paths can be overridden with `RC_PRIVATE_HIERARCHY` and `RC_PRIVATE_IMPORT`.
+and one deployment export in `private/import/` — either a raw rundeck execution
+`.csv` or an `.xlsx` already using the app's own column names. An optional MEP
+tracking sheet alongside it says which releases were hotfixes. Paths are overridable
+with `RC_PRIVATE_HIERARCHY`, `RC_PRIVATE_IMPORT` and `RC_PRIVATE_MEP_TRACKING`; see
+`docs/dev-environment.md` for what the import derives from them.
 
 ---
 

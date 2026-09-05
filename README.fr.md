@@ -105,8 +105,11 @@ et **Kaleido** ne l'est pas, ce qui rend le mode public visible sans se connecte
 Le produit *Release Chronicle* rejoue l'historique git réel de ce projet.
 
 Le seeder privé attend `private/hierarchy.yml` (noms compagnies/produits/services) et
-`private/deployments.xlsx` (export de déploiements au format de l'export Excel de
-l'app). Chemins surchargeables par `RC_PRIVATE_HIERARCHY` et `RC_PRIVATE_IMPORT`.
+un export de déploiements dans `private/import/` — soit un `.csv` d'exécutions
+rundeck brut, soit un `.xlsx` déjà aux colonnes de l'app. Un suivi des MEP optionnel
+à côté indique quelles releases étaient des hotfix. Chemins surchargeables par
+`RC_PRIVATE_HIERARCHY`, `RC_PRIVATE_IMPORT` et `RC_PRIVATE_MEP_TRACKING` ; voir
+`docs/dev-environment.md` pour ce que l'import en déduit.
 
 ## Instance de démo vivante
 
