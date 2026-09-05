@@ -8,7 +8,7 @@ import { getCausalSummaries } from "@/lib/causal";
 import { publicEventScopeWhere, type Scope } from "@/lib/apiVisibility";
 import { resolveEnvColorMap, getPublicEnvSlugs } from "@/lib/environment";
 import { getSession } from "@/lib/auth/session";
-import { canWrite, isAnonymous, isServicePublic, getPublicEventTypes } from "@/lib/visibility";
+import { canWrite, isAnonymous, isServicePublic, getPublicEventTypes, canReadChangelog } from "@/lib/visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +71,22 @@ export default async function ServicePage({
     events.map((e) => ({ id: e.id, causedById: e.causedById })),
     publicEventScopeWhere(scope),
   );
+  // Les notes des versions presentes a l'ecran, rendues ICI : le Markdown ne
+  // traverse pas vers le client, ni le moteur qui l'assainit. Soumis au meme
+  // reglage que la page changelog -- un anonyme en mode AUTHENTICATED n'en voit
+  // aucune, meme en ouvrant un deploiement qu'il a le droit de lire.
+  const changelogHtml: Record<string, string> = {};
+  if (await canReadChangelog(session)) {
+    const { listChangelogs } = await import("@/lib/changelog");
+    const { renderChangelog } = await import("@/lib/changelogRender");
+    const onScreen = new Set(
+      events.filter((e) => e.type === "DEPLOYMENT" && e.version).map((e) => e.version as string),
+    );
+    for (const note of await listChangelogs(svc.id)) {
+      if (onScreen.has(note.version)) changelogHtml[note.version] = renderChangelog(note.body);
+    }
+  }
+
   const causal: Record<string, CausalInfo> = {};
   for (const [id, s] of causalSummaries) {
     causal[id] = {
@@ -98,6 +114,7 @@ export default async function ServicePage({
       defaultFrom={defaultFrom}
       olderCount={olderCount}
       causal={causal}
+      changelogHtml={changelogHtml}
     />
   );
 }

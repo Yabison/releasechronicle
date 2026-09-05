@@ -453,5 +453,12 @@
   "hookKind.maintenance.created": "Maintenance scheduled",
   "logs.mailbox": "Catch-all mailbox (dev)",
   "hook.openAction": "Open",
-  "hook.seeEvent": "See the event"
+  "hook.seeEvent": "See the event",
+  "changelog.title": "Release notes",
+  "changelog.back": "← back to the service",
+  "changelog.empty": "No release note for this service yet.",
+  "changelog.handEdited": "edited by hand",
+  "changelog.handEditedBy": "edited by {name}",
+  "changelog.link": "Release notes",
+  "changelog.viewAll": "See all release notes"
 }

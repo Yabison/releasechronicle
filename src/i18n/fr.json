@@ -453,5 +453,12 @@
   "hookKind.maintenance.created": "Maintenance planifiée",
   "logs.mailbox": "Boîte de réception (dev)",
   "hook.openAction": "Ouvrir",
-  "hook.seeEvent": "Voir l'événement"
+  "hook.seeEvent": "Voir l'événement",
+  "changelog.title": "Notes de release",
+  "changelog.back": "← retour au service",
+  "changelog.empty": "Aucune note de release pour ce service.",
+  "changelog.handEdited": "éditée à la main",
+  "changelog.handEditedBy": "éditée par {name}",
+  "changelog.link": "Notes de release",
+  "changelog.viewAll": "Voir toutes les notes de release"
 }

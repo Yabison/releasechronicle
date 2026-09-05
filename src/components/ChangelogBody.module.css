@@ -1,0 +1,31 @@
+/* Le HTML injecté ici vient de renderChangelog : liste de balises fermée, donc
+   ces règles couvrent tout ce qui peut sortir du rendu, rien de plus. */
+.body { font-size: 0.92em; line-height: 1.55; }
+.body > :first-child { margin-top: 0; }
+.body > :last-child { margin-bottom: 0; }
+
+.body h3, .body h4, .body h5, .body h6 { margin: 14px 0 6px; font-size: 0.95rem; }
+.body h5, .body h6 { color: var(--muted); }
+.body p { margin: 6px 0; }
+.body ul, .body ol { margin: 6px 0; padding-left: 20px; }
+.body li { margin: 2px 0; }
+.body a { color: var(--cat-deploy); }
+.body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em; padding: 1px 4px; border-radius: 4px; background: var(--cat-deploy-bg);
+}
+.body pre {
+  margin: 8px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius);
+  overflow-x: auto;
+}
+.body pre code { background: none; padding: 0; }
+.body blockquote {
+  margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted);
+}
+.body hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+
+/* Une note peut contenir un tableau de tickets : il doit défiler seul plutôt que
+   pousser la page en largeur. */
+.body table { display: block; overflow-x: auto; border-collapse: collapse; margin: 8px 0; }
+.body th, .body td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+.body th { font-weight: 600; }
