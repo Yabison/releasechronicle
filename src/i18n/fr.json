@@ -230,6 +230,8 @@
   "login.demoTitle": "Comptes de démonstration",
   "login.demoHint": "Cliquez un compte pour remplir le formulaire.",
   "login.demoPassword": "Mot de passe commun :",
+  "login.devTitle": "Comptes de développement",
+  "login.devHint": "Cliquez un compte pour remplir le formulaire ; le mot de passe est l'identifiant.",
   "theme.label": "Thème",
   "theme.light": "Clair",
   "theme.dark": "Sombre",
