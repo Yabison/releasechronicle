@@ -73,3 +73,11 @@ export function actionMessage(
     : undefined;
   return t(res.error, vars);
 }
+
+/** Wording of one workflow violation from traceRelease, in the user's language. */
+export function releaseIssueLabel(
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  issue: { kind: "OUT_OF_ORDER" | "SKIPPED"; environment: string },
+): string {
+  return t(issue.kind === "OUT_OF_ORDER" ? "trace.outOfOrder" : "trace.skipped", { env: issue.environment });
+}

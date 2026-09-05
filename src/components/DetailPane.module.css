@@ -91,6 +91,7 @@
 }
 .sevIcon[data-sev="red"] { color: var(--cat-incident); }
 .sevIcon[data-sev="orange"] { color: var(--warning); }
+.sevIcon[data-sev="danger"] { color: var(--danger); }
 /* Fixed width so the status column stays aligned whatever the env name length (SECURE vs RUN). */
 .envCell, .typeCell { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
@@ -130,6 +131,7 @@
 .meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
 .tags { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 .tag { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
+.tag[data-level="danger"] { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-line); font-weight: 600; }
 .tagFilter { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .tagFilterChip { font: inherit; font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; cursor: pointer; }
 .tagFilterChip[data-active="true"] { color: var(--text); border-color: var(--muted); }
