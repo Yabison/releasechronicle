@@ -67,7 +67,21 @@ export const opsPaths = {
         { name: "environment", in: "query", required: true, schema: { type: "string" } },
       ],
       responses: {
-        "200": { description: "Candidate deployments", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Event" } } } } },
+        "200": {
+          description: "Candidate deployments, newest first, capped at 300. `truncated` says the cap was reached, so the list is a window rather than the whole set.",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["items", "truncated"],
+                properties: {
+                  items: { type: "array", items: { $ref: "#/components/schemas/Event" } },
+                  truncated: { type: "boolean" },
+                },
+              },
+            },
+          },
+        },
         "400": { description: "Missing company or environment", content: err },
         "401": { description: "Anonymous caller", content: err },
       },

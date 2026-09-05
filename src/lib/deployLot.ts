@@ -32,30 +32,41 @@ export type LotCandidate = {
   version: string | null; occurredAt: string; lot: string | null;
 };
 
+/** How many candidates one listing carries at most. */
+export const LOT_CANDIDATE_LIMIT = 300;
+
+/** `truncated` says the company had more recent deployments than the limit could
+ *  carry, so the picker can tell the user its list is a window, not the whole set. */
+export type LotCandidateList = { items: LotCandidate[]; truncated: boolean };
+
 /**
  * Deployments eligible to be grouped into a lot after the fact: all services of a company
  * in one environment, recent (90d), whose lot is empty or solo (not already in a manual
- * multi-member lot). Newest first.
+ * multi-member lot). Newest first, capped at LOT_CANDIDATE_LIMIT.
  */
-export async function listLotCandidates(company: string, environment: string): Promise<LotCandidate[]> {
+export async function listLotCandidates(company: string, environment: string): Promise<LotCandidateList> {
   const since = new Date(Date.now() - 90 * 86_400_000);
-  const rows = await prisma.event.findMany({
+  // One row over the limit, purely to tell a full page from a truncated one.
+  const fetched = await prisma.event.findMany({
     where: {
       type: "DEPLOYMENT", deletedAt: null, environment, occurredAt: { gte: since },
       service: { deletedAt: null, product: { company: { slug: company } } },
     },
     include: { service: { include: { product: true } } },
     orderBy: { occurredAt: "desc" },
-    take: 300,
+    take: LOT_CANDIDATE_LIMIT + 1,
   });
+  const truncated = fetched.length > LOT_CANDIDATE_LIMIT;
+  const rows = truncated ? fetched.slice(0, LOT_CANDIDATE_LIMIT) : fetched;
   const lotCounts = new Map<string, number>();
   for (const r of rows) if (r.lot) lotCounts.set(r.lot, (lotCounts.get(r.lot) ?? 0) + 1);
-  return rows
+  const items = rows
     .filter((r) => !r.lot || (lotCounts.get(r.lot) ?? 0) <= 1)
     .map((r) => ({
       eventId: r.id, product: r.service.product.slug, service: r.service.slug,
       version: r.version, occurredAt: r.occurredAt.toISOString(), lot: r.lot,
     }));
+  return { items, truncated };
 }
 
 /** Assign an existing set of deployments to a (manual) lot. Returns how many were updated. */
