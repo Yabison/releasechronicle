@@ -1,5 +1,7 @@
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { createEvent, upsertEventByExternalId, type EventData } from "@/lib/events";
+import { upsertChangelogFromCi } from "@/lib/changelog";
+import { prisma } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/http";
 import { emitHooks } from "@/lib/hooks/dispatch";
 import { log } from "@/lib/log";
@@ -49,9 +51,24 @@ export async function persistValidatedEvent<F extends Record<string, unknown>>(
     fields: v.fields,
   };
 
-  const ev = externalIdFromPath
-    ? await upsertEventByExternalId(externalIdFromPath, data)
-    : await createEvent(data);
+  // L'evenement et sa note de release sont un seul fait : une note orpheline et un
+  // evenement ampute de sa note seraient deux demi-verites. Les deux ecritures
+  // partagent donc une transaction -- que createEvent/upsertEventByExternalId
+  // acceptent deja en dernier argument.
+  const ev = await prisma.$transaction(async (tx) => {
+    const created = externalIdFromPath
+      ? await upsertEventByExternalId(externalIdFromPath, data, tx)
+      : await createEvent(data, tx);
+    // La version peut etre vide : un deploiement PRE_MEP / POST_MEP n'en porte pas
+    // (voir le superRefine de deploymentBodySchema, qui ne l'exige que pour les
+    // autres). Sans ce garde, la note serait rangee sous la cle (service, "") et
+    // deux phases distinctes s'ecraseraient mutuellement.
+    const version = typeof v.fields.version === "string" ? v.fields.version : "";
+    if (type === "DEPLOYMENT" && v.changelog && version) {
+      await upsertChangelogFromCi(service.id, version, v.changelog, tx);
+    }
+    return created;
+  });
 
   if (type === "DEPLOYMENT") {
     try {
