@@ -1,10 +1,13 @@
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { createEvent, upsertEventByExternalId, type EventData } from "@/lib/events";
+import { upsertChangelogFromCi } from "@/lib/changelog";
+import { prisma } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/http";
 import { emitHooks } from "@/lib/hooks/dispatch";
+import { log } from "@/lib/log";
 import "@/lib/hooks";
 import type { EventType } from "@prisma/client";
-import type { ValidatedEvent } from "@/lib/eventValidation";
+import type { EventBodyShape } from "@/lib/schemas/event";
 
 export class ServiceNotFoundError extends Error {
   constructor() {
@@ -28,7 +31,7 @@ export class EnvNotActiveError extends Error {
  */
 export async function persistValidatedEvent<F extends Record<string, unknown>>(
   type: EventType,
-  v: ValidatedEvent<F>,
+  v: EventBodyShape<F>,
   externalIdFromPath?: string,
 ) {
   const service = await getServiceBySlug(v.service.company, v.service.product, v.service.service);
@@ -48,9 +51,24 @@ export async function persistValidatedEvent<F extends Record<string, unknown>>(
     fields: v.fields,
   };
 
-  const ev = externalIdFromPath
-    ? await upsertEventByExternalId(externalIdFromPath, data)
-    : await createEvent(data);
+  // L'evenement et sa note de release sont un seul fait : une note orpheline et un
+  // evenement ampute de sa note seraient deux demi-verites. Les deux ecritures
+  // partagent donc une transaction -- que createEvent/upsertEventByExternalId
+  // acceptent deja en dernier argument.
+  const ev = await prisma.$transaction(async (tx) => {
+    const created = externalIdFromPath
+      ? await upsertEventByExternalId(externalIdFromPath, data, tx)
+      : await createEvent(data, tx);
+    // La version peut etre vide : un deploiement PRE_MEP / POST_MEP n'en porte pas
+    // (voir le superRefine de deploymentBodySchema, qui ne l'exige que pour les
+    // autres). Sans ce garde, la note serait rangee sous la cle (service, "") et
+    // deux phases distinctes s'ecraseraient mutuellement.
+    const version = typeof v.fields.version === "string" ? v.fields.version : "";
+    if (type === "DEPLOYMENT" && v.changelog && version) {
+      await upsertChangelogFromCi(service.id, version, v.changelog, tx);
+    }
+    return created;
+  });
 
   if (type === "DEPLOYMENT") {
     try {
@@ -58,8 +76,11 @@ export async function persistValidatedEvent<F extends Record<string, unknown>>(
       await attachToAutoLot(ev.id);
       const { detectRollbackOnIngest } = await import("@/lib/rollbackDetect");
       await detectRollbackOnIngest(ev.id);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      // Enrichment only (lot grouping, rollback detection): the event itself is
+      // saved, so don't fail the ingest — but a silent swallow made real bugs
+      // here undiagnosable. Log with enough context to find the event again.
+      log.error("ingest enrichment failed", { mod: "ingest", eventId: ev.id, err: e });
     }
   }
 
@@ -69,13 +90,13 @@ export async function persistValidatedEvent<F extends Record<string, unknown>>(
 /** REST-facing wrapper: same behavior/status codes as before, returning a Response. */
 export async function persistValidated<F extends Record<string, unknown>>(
   type: EventType,
-  v: ValidatedEvent<F>,
+  v: EventBodyShape<F>,
   externalIdFromPath?: string,
 ): Promise<Response> {
   try {
     const ev = await persistValidatedEvent(type, v, externalIdFromPath);
     const kind = type === "DEPLOYMENT" ? "deploy.created" : type === "INCIDENT" ? "incident.created" : "maintenance.created";
-    emitHooks(ev.id, kind);
+    await emitHooks(ev.id, kind);
     return Response.json(ev, { status: externalIdFromPath ? 200 : 201 });
   } catch (e) {
     if (e instanceof ServiceNotFoundError) {

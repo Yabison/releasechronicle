@@ -66,4 +66,13 @@ describe("detectRollbackOnIngest", () => {
     const res = await detectRollbackOnIngest(low.id);
     expect(res.flagged).toBeNull();
   });
+
+  it("links the new (rollback) deployment to the release it reverts", async () => {
+    await deploy("100", 30);
+    const high = await deploy("200", 20);
+    const low = await deploy("150", 10);
+    await detectRollbackOnIngest(low.id);
+    const updatedLow = await prisma.event.findUnique({ where: { id: low.id } });
+    expect(updatedLow?.causedById).toBe(high.id);
+  });
 });

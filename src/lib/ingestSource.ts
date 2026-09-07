@@ -25,7 +25,20 @@ export function createIngestSource(input: NewSource) {
 
 export function findIngestSourceByToken(token: string) {
   return prisma.ingestSource.findFirst({
-    where: { token, enabled: true },
+    where: {
+      token,
+      enabled: true,
+      // A SERVICE- or COMPANY-scoped source targets a specific row in the hierarchy;
+      // once that row is soft-deleted the token must stop resolving, or ingest keeps
+      // writing events into a "deleted" service/company. A GLOBAL source (both null)
+      // has no fixed target — its per-request slugs are checked live downstream — so
+      // it stays valid regardless.
+      OR: [
+        { serviceId: { not: null }, service: { deletedAt: null } },
+        { companyId: { not: null }, company: { deletedAt: null } },
+        { serviceId: null, companyId: null },
+      ],
+    },
     include: { company: true },
   });
 }

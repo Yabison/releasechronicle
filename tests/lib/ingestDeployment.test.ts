@@ -3,6 +3,7 @@ import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createIngestSource, findIngestSourceByToken } from "@/lib/ingestSource";
 import { ingestDeployment } from "@/lib/ingestDeployment";
+import { deleteService } from "@/lib/hierarchyDelete";
 
 async function source(defEnv: "PROD" | "QA" = "PROD") {
   const c = await createCompany({ name: "Acme" });
@@ -69,6 +70,15 @@ describe("ingestDeployment", () => {
     expect(r).toMatchObject({ ok: false, status: 400 });
     if (r.ok) throw new Error("expected fail");
     expect(r.error).toMatch(/scheduledAt/);
+  });
+  it("404s and writes no event when the source's service has been soft-deleted", async () => {
+    const { serviceId, src } = await source("QA");
+    await deleteService(serviceId);
+    const r = await ingestDeployment(src, { version: "1.2.3" });
+    expect(r).toMatchObject({ ok: false, status: 404 });
+    if (r.ok) throw new Error("expected fail");
+    expect(r.error).toMatch(/service/i);
+    expect(await prisma.event.count()).toBe(0);
   });
   it("rejects an environment string with no matching active env row (membership check)", async () => {
     const { src } = await source();

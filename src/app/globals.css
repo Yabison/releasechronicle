@@ -1,10 +1,45 @@
+/* ── Theme ────────────────────────────────────────────────────────────────────
+   Every colour in the app comes from a token below. A stylesheet that writes a
+   literal colour is a stylesheet that only works in one theme, so the only
+   literals left are white text over a saturated fill and black overlays, both of
+   which hold either way.
+
+   The server always stamps data-theme on <html> (light | dark | system), read
+   from the rc_theme cookie — see src/lib/theme.ts. Because it is server-rendered
+   there is no flash of the wrong theme on first paint. "system" is the default
+   and defers to the OS through the media query at the bottom.
+   ─────────────────────────────────────────────────────────────────────────── */
+
 :root {
   --bg: #ffffff;
   --surface: #ffffff;
+  /* One step down from the surface: zebra rows, calendar days outside the month. */
+  --sunken: #fbfbfc;
+  --hover: rgba(0, 0, 0, 0.04);
   --text: #1f2328;
   --muted: #8a8f98;
+  /* Between --text and --muted. Labels that should read as labels, not as
+     headings: the type wording in a timeline row, a selected filter pill. */
+  --text-soft: #4f545c;
   --line: #ececf0;
+  /* Same role as --line where it has to stay visible on its own: tree guides. */
+  --line-strong: #b9bec7;
   --accent: #3b5bdb;
+  --accent-bg: #eef2ff;
+  --accent-fg: #4338ca;
+  /* Neutral fill for inline chips, tokens and code blocks. */
+  --chip-bg: #f4f4f5;
+  --code-bg: #f7f7f8;
+
+  --danger: #b42318;
+  --danger-bg: #fff4f4;
+  --danger-line: #fecdca;
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --warning-bg: #fef3c7;
+  --warning-line: #fcd34d;
+  --warning-text: #92400e;
+
   --space: 8px;
   --radius: 10px;
   --font: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -14,6 +49,153 @@
   --cat-rollback: #f08c00;   --cat-rollback-bg: #fff4e6;
   --cat-incident: #e03131;   --cat-incident-bg: #fff0f0;
   --cat-maint: #1971c2;      --cat-maint-bg: #e7f5ff;
+
+  /* Status swatches on the timeline and the calendar. Aliases rather than their
+     own values: they were referenced by Timeline.module.css and
+     Calendar.module.css but never defined anywhere, so those dots rendered
+     transparent. Pointing them at the category tokens fixes that and makes them
+     follow the theme for free. */
+  --green: var(--cat-deploy);
+  --red: var(--cat-incident);
+  --orange: var(--cat-rollback);
+  --blue: var(--cat-maint);
+
+  /* Lead icon of a timeline row (RowLeadIcon). Release and hotfix share the
+     green here on purpose — the glyph carries the difference — and only here:
+     --cat-hotfix stays violet everywhere else in the app. Icons are graphics,
+     so the bar is WCAG 1.4.11 non-text contrast at 3:1, not the 4.5:1 of text;
+     the lightest pair below is 3.45:1. */
+  --lead-release-bg: #e6f5e6;   --lead-release-fg: #008300;
+  --lead-incident-bg: #fceceb;  --lead-incident-fg: #e34948;
+  --lead-maint-bg: #e9f0fb;     --lead-maint-fg: #2a78d6;
+  --lead-danger-bg: #fbe4e4;    --lead-danger-fg: #d03b3b;
+  --lead-idle-bg: #f1f1f2;      --lead-idle-fg: #6b7280;
+  --lead-busy-bg: #f1ebfd;      --lead-busy-fg: #6d28d9;
+
+  /* Status wording, as text rather than as a pill fill. The pill colours are
+     chosen to sit under white text and fail badly the other way round — GO at
+     2.43:1, TESTING 2.15, VALIDATE 2.28 on white. These are the text-safe
+     variants, all above 5:1 on their own background. */
+  --st-scheduled: #7e22ce;
+  --st-go: #0e7490;
+  --st-pending: #475569;
+  --st-progress: #1d4ed8;
+  --st-deployed: #4338ca;
+  --st-testing: #b45309;
+  --st-validate: #15803d;
+}
+
+/* Dark values, defined once and applied twice: on an explicit choice, and on
+   "system" when the OS asks for dark. Foregrounds are lightened and backgrounds
+   are dark tints of the same hue rather than the light pastels, which would
+   glare on a dense timeline. Every pair below clears 7:1 against its own
+   background — AAA for body text, not merely AA.
+
+   The two blocks are deliberately duplicated rather than combined with a
+   selector list: `:root[data-theme="dark"], @media … :root[data-theme="system"]`
+   cannot be expressed as one selector, and plain CSS has no way to share a
+   declaration block. Keep them in step. */
+
+:root[data-theme="dark"] {
+  --bg: #14161c;
+  --surface: #1b1e26;
+  --sunken: #171a21;
+  --hover: rgba(255, 255, 255, 0.06);
+  --text: #e6e8ec;
+  --muted: #9aa0ab;
+  --text-soft: #b8bcc4;
+  --line: #2b2f3a;
+  --line-strong: #3d434f;
+  --accent: #8da2fb;
+  --accent-bg: #1e2438;
+  --accent-fg: #a5b4fc;
+  --chip-bg: #242832;
+  --code-bg: #1f232c;
+
+  --danger: #ff8787;
+  --danger-bg: #2e1616;
+  --danger-line: #5c2b2b;
+  --success: #51cf66;
+  --warning: #ffc078;
+  --warning-bg: #2e2110;
+  --warning-line: #5c4420;
+  --warning-text: #ffc078;
+
+  --cat-deploy: #51cf66;     --cat-deploy-bg: #12281a;
+  --cat-hotfix: #b197fc;     --cat-hotfix-bg: #1e1733;
+  --cat-rollback: #ffc078;   --cat-rollback-bg: #2e2110;
+  --cat-incident: #ff8787;   --cat-incident-bg: #2e1616;
+  --cat-maint: #74c0fc;      --cat-maint-bg: #10202e;
+
+  --lead-release-bg: #12281a;   --lead-release-fg: #51cf66;
+  --lead-incident-bg: #2e1616;  --lead-incident-fg: #ff8787;
+  --lead-maint-bg: #10202e;     --lead-maint-fg: #74c0fc;
+  /* Distinct from incident: the two glyphs must not merge in the dark either. */
+  --lead-danger-bg: #3a1a1a;    --lead-danger-fg: #ff9d9d;
+  --lead-idle-bg: #242832;      --lead-idle-fg: #9aa0ab;
+  --lead-busy-bg: #241c3a;      --lead-busy-fg: #c4b5fd;
+
+  --st-scheduled: #c084fc;
+  --st-go: #22d3ee;
+  --st-pending: #94a3b8;
+  --st-progress: #60a5fa;
+  --st-deployed: #a5b4fc;
+  --st-testing: #fbbf24;
+  --st-validate: #4ade80;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --bg: #14161c;
+    --surface: #1b1e26;
+    --sunken: #171a21;
+    --hover: rgba(255, 255, 255, 0.06);
+    --text: #e6e8ec;
+    --muted: #9aa0ab;
+    --text-soft: #b8bcc4;
+    --line: #2b2f3a;
+    --line-strong: #3d434f;
+    --accent: #8da2fb;
+    --accent-bg: #1e2438;
+    --accent-fg: #a5b4fc;
+    --chip-bg: #242832;
+    --code-bg: #1f232c;
+
+    --danger: #ff8787;
+    --danger-bg: #2e1616;
+    --danger-line: #5c2b2b;
+    --success: #51cf66;
+    --warning: #ffc078;
+    --warning-bg: #2e2110;
+    --warning-line: #5c4420;
+    --warning-text: #ffc078;
+
+    --cat-deploy: #51cf66;     --cat-deploy-bg: #12281a;
+    --cat-hotfix: #b197fc;     --cat-hotfix-bg: #1e1733;
+    --cat-rollback: #ffc078;   --cat-rollback-bg: #2e2110;
+    --cat-incident: #ff8787;   --cat-incident-bg: #2e1616;
+    --cat-maint: #74c0fc;      --cat-maint-bg: #10202e;
+
+    --lead-release-bg: #12281a;   --lead-release-fg: #51cf66;
+    --lead-incident-bg: #2e1616;  --lead-incident-fg: #ff8787;
+    --lead-maint-bg: #10202e;     --lead-maint-fg: #74c0fc;
+    /* Distinct from incident: the two glyphs must not merge in the dark either. */
+    --lead-danger-bg: #3a1a1a;    --lead-danger-fg: #ff9d9d;
+    --lead-idle-bg: #242832;      --lead-idle-fg: #9aa0ab;
+    --lead-busy-bg: #241c3a;      --lead-busy-fg: #c4b5fd;
+
+    --st-scheduled: #c084fc;
+    --st-go: #22d3ee;
+    --st-pending: #94a3b8;
+    --st-progress: #60a5fa;
+    --st-deployed: #a5b4fc;
+    --st-testing: #fbbf24;
+    --st-validate: #4ade80;
+
+    color-scheme: dark;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -45,3 +227,12 @@ h2 { font-size: 1rem; font-weight: 600; margin: calc(var(--space) * 3) 0 var(--s
 [data-cat="MAINTENANCE"].catBadge { color: var(--cat-maint); background: var(--cat-maint-bg); }
 
 .deployPill { display: inline-block; padding: 1px 7px; border-radius: 999px; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 0.02em; }
+
+/* � UI primitives: the one source for button and env-chip styling. Modules
+   compose these (composes: � from global) and add only layout on top, so the
+   five diverging button styles and six env-chip variants stay in sync. � */
+.btnPrimary { font: inherit; border: none; background: var(--accent); color: #fff; border-radius: var(--radius); padding: 6px 16px; cursor: pointer; }
+.btnPrimary:disabled { opacity: 0.6; cursor: default; }
+.btnGhost { font: inherit; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: var(--radius); padding: 6px 14px; cursor: pointer; }
+.btnGhost:hover:not(:disabled) { background: var(--cat-deploy-bg); }
+.envChip { color: #fff; font-weight: 600; font-size: 11px; padding: 2px 8px; border-radius: 4px; }

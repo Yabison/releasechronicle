@@ -9,7 +9,7 @@ Next SWC binary, so host dev is the reliable path.
 
 ```bash
 cp .env.example .env          # first time
-npm run dev:up                # docker: db, db_test, mailpit, ldap
+npm run dev:up                # docker: everything but the app (make up-deps)
 npm run dev:reset             # prisma migrate deploy + seed (import dataset)
 npm run dev                   # app on http://localhost:3000
 ```
@@ -23,19 +23,33 @@ Stop the containers with `npm run dev:down`.
 | app      | http://localhost:3000         | `npm run dev` (host)                           |
 | db       | localhost:5432                | `releasechronicle` (dev data)                 |
 | db_test  | localhost:5433                | `releasechronicle_test` (vitest)              |
-| ldap     | localhost:1389                | osixia/openldap, seeded from `test/ldap`      |
+| ldap     | localhost:1389                | osixia/openldap, seeded from `tests/fixtures/ldap` |
 | mailpit  | http://localhost:8025 (UI)    | SMTP on 1025; catches all outgoing mail       |
 
 ## Login (LDAP)
 
-`.env` sets `AUTH_PROVIDER=ldap`. Users come from `test/ldap/fixture.ldif`, roles from
-the group map in `config/ldap.yml`:
+`.env` sets `AUTH_PROVIDER=ldap`. Users come from `tests/fixtures/ldap/fixture.ldif`, roles from
+the group map in `config/ldap.yml` — one account per role, **password identical to the
+username**:
 
-| user  | password | roles          |
-|-------|----------|----------------|
-| bob   | bobpw    | admin          |
-| carol | carolpw  | devops, qa     |
-| alice | alicepw  | qa             |
+| user   | password | roles                        |
+|--------|----------|------------------------------|
+| admin  | admin    | admin, devops, qa, viewer    |
+| devops | devops   | devops, viewer               |
+| qa     | qa       | qa, viewer                   |
+| viewer | viewer   | viewer                       |
+
+Everyone belongs to the `everyone` group, which grants the baseline `viewer` role; the
+other groups add to it. The login page lists these accounts and fills the form on click
+— `devAccounts()` returns them whenever `NODE_ENV` is not `production` and the provider
+is `ldap`, so the Docker image never shows them.
+
+After editing the ldif, recreate the container — osixia/openldap only applies it on a
+first start, so an edit alone looks like it did nothing:
+
+```bash
+docker compose rm -sf ldap && docker compose up -d ldap
+```
 
 To use the local user store instead (admin from `config/auth-users.yml`), remove
 `AUTH_PROVIDER=ldap` from `.env`.
@@ -52,6 +66,7 @@ leaves the machine — open http://localhost:8025 to read what the email hooks s
 | `npm run db:seed:demo`     | Yabison demo: 90 days of activity, relative to now (default) |
 | `npm run db:seed:private`     | Real hierarchy + rundeck history — needs `private/`, below |
 | `npm run db:seed:private:config` | Real hierarchy only, no events                          |
+| `npm run db:seed:releasenotes` | Import the release-note tree into the changelog — dry run unless `-- --write` |
 | `npm run db:wipe`          | Empty every table                                          |
 
 Two datasets, deliberately separate: the demo one is committed and publishable, the
@@ -61,11 +76,73 @@ real one loads customer data that is **not** in the repository.
 
 ### The `private/` directory
 
-`db:seed:private` reads two gitignored files, so the repository itself carries no
-production data: `private/hierarchy.yml` (company/product/service names) and
-`private/deployments.xlsx` (the rundeck export). Override the paths with
-`RC_PRIVATE_HIERARCHY` and `RC_PRIVATE_IMPORT`. A missing file fails with a message
-pointing at the demo seeder.
+`db:seed:private` reads two gitignored inputs, so the repository itself carries no
+production data:
+
+| Input | Where | Override |
+|-------|-------|----------|
+| Company/product/service names | `private/hierarchy.yml` | `RC_PRIVATE_HIERARCHY` |
+| The deployment export | the single `.csv` or `.xlsx` in `private/import/` | `RC_PRIVATE_IMPORT` |
+| MEP tracking sheet *(optional)* | `private/import/Suivi des MEPs.xlsx` | `RC_PRIVATE_MEP_TRACKING` |
+| Release-note tree *(optional)* | `private/releases/` | `RC_PRIVATE_RELEASE_NOTES` |
+
+The export may be a raw rundeck execution CSV (translated on the way in) or a
+spreadsheet already using the app's own column names. `private/import/` is expected to
+hold exactly one of them — the tracking sheet does not count — since importing last
+month's export by alphabetical luck is the kind of thing nobody notices until the
+metrics look wrong.
+
+A missing hierarchy or export fails with a message pointing at the demo seeder. The
+tracking sheet is optional: without it the import simply carries no hotfix information
+and says so.
+
+### Importing the release notes
+
+`db:seed:releasenotes` reads a tree of release folders — one per release, named
+`<env...> <day> <label>`, holding whatever the Azure DevOps generator produced:
+
+```
+secure 2026-09-03 - Hotfix Security/releasenote.md
+run secure 2026-02-04 kc-migration/releasenote_WEDA_20260204.md
+secure 2026-03-11/releasenote 20260311.html
+```
+
+Markdown and HTML are read, Markdown winning when a folder holds both. An HTML note
+is a whole document, so its shell is stripped and the rest put on one line: left
+indented, Markdown would read it as a code block and the note would render as its own
+source. The `.docx` and `.pdf` sitting in the same folders are ignored.
+
+A folder names an environment and a day, never a version — but a changelog row is
+keyed by service and version. So the join is by **day and environment**, the same one
+`mep-tracking.ts` makes, walking deployments (which know both) and asking whether a
+note covers each. A release train that shipped nine services on one day therefore
+attaches its note to all nine.
+
+Two cases are reported and never written, because a wrong note is invisible once
+saved while a missing one is not:
+
+- **ambiguous** — that day holds notes that disagree.
+- **conflict** — one service and version claimed by two different notes. A build
+  promoted to the next environment the following day hits this whenever both days
+  have their own note. Services whose version never moves (`0.1.0`) hit it often.
+
+The command is a **dry run by default** and prints the whole plan; `npm run
+db:seed:releasenotes -- --write` applies it. Notes already edited in the UI keep
+their text — the write goes through the same lock the CI ingest respects.
+
+### What the import derives
+
+| | |
+|---|---|
+| **Chained runs** | A release reaching production in several runs (same service, environment and version, each within 60 min of the previous) becomes **one** deployment. Counting them separately would inflate the frequency metric fivefold. |
+| **Status** | Everything that reached production is treated as tested: a successful deployment ends at `VALIDATE` with its full trail. A rolled-back one stops at `DEPLOYED` — it is the one outcome that is not a validation. Failed and aborted runs keep their own statuses. |
+| **HO / HNO** | From the start time, in **Europe/Paris**: `HO` on weekdays from 09:00 to 18:00, `HNO` otherwise. The export is UTC, so the boundary moves between winter and summer. |
+| **Hotfix** | From the tracking sheet's `scope`, joined by day and environment, applied to every service deployed in that window. Days carrying two MEPs are separated by their hour; when they disagree and no hour is recorded, the deployment stays `NORMAL` and the count is reported. |
+| **Rollbacks** | Three sources: the export's own flag, the tracking sheet's `rollback` column, and a build-number heuristic (a lower build after a higher one means the higher was reverted). |
+
+The sheet's `incident/Hotfix` column is deliberately ignored: it is retroactive, set on
+a release that later *needed* a hotfix, so reading it as a hotfix marker would flag
+exactly the wrong releases.
 
 ## Live demo instance
 

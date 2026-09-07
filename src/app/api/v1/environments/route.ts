@@ -1,7 +1,12 @@
+import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
 import { listEnvironments, createEnvironment } from "@/lib/environment";
 import { isUniqueViolation } from "@/lib/http";
 import { requestScope } from "@/lib/apiVisibility";
+import { nonEmpty, hexColor } from "@/lib/schemas/common";
+import { parseBody } from "@/lib/schemas/parse";
+
+const postSchema = z.object({ name: nonEmpty(), color: hexColor });
 
 export async function GET(req: Request) {
   const scope = await requestScope(req);
@@ -13,13 +18,13 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
-  const body = await req.json().catch(() => null);
-  const name = body && typeof body.name === "string" ? body.name.trim() : "";
-  const color = body && typeof body.color === "string" ? body.color.trim() : "";
-  if (!name) return Response.json({ error: "name is required" }, { status: 400 });
-  if (!/^#[0-9a-f]{6}$/i.test(color)) return Response.json({ error: "color must be #rrggbb" }, { status: 400 });
+  const parsed = await parseBody(req, postSchema);
+  if (!parsed.ok) return parsed.res;
   try {
-    return Response.json(await createEnvironment({ name, color }), { status: 201 });
+    return Response.json(
+      await createEnvironment({ name: parsed.value.name, color: parsed.value.color }),
+      { status: 201 },
+    );
   } catch (e) {
     if (isUniqueViolation(e)) return Response.json({ error: "an environment with this name already exists" }, { status: 400 });
     throw e;

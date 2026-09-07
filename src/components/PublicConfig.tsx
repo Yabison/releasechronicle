@@ -13,11 +13,16 @@ type Env = { id: string; slug: string; name: string; public: boolean };
 
 const EVENT_TYPES = ["DEPLOYMENT", "INCIDENT", "MAINTENANCE"] as const;
 
-export function PublicConfig({ tree, envs, eventTypes }: { tree: Company[]; envs: Env[]; eventTypes: string[] }) {
+type ChangelogMode = "PUBLIC" | "AUTHENTICATED";
+
+export function PublicConfig({ tree, envs, eventTypes, changelogVisibility }: {
+  tree: Company[]; envs: Env[]; eventTypes: string[]; changelogVisibility: ChangelogMode;
+}) {
   const { t } = useI18n();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [types, setTypes] = useState<string[]>(eventTypes);
+  const [changelogMode, setChangelogMode] = useState<ChangelogMode>(changelogVisibility);
 
   function patch(url: string, body: unknown) {
     startTransition(async () => {
@@ -40,6 +45,14 @@ export function PublicConfig({ tree, envs, eventTypes }: { tree: Company[]; envs
     });
   }
 
+  function setChangelog(mode: ChangelogMode) {
+    setChangelogMode(mode);
+    startTransition(async () => {
+      await fetch("/api/v1/public-settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ changelogVisibility: mode }) });
+      router.refresh();
+    });
+  }
+
   const typeLabel = (ty: string) =>
     ty === "DEPLOYMENT" ? t("publicCfg.typeDeployment") : ty === "INCIDENT" ? t("publicCfg.typeIncident") : t("publicCfg.typeMaintenance");
 
@@ -58,6 +71,25 @@ export function PublicConfig({ tree, envs, eventTypes }: { tree: Company[]; envs
             <label key={ty} className={styles.chip} data-on={types.includes(ty)}>
               <input type="checkbox" checked={types.includes(ty)} disabled={pending} onChange={() => toggleType(ty)} />
               {typeLabel(ty)}
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.section}>
+        <h2 className={styles.h2}>{t("publicCfg.changelog")}</h2>
+        <p className={styles.muted}>{t("publicCfg.changelogHelp")}</p>
+        <div className={styles.chips}>
+          {(["AUTHENTICATED", "PUBLIC"] as const).map((mode) => (
+            <label key={mode} className={styles.chip} data-on={changelogMode === mode}>
+              <input
+                type="radio"
+                name="changelogVisibility"
+                checked={changelogMode === mode}
+                disabled={pending}
+                onChange={() => setChangelog(mode)}
+              />
+              {mode === "PUBLIC" ? t("publicCfg.changelogPublic") : t("publicCfg.changelogAuth")}
             </label>
           ))}
         </div>

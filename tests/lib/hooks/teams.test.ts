@@ -11,21 +11,22 @@ const event: HookEvent = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("teamsConnector", () => {
-  it("POSTs a MessageCard mentioning product/service and version, 2xx → ok", async () => {
+  it("POSTs an Adaptive Card mentioning product/service and version, 2xx → ok", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 200 }));
     const res = await teamsConnector.send(event, { url: "https://teams/hook" });
     expect(res).toEqual({ ok: true, statusCode: 200 });
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
-    expect(body["@type"]).toBe("MessageCard");
-    expect(body.title).toContain("checkout");
-    expect(body.title).toContain("api");
-    expect(body.text).toContain("1.2.3");
+    expect(body.type).toBe("message");
+    const blocks = body.attachments[0].content.body as { text: string }[];
+    expect(blocks[0].text).toContain("checkout");
+    expect(blocks[0].text).toContain("api");
+    expect(blocks[1].text).toContain("1.2.3");
   });
   it("renders the target's locale when configured", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 200 }));
     await teamsConnector.send(event, { url: "https://teams/hook", locale: "en" });
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.text).toContain("by alice");
+    expect(body.attachments[0].content.body[1].text).toContain("by alice");
   });
   it("non-2xx → not ok with status code", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 503 }));

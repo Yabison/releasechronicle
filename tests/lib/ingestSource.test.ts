@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createIngestSource, findIngestSourceByToken, listIngestSources, deleteIngestSource } from "@/lib/ingestSource";
+import { deleteService, deleteCompany } from "@/lib/hierarchyDelete";
 
 async function seedService() {
   const c = await createCompany({ name: "Acme" });
@@ -35,5 +36,33 @@ describe("ingestSource", () => {
     expect(await listIngestSources(s.id)).toHaveLength(1);
     await deleteIngestSource(a.id);
     expect(await listIngestSources(s.id)).toHaveLength(0);
+  });
+
+  it("still finds a SERVICE-scoped token whose service is live", async () => {
+    const s = await seedService();
+    const a = await createIngestSource({ scope: "SERVICE", serviceId: s.id, label: "x", defaultEnvironment: "PROD" });
+    expect((await findIngestSourceByToken(a.token))?.id).toBe(a.id);
+  });
+
+  it("stops finding a SERVICE-scoped token once its service is soft-deleted", async () => {
+    const s = await seedService();
+    const a = await createIngestSource({ scope: "SERVICE", serviceId: s.id, label: "x", defaultEnvironment: "PROD" });
+    await deleteService(s.id);
+    expect(await findIngestSourceByToken(a.token)).toBeNull();
+  });
+
+  it("stops finding a COMPANY-scoped token once its company is soft-deleted", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const a = await createIngestSource({ scope: "COMPANY", companyId: c.id, label: "x", defaultEnvironment: "PROD" });
+    expect((await findIngestSourceByToken(a.token))?.id).toBe(a.id);
+    await deleteCompany(c.id);
+    expect(await findIngestSourceByToken(a.token)).toBeNull();
+  });
+
+  it("still finds a GLOBAL token regardless of any deletion elsewhere", async () => {
+    const s = await seedService();
+    const a = await createIngestSource({ scope: "GLOBAL", label: "x", defaultEnvironment: "PROD" });
+    await deleteService(s.id);
+    expect((await findIngestSourceByToken(a.token))?.id).toBe(a.id);
   });
 });

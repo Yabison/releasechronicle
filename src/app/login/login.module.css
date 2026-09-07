@@ -49,4 +49,29 @@
 .submit:disabled { opacity: 0.55; cursor: not-allowed; }
 .submit:not(:disabled):hover { filter: brightness(1.05); }
 
-.error { color: #b42318; font-size: 0.82rem; margin: 0; }
+.error { color: var(--danger); font-size: 0.82rem; margin: 0; }
+
+/* Public demo only: the credentials below are published in the repository. */
+.demo {
+  border-top: 1px dashed var(--line);
+  padding-top: 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.demoTitle { font-size: 0.82rem; font-weight: 600; color: var(--text); margin: 0; }
+.demoHint { font-size: 0.74rem; color: var(--muted); margin: 0; }
+
+.demoList { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.demoAccount {
+  width: 100%; font: inherit; text-align: left; cursor: pointer;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--text);
+}
+.demoAccount:hover { border-color: var(--cat-deploy); }
+.demoAccount:focus-visible { outline: 2px solid var(--cat-deploy); outline-offset: 1px; }
+.demoUser { font-size: 0.8rem; font-weight: 600; }
+.demoRoles { font-size: 0.72rem; color: var(--muted); }
+
+.demoPassword { font-size: 0.74rem; color: var(--muted); margin: 2px 0 0; }
+.demoPassword code { color: var(--text); font-weight: 600; }

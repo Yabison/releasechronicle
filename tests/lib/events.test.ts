@@ -5,12 +5,15 @@ import {
   createEvent,
   upsertEventByExternalId,
   listServiceEvents,
-  listProductEvents,
   currentVersions,
   addRollback,
   addQaValidation,
   addObservation,
+  setEventCausedBy,
+  setEventChangeType,
   AnnotationTargetError,
+  CausalLinkError,
+  PhaseTransitionError,
 } from "@/lib/events";
 
 async function seedService() {
@@ -106,6 +109,25 @@ describe("listServiceEvents", () => {
     expect(prod[0].environment).toBe("PROD");
   });
 
+  it("windows by occurredAt: only events inside [from, to] load", async () => {
+    const s = await seedService();
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-01-10T10:00:00Z"), fields: { version: "old", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } }));
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-05-10T10:00:00Z"), fields: { version: "mid", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } }));
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-08-10T10:00:00Z"), fields: { version: "new", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } }));
+    const windowed = await listServiceEvents(s.id, { from: new Date("2026-04-01"), to: new Date("2026-06-01") });
+    expect(windowed.map((e) => e.version)).toEqual(["mid"]);
+    const open = await listServiceEvents(s.id, { from: new Date("2026-04-01") });
+    expect(open.map((e) => e.version)).toEqual(["new", "mid"]);
+  });
+
+  it("counts events older than a date without loading them", async () => {
+    const s = await seedService();
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-01-10T10:00:00Z") }));
+    await createEvent(deployData(s.id, { occurredAt: new Date("2026-08-10T10:00:00Z") }));
+    const { countServiceEventsBefore } = await import("@/lib/events");
+    expect(await countServiceEventsBefore(s.id, new Date("2026-04-01"))).toBe(1);
+  });
+
   it("embeds maintenance status in the feed", async () => {
     const s = await seedService();
     const m = await createEvent({
@@ -160,43 +182,153 @@ describe("addObservation", () => {
   });
 });
 
-describe("listProductEvents", () => {
-  it("aggregates events across the product's services, newest-first, soft-delete excluded", async () => {
+describe("setEventCausedBy", () => {
+  it("accepts a cause from the same product (a different service) and persists it", async () => {
     const c = await createCompany({ name: "Acme" });
     const p = await createProduct({ companyId: c.id, name: "Checkout" });
-    const s1 = await createService({ productId: p.id, name: "API", type: "API" });
-    const s2 = await createService({ productId: p.id, name: "Web", type: "APP" });
-
-    const e1 = await createEvent({
-      serviceId: s1.id, environment: "PROD", type: "DEPLOYMENT",
-      occurredAt: new Date("2026-06-25T08:00:00Z"),
-      fields: { version: "1", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" },
+    const s1 = await createService({ productId: p.id, name: "Incidents Svc", type: "API" });
+    const s2 = await createService({ productId: p.id, name: "Deploys Svc", type: "API" });
+    const cause = await createEvent(deployData(s2.id));
+    const target = await createEvent({
+      serviceId: s1.id, environment: "PROD", type: "INCIDENT",
+      occurredAt: new Date(), fields: { incidentType: "x", startedAt: new Date(), resolvedAt: null, comment: null },
     });
-    const e2 = await createEvent({
-      serviceId: s2.id, environment: "PROD", type: "DEPLOYMENT",
-      occurredAt: new Date("2026-06-25T10:00:00Z"),
-      fields: { version: "2", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" },
-    });
-    const deleted = await createEvent({
-      serviceId: s1.id, environment: "PROD", type: "DEPLOYMENT",
-      occurredAt: new Date("2026-06-25T11:00:00Z"),
-      fields: { version: "3", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" },
-    });
-    await prisma.event.update({ where: { id: deleted.id }, data: { deletedAt: new Date() } });
-
-    const list = await listProductEvents(p.id, {});
-    expect(list.map((e) => e.id)).toEqual([e2.id, e1.id]); // newest first, deleted excluded
-    expect(list[0].derived).toBeDefined();
+    const updated = await setEventCausedBy(target.id, cause.id);
+    expect(updated?.causedById).toBe(cause.id);
+    expect((await prisma.event.findUnique({ where: { id: target.id } }))?.causedById).toBe(cause.id);
   });
 
-  it("filters by environment", async () => {
+  it("rejects a cause from a different product", async () => {
     const c = await createCompany({ name: "Acme" });
-    const p = await createProduct({ companyId: c.id, name: "Checkout" });
-    const s = await createService({ productId: p.id, name: "API", type: "API" });
-    await createEvent({ serviceId: s.id, environment: "QA", type: "DEPLOYMENT", occurredAt: new Date(), fields: { version: "1", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } });
-    await createEvent({ serviceId: s.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), fields: { version: "2", requester: "ci", changeType: "NORMAL", externalLink: null, deployStatus: "DEPLOYED" } });
-    const prod = await listProductEvents(p.id, { environment: "PROD" });
-    expect(prod).toHaveLength(1);
-    expect(prod[0].environment).toBe("PROD");
+    const p1 = await createProduct({ companyId: c.id, name: "Checkout" });
+    const p2 = await createProduct({ companyId: c.id, name: "Billing" });
+    const s1 = await createService({ productId: p1.id, name: "A", type: "API" });
+    const s2 = await createService({ productId: p2.id, name: "B", type: "API" });
+    const cause = await createEvent(deployData(s2.id));
+    const target = await createEvent({
+      serviceId: s1.id, environment: "PROD", type: "INCIDENT",
+      occurredAt: new Date(), fields: { incidentType: "x", startedAt: new Date(), resolvedAt: null, comment: null },
+    });
+    await expect(setEventCausedBy(target.id, cause.id)).rejects.toBeInstanceOf(CausalLinkError);
+  });
+
+  it("rejects a self-link", async () => {
+    const s = await seedService();
+    const ev = await createEvent(deployData(s.id));
+    await expect(setEventCausedBy(ev.id, ev.id)).rejects.toBeInstanceOf(CausalLinkError);
+  });
+
+  it("rejects a cycle", async () => {
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T09:00:00Z") }));
+    const b = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T10:00:00Z") }));
+    await setEventCausedBy(a.id, b.id); // A is caused by B
+    await expect(setEventCausedBy(b.id, a.id)).rejects.toBeInstanceOf(CausalLinkError); // B <- A would cycle
+  });
+
+  it("clears the link with null", async () => {
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id));
+    const b = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-26T09:00:00Z") }));
+    await setEventCausedBy(a.id, b.id);
+    const cleared = await setEventCausedBy(a.id, null);
+    expect(cleared?.causedById).toBeNull();
+  });
+
+  it("clearing with null is always allowed, even when there was no link", async () => {
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id));
+    const cleared = await setEventCausedBy(a.id, null);
+    expect(cleared?.causedById).toBeNull();
+  });
+
+  it("rejects a non-existent cause", async () => {
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id));
+    await expect(setEventCausedBy(a.id, "nonexistent-id")).rejects.toBeInstanceOf(CausalLinkError);
+  });
+
+  it("returns null for a non-existent target", async () => {
+    const result = await setEventCausedBy("nonexistent-id", null);
+    expect(result).toBeNull();
+  });
+
+  it("never lets two concurrent, mutually-conflicting writes create a 2-node cycle", async () => {
+    // A and B start with no cause. Fire "A caused by B" and "B caused by A" at the
+    // same time: each read-then-check-then-write races the other. Sequentially,
+    // the second call would correctly see the first link and refuse (a real
+    // cycle check working as intended); the point of this test is that even
+    // when both checks run concurrently -- each passing before the other's
+    // write lands -- the guard (a single SERIALIZABLE transaction per call,
+    // re-checked against its own transaction client) still holds: Postgres's
+    // serializable-snapshot-isolation detects the write-skew pattern and aborts
+    // one of the two transactions, so the outcome is deterministic regardless
+    // of how the two calls interleave -- never both succeeding, never a cycle.
+    const s = await seedService();
+    const a = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T09:00:00Z") }));
+    const b = await createEvent(deployData(s.id, { occurredAt: new Date("2026-06-25T10:00:00Z") }));
+
+    const results = await Promise.allSettled([
+      setEventCausedBy(a.id, b.id), // A <- B
+      setEventCausedBy(b.id, a.id), // B <- A
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    expect(fulfilled.length).toBeLessThanOrEqual(1);
+    // Every rejection must be the guard doing its job (a refused cycle / a detected
+    // write conflict), never some unrelated failure.
+    for (const r of results) {
+      if (r.status === "rejected") expect(r.reason).toBeInstanceOf(CausalLinkError);
+    }
+
+    const [freshA, freshB] = await Promise.all([
+      prisma.event.findUnique({ where: { id: a.id } }),
+      prisma.event.findUnique({ where: { id: b.id } }),
+    ]);
+    // The cycle itself must never exist in the data, however the race resolved.
+    expect(freshA?.causedById === b.id && freshB?.causedById === a.id).toBe(false);
+  });
+});
+
+describe("setEventChangeType", () => {
+  it("returns null when the event does not exist", async () => {
+    expect(await setEventChangeType("does-not-exist", "HOTFIX")).toBeNull();
+  });
+
+  it("throws AnnotationTargetError when the event is not a deployment (unchanged)", async () => {
+    const s = await seedService();
+    const inc = await createEvent({
+      serviceId: s.id, environment: "PROD", type: "INCIDENT",
+      occurredAt: new Date(), fields: { incidentType: "x", startedAt: new Date(), resolvedAt: null, comment: null },
+    });
+    await expect(setEventChangeType(inc.id, "HOTFIX")).rejects.toBeInstanceOf(AnnotationTargetError);
+  });
+
+  it("allows PRE_MEP -> POST_MEP when the event has a parent", async () => {
+    const s = await seedService();
+    const parent = await createEvent(deployData(s.id));
+    const dep = await createEvent(deployData(s.id, { fields: { ...deployData(s.id).fields, changeType: "PRE_MEP", parentId: parent.id } }));
+    const updated = await setEventChangeType(dep.id, "POST_MEP");
+    expect(updated?.changeType).toBe("POST_MEP");
+  });
+
+  it("allows leaving a phase (PRE_MEP -> NORMAL) even with no parent", async () => {
+    const s = await seedService();
+    const dep = await createEvent(deployData(s.id, { fields: { ...deployData(s.id).fields, changeType: "PRE_MEP", parentId: null } }));
+    const updated = await setEventChangeType(dep.id, "NORMAL");
+    expect(updated?.changeType).toBe("NORMAL");
+  });
+
+  it("throws PhaseTransitionError entering PRE_MEP without already being a phase", async () => {
+    const s = await seedService();
+    const dep = await createEvent(deployData(s.id));
+    await expect(setEventChangeType(dep.id, "PRE_MEP")).rejects.toBeInstanceOf(PhaseTransitionError);
+  });
+
+  it("rejects NORMAL -> POST_MEP even when the event already has a parent (parent presence alone is not enough)", async () => {
+    const s = await seedService();
+    const parent = await createEvent(deployData(s.id));
+    const dep = await createEvent(deployData(s.id, { fields: { ...deployData(s.id).fields, parentId: parent.id } }));
+    await expect(setEventChangeType(dep.id, "POST_MEP")).rejects.toBeInstanceOf(PhaseTransitionError);
   });
 });

@@ -4,6 +4,7 @@ import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
 import { GET } from "@/app/api/v1/calendar.ics/route";
 import { sessionCookie } from "../setup/session";
+import { deleteService } from "@/lib/hierarchyDelete";
 
 async function seed() {
   const c = await createCompany({ name: "Acme" });
@@ -42,6 +43,56 @@ describe("GET /calendar.ics", () => {
     await createEvent({ serviceId, environment: "QA", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
       fields: { version: "1", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "1" } });
     const body = await (await get("?environment=PROD")).text();
+    expect((body.match(/BEGIN:VEVENT/g) ?? []).length).toBe(0);
+  });
+  it("resolves an environment group to its members", async () => {
+    const serviceId = await seed();
+    await prisma.environmentGroup.create({ data: { slug: "allprod", name: "ALLPROD", members: ["PROD", "SECURE"], sortOrder: 0 } });
+    for (const [environment, version] of [["PROD", "in-prod"], ["SECURE", "in-secure"], ["RECETTE", "in-recette"]]) {
+      await createEvent({ serviceId, environment, type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+        fields: { version, requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: null } });
+    }
+
+    const body = await (await get("?environment=group:allprod")).text();
+
+    expect(body).toContain("in-prod");
+    expect(body).toContain("in-secure");
+    expect(body).not.toContain("in-recette");
+  });
+  it("serves one event for the whole lot with ?mergeLots=1", async () => {
+    const serviceId = await seed();
+    const p2 = await createProduct({ companyId: (await prisma.company.findFirstOrThrow()).id, name: "Billing" });
+    const other = await createService({ productId: p2.id, name: "API", type: "API" });
+    for (const id of [serviceId, other.id]) {
+      await createEvent({ serviceId: id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+        fields: { version: "2.1.0", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "release-08" } });
+    }
+
+    const body = await (await get("?mergeLots=1")).text();
+
+    expect((body.match(/BEGIN:VEVENT/g) ?? []).length).toBe(1);
+    expect(body).toContain("[MEP] lot release-08 (PROD)");
+  });
+  it("excludes a soft-deleted service's deployments for a session", async () => {
+    const serviceId = await seed();
+    await createEvent({ serviceId, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+      fields: { version: "1.2.3", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "L1" } });
+    await deleteService(serviceId);
+    const body = await (await get()).text();
+    expect((body.match(/BEGIN:VEVENT/g) ?? []).length).toBe(0);
+  });
+  it("excludes a soft-deleted service's deployments from the anonymous public feed", async () => {
+    const c = await createCompany({ name: "Beta" });
+    const p = await createProduct({ companyId: c.id, name: "Widgets" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    await prisma.company.update({ where: { id: c.id }, data: { public: true } });
+    await prisma.product.update({ where: { id: p.id }, data: { public: true } });
+    await prisma.service.update({ where: { id: s.id }, data: { public: true } });
+    await prisma.environmentConfig.create({ data: { slug: "PROD", name: "PROD", color: "#22c55e", sortOrder: 0, public: true } });
+    await createEvent({ serviceId: s.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+      fields: { version: "1.2.3", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "L1" } });
+    await deleteService(s.id);
+    const body = await (await GET(new Request("http://x/api/v1/calendar.ics"))).text();
     expect((body.match(/BEGIN:VEVENT/g) ?? []).length).toBe(0);
   });
 });

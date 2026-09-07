@@ -25,15 +25,34 @@ describe("GET /api/v1/openapi.json", () => {
     );
   });
 
-  it("declares a bearer security scheme", () => {
-    return GET()
-      .then((r) => r.json())
-      .then((doc) => {
-        expect(doc.components.securitySchemes.bearerAuth).toEqual({
-          type: "http",
-          scheme: "bearer",
-        });
-      });
+  /**
+   * Three credentials, because the app has three. Declaring only bearerAuth and
+   * attaching it to the administration endpoints told callers to send a write
+   * token where requireAdmin reads the session cookie and nothing else.
+   */
+  it("declares the write-token, admin-session and ingest-source schemes", async () => {
+    const doc = await (await GET()).json();
+    const s = doc.components.securitySchemes;
+    expect(s.bearerAuth).toMatchObject({ type: "http", scheme: "bearer" });
+    expect(s.sourceToken).toMatchObject({ type: "http", scheme: "bearer" });
+    expect(s.adminSession).toMatchObject({ type: "apiKey", in: "cookie", name: "rc_session" });
+  });
+
+  it("guards the hierarchy writes with the admin session, not a write token", async () => {
+    const doc = await (await GET()).json();
+    for (const [path, method] of [
+      ["/api/v1/companies", "post"], ["/api/v1/companies/{slug}", "put"], ["/api/v1/companies/{slug}", "delete"],
+      ["/api/v1/products", "post"], ["/api/v1/products/{slug}", "put"], ["/api/v1/products/{slug}", "delete"],
+      ["/api/v1/services", "post"], ["/api/v1/services/{slug}", "put"], ["/api/v1/services/{slug}", "delete"],
+    ] as const) {
+      expect(doc.paths[path][method].security, `${method.toUpperCase()} ${path}`).toEqual([{ adminSession: [] }]);
+    }
+  });
+
+  it("keeps the write token on the event writes", async () => {
+    const doc = await (await GET()).json();
+    expect(doc.paths["/api/v1/deployments"].post.security).toEqual([{ bearerAuth: [] }]);
+    expect(doc.paths["/api/v1/hooks/deliveries/sweep"].post.security).toEqual([{ bearerAuth: [] }]);
   });
 });
 

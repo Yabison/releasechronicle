@@ -1,0 +1,11 @@
+[Unit]
+Description=Pull the rc image and redeploy the Release Chronicle demo
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+Environment=RC_DEMO_DIR=/srv/rc-demo
+ExecStart=/usr/local/bin/rc-demo-update.sh
+# The pull can be slow on a cold layer cache; do not let systemd kill it mid-way.
+TimeoutStartSec=600

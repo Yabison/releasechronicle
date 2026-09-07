@@ -11,6 +11,18 @@ describe("securityHeaders", () => {
     expect(csp(prod)).not.toMatch(/script-src [^;]*'unsafe-inline'/);
   });
 
+  // Fast Refresh evaluates strings. Without the escape hatch the EvalError fires
+  // while main-app.js is initialising, hydration never completes and every client
+  // component on the page is inert — which is how this was found.
+  it("allows eval in development, for Fast Refresh", () => {
+    expect(csp(dev)).toMatch(/script-src [^;]*'unsafe-eval'/);
+  });
+
+  // The whole point of the previous test is that it stays out of a real deploy.
+  it("never allows eval in production", () => {
+    expect(csp(prod)).not.toMatch(/'unsafe-eval'/);
+  });
+
   it("allows inline styles, which React style props require", () => {
     // A nonce cannot cover a style attribute, and the UI sets colours inline.
     expect(csp(prod)).toMatch(/style-src [^;]*'unsafe-inline'/);

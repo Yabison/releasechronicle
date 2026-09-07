@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { sessionCookie } from "../setup/session";
+import { createProduct, createService } from "@/lib/hierarchy";
 import { GET as listGET, POST } from "@/app/api/v1/companies/route";
-import { GET as detailGET, PUT } from "@/app/api/v1/companies/[slug]/route";
+import { GET as detailGET, PUT, DELETE } from "@/app/api/v1/companies/[slug]/route";
+import { POST as RESTORE } from "@/app/api/v1/companies/[slug]/restore/route";
 
 let AUTH: { cookie: string };
 
@@ -122,5 +124,123 @@ describe("PUT /api/v1/companies/[slug]", () => {
   it("returns 404 for an unknown company", async () => {
     const res = await PUT(put({ autoLotNaming: "date" }, AUTH), ctx("nope"));
     expect(res.status).toBe(404);
+  });
+});
+
+function del(slug: string, headers: Record<string, string> = {}) {
+  return new Request(`http://x/api/v1/companies/${slug}`, { method: "DELETE", headers });
+}
+function restore(slug: string, headers: Record<string, string> = {}) {
+  return new Request(`http://x/api/v1/companies/${slug}/restore`, { method: "POST", headers });
+}
+
+describe("DELETE /api/v1/companies/[slug]", () => {
+  it("rejects without a session", async () => {
+    await POST(post({ name: "Acme" }, AUTH));
+    const res = await DELETE(del("acme"), ctx("acme"));
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a non-admin session with 403", async () => {
+    await POST(post({ name: "Acme" }, AUTH));
+    const nonAdmin = await sessionCookie(["viewer"]);
+    const res = await DELETE(del("acme", nonAdmin), ctx("acme"));
+    expect(res.status).toBe(403);
+  });
+
+  it("soft-deletes a company, returns cascade counts, and it drops out of the listing", async () => {
+    const c = await (await POST(post({ name: "Acme" }, AUTH))).json();
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    await createService({ productId: p.id, name: "Payment API", type: "API" });
+
+    const res = await DELETE(del("acme", AUTH), ctx("acme"));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.products).toBe(1);
+    expect(json.services).toBe(1);
+
+    const listed = await listGET(new Request("http://x/api/v1/companies", { headers: AUTH }));
+    expect(await listed.json()).toEqual([]);
+  });
+
+  it("returns 404 deleting an unknown company", async () => {
+    const res = await DELETE(del("nope", AUTH), ctx("nope"));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns a sane non-500 status deleting an already-deleted company", async () => {
+    // The route resolves by getCompanyBySlug, which filters deletedAt: null, so a
+    // second delete never even reaches deleteCompany() — it 404s at resolution,
+    // same as deleting any other slug that isn't live. Still non-500 either way.
+    await POST(post({ name: "Acme" }, AUTH));
+    await DELETE(del("acme", AUTH), ctx("acme"));
+    const res = await DELETE(del("acme", AUTH), ctx("acme"));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /api/v1/companies?includeDeleted=1", () => {
+  it("shows deleted companies to an admin", async () => {
+    await POST(post({ name: "Acme" }, AUTH));
+    await DELETE(del("acme", AUTH), ctx("acme"));
+    const res = await listGET(new Request("http://x/api/v1/companies?includeDeleted=1", { headers: AUTH }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveLength(1);
+  });
+
+  it("ignores includeDeleted for a non-admin session", async () => {
+    await POST(post({ name: "Acme" }, AUTH));
+    await DELETE(del("acme", AUTH), ctx("acme"));
+    const nonAdmin = await sessionCookie(["viewer"]);
+    const res = await listGET(new Request("http://x/api/v1/companies?includeDeleted=1", { headers: nonAdmin }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it("ignores includeDeleted for an anonymous caller", async () => {
+    await POST(post({ name: "Acme" }, AUTH));
+    await DELETE(del("acme", AUTH), ctx("acme"));
+    const res = await listGET(new Request("http://x/api/v1/companies?includeDeleted=1"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+});
+
+describe("POST /api/v1/companies/[slug]/restore", () => {
+  it("rejects without a session", async () => {
+    await POST(post({ name: "Acme" }, AUTH));
+    await DELETE(del("acme", AUTH), ctx("acme"));
+    const res = await RESTORE(restore("acme"), ctx("acme"));
+    expect(res.status).toBe(401);
+  });
+
+  it("restores a deleted company", async () => {
+    await POST(post({ name: "Acme" }, AUTH));
+    await DELETE(del("acme", AUTH), ctx("acme"));
+    const res = await RESTORE(restore("acme", AUTH), ctx("acme"));
+    expect(res.status).toBe(200);
+    const check = await detailGET(new Request("http://x"), ctx("acme"));
+    expect(check.status).toBe(200);
+  });
+
+  it("returns 409 when a live company already holds the slug", async () => {
+    await POST(post({ name: "Acme" }, AUTH));
+    await DELETE(del("acme", AUTH), ctx("acme"));
+    await POST(post({ name: "Acme" }, AUTH));
+    const res = await RESTORE(restore("acme", AUTH), ctx("acme"));
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toMatch(/slug/i);
+  });
+
+  it("returns 404 restoring an unknown company", async () => {
+    const res = await RESTORE(restore("nope", AUTH), ctx("nope"));
+    expect(res.status).toBe(404);
+  });
+
+  it("returns a sane non-500 status restoring a company that is not deleted", async () => {
+    await POST(post({ name: "Acme" }, AUTH));
+    const res = await RESTORE(restore("acme", AUTH), ctx("acme"));
+    expect(res.status).toBe(409);
   });
 });

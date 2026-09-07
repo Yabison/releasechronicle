@@ -29,7 +29,24 @@ describe("audit API", () => {
     await seed();
     const { rows, total } = await (await GET(req("", AUTH))).json();
     expect(total).toBe(3);
-    expect(rows[0].action).toBe("hook.created");
+    // The three writes land in the same millisecond, so this only holds because
+    // listAuditLog breaks the tie on the id rather than leaving it to the planner.
+    expect(rows.map((r: { action: string }) => r.action)).toEqual([
+      "hook.created",
+      "auth.login_failed",
+      "auth.login",
+    ]);
+  });
+
+  it("does not lose or repeat a row across pages", async () => {
+    await seed();
+    const page = async (offset: number) =>
+      (await (await GET(req(`?limit=1&offset=${offset}`, AUTH))).json()).rows[0].action;
+    expect([await page(0), await page(1), await page(2)]).toEqual([
+      "hook.created",
+      "auth.login_failed",
+      "auth.login",
+    ]);
   });
   it("filters by action and by outcome", async () => {
     await seed();

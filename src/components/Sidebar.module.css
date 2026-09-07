@@ -10,6 +10,15 @@
 .identity { display: flex; }
 .identityUser { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85em; color: var(--text); }
 .userIcon { font-size: 0.95em; }
+/* The name is a button: it opens the settings. Styled as text so the sidebar
+   does not grow a second control, but it is focusable and says what it does. */
+.userButton {
+  font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+  color: inherit; display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 5px;
+}
+.userButton:hover .userName { text-decoration: underline; }
+.userButton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .userName { font-weight: 600; }
 .logoutBtn { font: inherit; font-size: 0.9em; background: none; border: 0; padding: 0; margin-left: 4px; color: var(--muted); cursor: pointer; text-decoration: underline; }
 .loginBtn {
@@ -20,7 +29,8 @@
 
 .heading { color: var(--muted); font-size: 0.8em; letter-spacing: 0.1em; }
 .company { display: flex; flex-direction: column; gap: 4px; }
-.companyName { color: var(--muted); font-size: 0.85em; margin: var(--space) 0 4px; }
+.companyName { display: block; color: var(--muted); font-size: 0.85em; margin: var(--space) 0 4px; text-decoration: none; }
+.companyName:hover { color: var(--text); }
 .product { display: flex; flex-direction: column; gap: 2px; }
 .productRow {
   display: flex; align-items: center; gap: var(--space); width: 100%;
@@ -28,6 +38,9 @@
   padding: 4px; border-radius: var(--radius);
 }
 .productRow:hover { background: var(--cat-deploy-bg); }
+.productRow[data-active="true"] { background: var(--cat-deploy-bg); }
+.caretBtn { background: none; border: none; cursor: pointer; font: inherit; padding: 0; display: grid; place-items: center; }
+.productLink { display: flex; align-items: center; gap: var(--space); flex: 1; min-width: 0; color: inherit; text-decoration: none; }
 .caret { width: 1em; color: var(--muted); font-size: 0.75em; }
 .badge {
   width: 22px; height: 22px; display: grid; place-items: center;
@@ -47,7 +60,7 @@
 /* Services drawn as a subset (tree) hanging off their product. */
 .children {
   display: flex; flex-direction: column; gap: 2px;
-  margin-left: 14px; padding-left: 8px; border-left: 1.5px solid #b9bec7;
+  margin-left: 14px; padding-left: 8px; border-left: 1.5px solid var(--line-strong);
 }
 .upcoming {
   display: inline-flex; align-items: center; gap: 2px;
@@ -65,7 +78,7 @@
 /* Horizontal tick onto the vertical guide → ├─ / └─ tree look. */
 .service::before {
   content: ""; position: absolute; left: -8px; top: 50%;
-  width: 8px; height: 1.5px; background: #b9bec7;
+  width: 8px; height: 1.5px; background: var(--line-strong);
 }
 .service:hover { background: var(--cat-deploy-bg); }
 .service[data-active="true"] { background: var(--cat-deploy-bg); font-weight: 600; }

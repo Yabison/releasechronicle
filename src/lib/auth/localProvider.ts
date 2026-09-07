@@ -33,6 +33,18 @@ function loadUsers(): RawUser[] {
   }
 }
 
+/** The configured accounts, without their hashes. Entries missing a username or a
+ *  name are dropped, exactly as `authenticate` would refuse them. */
+export function listUsers(): { username: string; name: string; roles: Role[] }[] {
+  return loadUsers()
+    .filter((u) => typeof u.username === "string" && typeof u.name === "string")
+    .map((u) => ({
+      username: u.username as string,
+      name: u.name as string,
+      roles: Array.isArray(u.roles) ? (u.roles as unknown[]).filter(isRole) : [],
+    }));
+}
+
 export const localProvider: AuthProvider = {
   async authenticate(username: string, password: string): Promise<AuthUser | null> {
     const u = loadUsers().find((x) => x.username === username);

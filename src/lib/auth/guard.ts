@@ -11,3 +11,11 @@ export async function requireSessionRole(req: Request, role: Role): Promise<Resp
 export function requireAdmin(req: Request): Promise<Response | null> {
   return requireSessionRole(req, "admin");
 }
+
+/** True when the request carries a valid admin session. Used to gate
+ *  admin-only query params (e.g. `includeDeleted`) on GET routes that stay
+ *  reachable by non-admins for their normal (live-rows-only) listing. */
+export async function isAdminRequest(req: Request): Promise<boolean> {
+  const s = await readSessionFromCookieHeader(req.headers.get("cookie"));
+  return !!s?.roles.includes("admin");
+}

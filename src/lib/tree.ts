@@ -1,6 +1,8 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth/session";
 import { isAnonymous, getPublicEventTypes } from "@/lib/visibility";
+import { SIDEBAR_TREE_TAG, SIDEBAR_TREE_TTL_SECONDS } from "@/lib/cache";
 
 export type TreeService = {
   id: string; name: string; slug: string; type: string; isMaster: boolean;
@@ -70,4 +72,25 @@ export async function getSidebarTree(session: SessionUser | null = null): Promis
       })),
     })),
   }));
+}
+
+/**
+ * The sidebar tree as the layout should read it: cached, since the root layout
+ * renders on every navigation and this query costs one nested hierarchy read plus
+ * three grouped scans of the whole Event table.
+ *
+ * Two cache scopes only — anonymous and authenticated — because that is the whole
+ * of what the tree depends on: `getSidebarTree` reads the session through
+ * `isAnonymous` and nothing else, so every signed-in viewer shares one entry.
+ *
+ * Structure changes invalidate SIDEBAR_TREE_TAG on the spot (see hierarchy writes);
+ * counters ride the TTL.
+ */
+export function getSidebarTreeCached(session: SessionUser | null = null): Promise<TreeCompany[]> {
+  const scope = isAnonymous(session) ? "anon" : "auth";
+  return unstable_cache(
+    () => getSidebarTree(session),
+    [SIDEBAR_TREE_TAG, scope],
+    { revalidate: SIDEBAR_TREE_TTL_SECONDS, tags: [SIDEBAR_TREE_TAG] },
+  )();
 }

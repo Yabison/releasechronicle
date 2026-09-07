@@ -18,3 +18,13 @@ private/
 # Personal Claude Code overrides. .claude/settings.json is shared with the team;
 # this one is not.
 .claude/settings.local.json
+.claude/settings.json
+
+# Server-side demo secrets, never committed.
+.env.demo
+
+# Worktrees créés par Claude Code : un checkout complet, jamais versionné.
+.claude/worktrees/
+
+# Vendored at build time by scripts/copy-swagger.mjs from swagger-ui-dist.
+public/swagger/

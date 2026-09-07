@@ -108,11 +108,19 @@ describe("groupByMonth", () => {
     const groups = groupByMonth([
       { id: "a", eventId: "a", category: "DEPLOY", environment: "PROD", at: "2026-06-20T14:10:00.000Z", version: null, title: "", done: false, endAt: null },
       { id: "b", eventId: "b", category: "DEPLOY", environment: "PROD", at: "2026-05-02T09:00:00.000Z", version: null, title: "", done: false, endAt: null },
-    ]);
+    ], { mode: "utc", locale: "fr" });
     expect(groups[0].key).toBe("2026-06");
     expect(groups[0].label).toBe("JUIN 2026");
     expect(groups[1].key).toBe("2026-05");
     expect(groups[0].entries).toHaveLength(1);
+  });
+  it("puts a midnight-boundary event under the month its displayed stamp shows", () => {
+    // 22:30 UTC on May 31st = 00:30 on June 1st in Paris.
+    const groups = groupByMonth([
+      { id: "a", eventId: "a", category: "DEPLOY", environment: "PROD", at: "2026-05-31T22:30:00.000Z", version: null, title: "", done: false, endAt: null },
+    ], { mode: "local", timeZone: "Europe/Paris", locale: "fr" });
+    expect(groups[0].key).toBe("2026-06");
+    expect(groups[0].label).toBe("JUIN 2026");
   });
 });
 

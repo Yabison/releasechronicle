@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { isUniqueViolation } from "@/lib/http";
 
 export type DriftResult = { drift: boolean; running: string; expected: string | null; incidentId?: string };
 
@@ -8,6 +9,14 @@ export type DriftResult = { drift: boolean; running: string; expected: string | 
  * when they match again, auto-resolve any open one. Returns the drift status.
  */
 export async function reportRuntimeBuild(input: { serviceId: string; environment: string; build: string }): Promise<DriftResult> {
+  // Defensive only: the sole HTTP caller (POST /api/v1/ingest/runtime) already resolves
+  // serviceId via getServiceBySlug, which filters deletedAt: null — a deleted service
+  // never reaches this function through that route. This closes the hole for a direct
+  // call (tests, a future caller) bypassing that resolution: report no drift and record
+  // nothing rather than upserting RuntimeState or opening an incident for a dead service.
+  const live = await prisma.service.findFirst({ where: { id: input.serviceId, deletedAt: null }, select: { id: true } });
+  if (!live) return { drift: false, running: input.build, expected: null };
+
   await prisma.runtimeState.upsert({
     where: { serviceId_environment: { serviceId: input.serviceId, environment: input.environment } },
     create: { serviceId: input.serviceId, environment: input.environment, build: input.build },
@@ -20,7 +29,7 @@ export async function reportRuntimeBuild(input: { serviceId: string; environment
       deployStatus: "DEPLOYED", deletedAt: null,
     },
     orderBy: { occurredAt: "desc" },
-    select: { version: true },
+    select: { id: true, version: true },
   });
   const expected = last?.version ?? null;
   const drift = expected !== null && expected !== input.build;
@@ -34,17 +43,34 @@ export async function reportRuntimeBuild(input: { serviceId: string; environment
   });
 
   if (drift && !openDrift) {
-    const incident = await prisma.event.create({
-      data: {
-        serviceId: input.serviceId, environment: input.environment, type: "INCIDENT",
-        occurredAt: new Date(), startedAt: new Date(),
-        incidentType: "BUILD_DRIFT", incidentStatus: "INVESTIGATING",
-        comment: `Dérive de build : tourne ${input.build}, attendu ${expected}`,
-        source: "API",
-      },
-      select: { id: true },
-    });
-    return { drift, running: input.build, expected, incidentId: incident.id };
+    try {
+      const incident = await prisma.event.create({
+        data: {
+          serviceId: input.serviceId, environment: input.environment, type: "INCIDENT",
+          occurredAt: new Date(), startedAt: new Date(),
+          incidentType: "BUILD_DRIFT", incidentStatus: "INVESTIGATING",
+          comment: `Dérive de build : tourne ${input.build}, attendu ${expected}`,
+          source: "API",
+          // The drift is caused by the deployment whose version was expected.
+          causedById: last?.id ?? null,
+        },
+        select: { id: true },
+      });
+      return { drift, running: input.build, expected, incidentId: incident.id };
+    } catch (e) {
+      // Two agents reporting the same drift can both pass the check above; the
+      // partial unique index (one OPEN drift per service+env) turns the loser's
+      // create into a P2002. The incident exists either way — fetch and return it.
+      if (!isUniqueViolation(e)) throw e;
+      const existing = await prisma.event.findFirst({
+        where: {
+          serviceId: input.serviceId, environment: input.environment, type: "INCIDENT",
+          incidentType: "BUILD_DRIFT", resolvedAt: null, deletedAt: null,
+        },
+        select: { id: true },
+      });
+      return { drift, running: input.build, expected, incidentId: existing?.id };
+    }
   }
   if (!drift && openDrift) {
     await prisma.event.update({ where: { id: openDrift.id }, data: { resolvedAt: new Date(), incidentStatus: "RESOLVED" } });

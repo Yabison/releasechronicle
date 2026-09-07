@@ -12,7 +12,7 @@ export type ExportFilter = {
 
 /** Fetch non-deleted events matching the UI filter, with hierarchy slugs resolved. */
 export async function queryEventsForExport(filter: ExportFilter): Promise<ExportEvent[]> {
-  const where: Prisma.EventWhereInput = { deletedAt: null };
+  const where: Prisma.EventWhereInput = { deletedAt: null, service: { deletedAt: null } };
   if (filter.serviceId) where.serviceId = filter.serviceId;
   if (filter.environment) where.environment = filter.environment;
   if (filter.type) where.type = filter.type as EventType;

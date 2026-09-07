@@ -15,3 +15,17 @@ export const STATUS_META: Record<DeployStatus, StatusMeta> = {
 };
 
 export const ROLLBACK_COLOR = "#ef4444";
+
+/** CSS variable holding the text-safe colour of each status.
+ *  STATUS_META.color is a pill *fill*, meant to sit under white text; used as a
+ *  font colour on white it drops as low as 2.15:1. These tokens are the
+ *  readable counterparts, and they follow the theme. */
+export const STATUS_TEXT_VAR: Record<DeployStatus, string> = {
+  SCHEDULED: "var(--st-scheduled)",
+  GO_CONFIRMED: "var(--st-go)",
+  PENDING: "var(--st-pending)",
+  IN_PROGRESS: "var(--st-progress)",
+  DEPLOYED: "var(--st-deployed)",
+  TESTING: "var(--st-testing)",
+  VALIDATE: "var(--st-validate)",
+};

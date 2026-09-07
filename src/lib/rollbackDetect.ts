@@ -45,5 +45,7 @@ export async function detectRollbackOnIngest(eventId: string): Promise<{ flagged
   if (prev.tags.includes(ROLLBACK_TAG)) return { flagged: null };
 
   await prisma.event.update({ where: { id: prev.id }, data: { tags: { push: ROLLBACK_TAG } } });
+  // The rollback was caused by the release it reverts.
+  await prisma.event.update({ where: { id: eventId }, data: { causedById: prev.id } });
   return { flagged: prev.id };
 }

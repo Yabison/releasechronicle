@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toClientEvents, filterEvents, groupByDay, eventAppearance, calendarCells, resolveCausal, type ClientEvent } from "@/lib/timeline";
+import { toClientEvents, filterEvents, groupByDay, eventAppearance, calendarCells, type ClientEvent } from "@/lib/timeline";
 
 function ev(over: Partial<ClientEvent> = {}): ClientEvent {
   return {
@@ -125,22 +125,6 @@ describe("toClientEvents rollback mapping", () => {
     ];
     const [ev] = toClientEvents(rows);
     expect(ev.rollbacks[0].createdAt).toBe("2026-06-20T14:54:00.000Z");
-  });
-});
-
-describe("resolveCausal", () => {
-  it("resolves causedBy and led-to from the loaded set", () => {
-    const cause = ev({ id: "cause", type: "DEPLOYMENT", occurredAt: "2026-06-25T08:00:00.000Z" });
-    const effect = ev({ id: "effect", type: "INCIDENT", causedById: "cause", occurredAt: "2026-06-25T09:00:00.000Z" });
-    const all = [cause, effect];
-    expect(resolveCausal(effect, all).causedBy?.id).toBe("cause");
-    expect(resolveCausal(cause, all).led.map((e) => e.id)).toEqual(["effect"]);
-  });
-  it("returns undefined/empty for missing references", () => {
-    const e = ev({ id: "x", causedById: "ghost" });
-    const r = resolveCausal(e, [e]);
-    expect(r.causedBy).toBeUndefined();
-    expect(r.led).toEqual([]);
   });
 });
 

@@ -48,7 +48,7 @@
   padding: 6px 16px;
   border: none;
   border-radius: var(--radius);
-  background: var(--accent, #3b5bdb);
+  background: var(--accent);
   color: #fff;
   cursor: pointer;
 }
@@ -63,7 +63,7 @@
 }
 
 .error {
-  color: #c0392b;
+  color: var(--danger);
 }
 
 .tagRow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

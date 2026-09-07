@@ -1,30 +1,30 @@
+import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
-import { getProductBySlug } from "@/lib/hierarchy";
 import { listHooks, createHook } from "@/lib/hooks/config";
 import { getConnector } from "@/lib/hooks/registry";
 import { getTarget } from "@/lib/notificationTarget";
 import { checkConfiguredOutboundUrl } from "@/lib/outboundUrl";
 import { auditRequest } from "@/lib/audit";
+import { parseBody } from "@/lib/schemas/parse";
+import { resolveProduct, hostOf } from "@/lib/hooks/productRoute";
 import "@/lib/hooks";
 
-const hostOf = (raw: string): string | null => {
-  try { return new URL(raw).host; } catch { return null; }
-};
-
-async function resolve(req: Request, slug: string) {
-  const company = new URL(req.url).searchParams.get("company");
-  if (!company) return { error: Response.json({ error: "company query param is required" }, { status: 400 }) };
-  const product = await getProductBySlug(company, slug);
-  if (!product) return { error: Response.json({ error: "not found" }, { status: 404 }) };
-  return { product };
-}
+const postSchema = z.object({
+  type: z.string().catch(""),
+  url: z.preprocess((v) => (typeof v === "string" ? v.trim() : ""), z.string()),
+  config: z.preprocess((v) => (v && typeof v === "object" && !Array.isArray(v) ? v : null), z.record(z.string(), z.unknown()).nullable()),
+  targetId: z.string().catch(""),
+  events: z.preprocess((v) => (Array.isArray(v) && v.every((e) => typeof e === "string") ? v : ["*"]), z.array(z.string())),
+  transitions: z.preprocess((v) => (Array.isArray(v) && v.every((e) => typeof e === "string") ? v : []), z.array(z.string())),
+  enabled: z.unknown().optional(),
+});
 
 // Admin-only: hook config carries webhook URLs and custom auth headers.
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
   const { slug } = await params;
-  const r = await resolve(req, slug);
+  const r = await resolveProduct(req, slug);
   if (r.error) return r.error;
   return Response.json(await listHooks(r.product.id));
 }
@@ -33,23 +33,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const denied = await requireAdmin(req);
   if (denied) return denied;
   const { slug } = await params;
-  const r = await resolve(req, slug);
+  const r = await resolveProduct(req, slug);
   if (r.error) return r.error;
-  const body = await req.json().catch(() => null);
-  const type = body && typeof body.type === "string" ? body.type : "";
-  const url = body && typeof body.url === "string" ? body.url.trim() : "";
-  const configObj = body && body.config && typeof body.config === "object" && !Array.isArray(body.config)
-    ? (body.config as Record<string, unknown>)
-    : null;
-  const targetId = body && typeof body.targetId === "string" ? body.targetId : "";
+  const parsed = await parseBody(req, postSchema);
+  if (!parsed.ok) return parsed.res;
+  const { type, url, config: configObj, targetId, events, transitions, enabled: rawEnabled } = parsed.value;
+  const enabled = rawEnabled !== false;
   if (!getConnector(type)) return Response.json({ error: "unknown connector type" }, { status: 400 });
-  const events = Array.isArray(body.events) && body.events.every((e: unknown) => typeof e === "string") ? body.events : ["*"];
-  const transitions = Array.isArray(body.transitions) && body.transitions.every((t: unknown) => typeof t === "string") ? body.transitions : [];
   if (targetId) {
     const target = await getTarget(targetId);
     if (!target) return Response.json({ error: "unknown target" }, { status: 400 });
     if (target.type !== type) return Response.json({ error: "target type mismatch" }, { status: 400 });
-    const hook = await createHook({ productId: r.product.id, type, events, transitions, config: {}, targetId, enabled: body.enabled !== false });
+    const hook = await createHook({ productId: r.product.id, type, events, transitions, config: {}, targetId, enabled });
     await auditRequest(req, { action: "hook.created", target: hook.id, detail: { product: slug, type, targetId, events } });
     return Response.json(hook, { status: 201 });
   }
@@ -62,7 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const checked = checkConfiguredOutboundUrl(target);
     if (!checked.ok) return Response.json({ error: checked.reason }, { status: 400 });
   }
-  const hook = await createHook({ productId: r.product.id, type, events, transitions, config, enabled: body.enabled !== false });
+  const hook = await createHook({ productId: r.product.id, type, events, transitions, config, enabled });
   // The host, not the full url: query strings in webhook urls are often the token.
   await auditRequest(req, { action: "hook.created", target: hook.id, detail: { product: slug, type, events, host: hostOf(target) } });
   return Response.json(hook, { status: 201 });

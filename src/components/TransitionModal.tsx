@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { DeployStatus } from "@prisma/client";
@@ -47,7 +49,8 @@ export function TransitionModal({
   }
 
   return (
-    <div className={styles.overlay} onClick={pending ? undefined : onClose}>
+    // No overlay-click close: a stray click must not discard the typed comment.
+    <div className={styles.overlay}>
       <div ref={modalRef} className={styles.modal} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <h3>{t("modal.transitionTitle")} <span style={{ color: STATUS_META[to].color }}>{STATUS_META[to].label}</span></h3>
         <label className={styles.field}>
@@ -60,7 +63,7 @@ export function TransitionModal({
             {error.includes("connexion") && (
               <>
                 {" "}
-                <a href="/login" className={styles.loginLink}>{t("common.login")}</a>
+                <Link href="/login" className={styles.loginLink}>{t("common.login")}</Link>
               </>
             )}
           </p>

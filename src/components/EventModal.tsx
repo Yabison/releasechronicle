@@ -1,8 +1,8 @@
 "use client";
 
 import { EventForm, type MepCandidate } from "./EventForm";
+import { Modal } from "./Modal";
 import { useI18n } from "@/i18n/useI18n";
-import styles from "./EventModal.module.css";
 
 export function EventModal({
   company,
@@ -31,23 +31,19 @@ export function EventModal({
 }) {
   const { t } = useI18n();
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
-        <button className={styles.close} onClick={onClose} aria-label={t("common.close")}>×</button>
-        <h2>{title ?? t("form.newEvent")}</h2>
-        <EventForm
-          company={company}
-          product={product}
-          service={service}
-          path={path}
-          onSuccess={onClose}
-          mepCandidates={mepCandidates}
-          defaultChangeType={defaultChangeType}
-          defaultParentId={defaultParentId}
-          defaultEnvironment={defaultEnvironment}
-          parentOccurredAt={parentOccurredAt}
-        />
-      </div>
-    </div>
+    <Modal title={title ?? t("form.newEvent")} onClose={onClose}>
+      <EventForm
+        company={company}
+        product={product}
+        service={service}
+        path={path}
+        onSuccess={onClose}
+        mepCandidates={mepCandidates}
+        defaultChangeType={defaultChangeType}
+        defaultParentId={defaultParentId}
+        defaultEnvironment={defaultEnvironment}
+        parentOccurredAt={parentOccurredAt}
+      />
+    </Modal>
   );
 }

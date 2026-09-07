@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env
+.env.test
+.env.local
+*.log
+.DS_Store
+docs
+tests
+README.md
+Dockerfile
+.dockerignore
+docker-compose.yml

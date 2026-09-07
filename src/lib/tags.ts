@@ -30,22 +30,27 @@ export async function setTagColor(name: string, color: string): Promise<void> {
   });
 }
 
-/** Rename a tag everywhere: across all events + its config (if any). */
+/** Rename a tag everywhere: across all events + its config (if any). Atomic — a
+ *  failure halfway must not leave events renamed but the config pointing elsewhere. */
 export async function renameTag(oldName: string, newName: string): Promise<void> {
   const nn = newName.trim();
   if (!nn || nn === oldName) return;
-  await prisma.$executeRaw`UPDATE "Event" SET tags = array_replace(tags, ${oldName}, ${nn}) WHERE ${oldName} = ANY(tags)`;
-  const oldSlug = slugify(oldName), newSlug = slugify(nn);
-  const cfg = await prisma.tagConfig.findUnique({ where: { slug: oldSlug } });
-  if (cfg) {
-    // Free the target slug first so the rename can't hit the unique constraint.
-    if (newSlug !== oldSlug) await prisma.tagConfig.deleteMany({ where: { slug: newSlug } });
-    await prisma.tagConfig.update({ where: { id: cfg.id }, data: { name: nn, slug: newSlug } });
-  }
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`UPDATE "Event" SET tags = array_replace(tags, ${oldName}, ${nn}) WHERE ${oldName} = ANY(tags)`;
+    const oldSlug = slugify(oldName), newSlug = slugify(nn);
+    const cfg = await tx.tagConfig.findUnique({ where: { slug: oldSlug } });
+    if (cfg) {
+      // Free the target slug first so the rename can't hit the unique constraint.
+      if (newSlug !== oldSlug) await tx.tagConfig.deleteMany({ where: { slug: newSlug } });
+      await tx.tagConfig.update({ where: { id: cfg.id }, data: { name: nn, slug: newSlug } });
+    }
+  });
 }
 
-/** Remove a tag everywhere: from all events + its config. */
+/** Remove a tag everywhere: from all events + its config. Atomic for the same reason. */
 export async function deleteTagEverywhere(name: string): Promise<void> {
-  await prisma.$executeRaw`UPDATE "Event" SET tags = array_remove(tags, ${name}) WHERE ${name} = ANY(tags)`;
-  await prisma.tagConfig.deleteMany({ where: { slug: slugify(name) } });
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`UPDATE "Event" SET tags = array_remove(tags, ${name}) WHERE ${name} = ANY(tags)`;
+    await tx.tagConfig.deleteMany({ where: { slug: slugify(name) } });
+  });
 }

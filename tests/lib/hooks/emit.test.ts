@@ -20,8 +20,9 @@ describe("emitHooks", () => {
       fields: { version: "1.0.0", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "1.0.0" } });
     await prisma.hook.create({ data: { productId: p.id, type: "t-emit", events: ["*"], config: {}, enabled: true } });
 
-    const done = emitHooks(ev.id, "deploy.created", "al");
-    await done;
+    const { delivered } = await emitHooks(ev.id, "deploy.created", "al");
+    await delivered;
     expect(await prisma.hookDelivery.count()).toBe(1);
+    expect((await prisma.hookDelivery.findFirstOrThrow()).status).toBe("OK");
   });
 });

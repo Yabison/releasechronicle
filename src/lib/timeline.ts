@@ -185,14 +185,3 @@ export function calendarCells(events: ClientEvent[], year: number, month: number
   return weeks;
 }
 
-export type EventSummary = { id: string; type: ClientEvent["type"]; environment: string; occurredAt: string };
-
-export function resolveCausal(
-  event: ClientEvent,
-  all: ClientEvent[],
-): { causedBy?: EventSummary; led: EventSummary[] } {
-  const toSummary = (e: ClientEvent): EventSummary => ({ id: e.id, type: e.type, environment: e.environment, occurredAt: e.occurredAt });
-  const causedBy = event.causedById ? all.find((e) => e.id === event.causedById) : undefined;
-  const led = all.filter((e) => e.causedById === event.id);
-  return { causedBy: causedBy ? toSummary(causedBy) : undefined, led: led.map(toSummary) };
-}

@@ -2,13 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import type { EventType, ChangeType } from "@prisma/client";
-import { DeployStatus } from "@prisma/client";
+import { DeployStatus, ChangeType as ChangeTypeEnum } from "@prisma/client";
 import {
-  validateDeploymentBody,
-  validateIncidentBody,
-  validateMaintenanceBody,
-  type ValidatedEvent,
-} from "@/lib/eventValidation";
+  deploymentBodySchema,
+  incidentBodySchema,
+  maintenanceBodySchema,
+  type EventBodyShape,
+} from "@/lib/schemas/event";
+import { zodErrorMessage } from "@/lib/schemas/parse";
 import { persistValidated } from "@/lib/ingest";
 import { getActiveEnvSlugs } from "@/lib/environment";
 import { emitHooks } from "@/lib/hooks/dispatch";
@@ -26,12 +27,16 @@ import {
   setEventTags,
   setEventOccurredAt,
   createEvent,
+  setEventCausedBy,
   type EventData,
   AnnotationTargetError,
   IncidentTargetError,
   DeployTransitionError,
+  CausalLinkError,
+  PhaseTransitionError,
+  RetiredChangeTypeError,
 } from "@/lib/events";
-import { getServiceBySlug } from "@/lib/hierarchy";
+import { getServicesBySlugs, serviceRefKey } from "@/lib/hierarchy";
 import { prisma } from "@/lib/db";
 import { commentRequired, roleGroup } from "@/lib/deployWorkflow";
 import { getSession, hasRole } from "@/lib/auth/session";
@@ -58,45 +63,33 @@ export async function createEventAction(input: CreateEventInput): Promise<Create
   if (!(await getSession())) return fail("err.loginRequired");
   const { type, path, ...body } = input;
 
-  let v:
-    | ReturnType<typeof validateDeploymentBody>
-    | ReturnType<typeof validateIncidentBody>
-    | ReturnType<typeof validateMaintenanceBody>;
+  const schema =
+    type === "DEPLOYMENT" ? deploymentBodySchema :
+    type === "INCIDENT" ? incidentBodySchema :
+    type === "MAINTENANCE" ? maintenanceBodySchema : null;
+  if (!schema) return fail("err.unknownEventType");
 
-  switch (type) {
-    case "DEPLOYMENT":
-      v = validateDeploymentBody(body);
-      break;
-    case "INCIDENT":
-      v = validateIncidentBody(body);
-      break;
-    case "MAINTENANCE":
-      v = validateMaintenanceBody(body);
-      break;
-    default:
-      return fail("err.unknownEventType");
-  }
-
-  if (!v.ok) return { ok: false, error: v.error };
+  const v = schema.safeParse(body);
+  if (!v.success) return { ok: false, error: zodErrorMessage(v.error) };
 
   // PRE/POST MEP: inherit the parent's environment and keep the date before/after it.
   if (type === "DEPLOYMENT") {
-    const f = (v.value.fields ?? {}) as { changeType?: string; parentId?: string | null };
+    const f = (v.data.fields ?? {}) as { changeType?: string; parentId?: string | null };
     if ((f.changeType === "PRE_MEP" || f.changeType === "POST_MEP") && f.parentId) {
       const parent = await prisma.event.findUnique({ where: { id: f.parentId }, select: { environment: true, occurredAt: true } });
       if (!parent) return fail("err.parentNotFound");
-      (v.value as { environment: string }).environment = parent.environment;
-      const when = v.value.occurredAt;
+      (v.data as { environment: string }).environment = parent.environment;
+      const when = v.data.occurredAt;
       if (f.changeType === "PRE_MEP" && when >= parent.occurredAt) return fail("err.preBeforeParent");
       if (f.changeType === "POST_MEP" && when <= parent.occurredAt) return fail("err.postAfterParent");
     }
   }
 
-  if (!(await getActiveEnvSlugs()).includes(v.value.environment)) {
+  if (!(await getActiveEnvSlugs()).includes(v.data.environment)) {
     return fail("err.unknownEnv");
   }
 
-  const res = await persistValidated(type, v.value as ValidatedEvent<Record<string, unknown>>);
+  const res = await persistValidated(type, v.data as EventBodyShape<Record<string, unknown>>);
   if (res.status >= 400) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     return data.error ? { ok: false, error: data.error } : fail("err.requestFailed", { status: res.status });
@@ -132,7 +125,7 @@ export async function createRollbackAction(input: {
     }
     throw e;
   }
-  emitHooks(input.eventId, "deploy.rolled_back", actorName);
+  await emitHooks(input.eventId, "deploy.rolled_back", actorName);
   revalidatePath(input.path);
   return { ok: true };
 }
@@ -226,7 +219,7 @@ export async function transitionDeployStatusAction(input: {
     }
     throw e;
   }
-  emitHooks(input.eventId, "deploy.status_changed", actorName);
+  await emitHooks(input.eventId, "deploy.status_changed", actorName);
   revalidatePath(input.path);
   return { ok: true };
 }
@@ -260,7 +253,7 @@ export async function undoDeployStatusAction(input: {
     if (e instanceof DeployTransitionError) return fail("err.noTransitionToUndo");
     throw e;
   }
-  emitHooks(input.eventId, "deploy.status_undone", actorName);
+  await emitHooks(input.eventId, "deploy.status_undone", actorName);
   revalidatePath(input.path);
   return { ok: true };
 }
@@ -286,9 +279,21 @@ export async function updateEventLotAction(input: {
   return { ok: true };
 }
 
-const CHANGE_TYPES: ChangeType[] = ["POSTMEP_SQL", "HOTFIX", "NORMAL"];
+// The allowlist is just every ChangeType value — no hand-maintained copy to drift.
+// It stays the full enum on purpose: this only rejects a value that is not a
+// ChangeType at all. Which values may be *entered* is policy, and policy lives in
+// `setEventChangeType` — phases can only be reached from a phase, and a retired
+// type can only be kept on an event that already carries it. Narrowing this list
+// to the creatable set would break reclassifying a retired event, which the
+// drawer offers.
+const CHANGE_TYPES: ChangeType[] = Object.values(ChangeTypeEnum);
 
-/** Change a deployment's type after the fact (e.g. a MEP reclassified as MEP HOTFIX). */
+/**
+ * Change a deployment's type after the fact (e.g. a MEP reclassified as MEP HOTFIX).
+ * Entering PRE_MEP/POST_MEP on an event that isn't already a phase is rejected by
+ * the domain layer — see `setEventChangeType` — since only PRE_MEP ↔ POST_MEP
+ * reclassification is allowed; a non-phase event can never become one here.
+ */
 export async function updateEventChangeTypeAction(input: {
   eventId: string;
   changeType: string;
@@ -304,6 +309,12 @@ export async function updateEventChangeTypeAction(input: {
   } catch (e) {
     if (e instanceof AnnotationTargetError) {
       return fail("err.changeTypeDeployOnly");
+    }
+    if (e instanceof PhaseTransitionError) {
+      return fail("err.phaseTransitionNotAllowed");
+    }
+    if (e instanceof RetiredChangeTypeError) {
+      return fail("err.retiredChangeType");
     }
     throw e;
   }
@@ -412,6 +423,31 @@ export async function addEventCommentAction(input: {
   return { ok: true };
 }
 
+const CAUSAL_ERROR_KEYS: Record<CausalLinkError["reason"], string> = {
+  selfLink: "err.causeSelfLink",
+  causeNotFound: "err.causeNotFound",
+  differentProduct: "err.causeDifferentProduct",
+  cycle: "err.causeCycle",
+};
+
+/** Set (or clear, with null causeId) the event that caused this one. */
+export async function updateEventCausedByAction(input: {
+  eventId: string;
+  causeId: string | null;
+  path: string;
+}): Promise<CreateEventResult> {
+  if (!(await getSession())) return fail("err.loginRequired");
+  try {
+    const updated = await setEventCausedBy(input.eventId, input.causeId);
+    if (!updated) return fail("err.eventNotFound");
+  } catch (e) {
+    if (e instanceof CausalLinkError) return fail(CAUSAL_ERROR_KEYS[e.reason]);
+    throw e;
+  }
+  revalidatePath(input.path);
+  return { ok: true };
+}
+
 /** Group already-existing deployments into a (manual) lot. */
 export async function createLotFromExistingAction(input: {
   eventIds: string[];
@@ -449,6 +485,11 @@ export async function createLotAction(input: CreateLotInput): Promise<{ ok: true
   const active = new Set(await getActiveEnvSlugs());
   if (!active.has(common.environment)) return fail("err.unknownEnv");
 
+  // Resolved up front, in one query: the loop below would otherwise resolve a
+  // service per item. Order of failures is unchanged — each item is still zod-
+  // checked before its service is looked up, and the first bad item still wins.
+  const services = await getServicesBySlugs(items);
+
   const validated: { data: EventData }[] = [];
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
@@ -460,15 +501,15 @@ export async function createLotAction(input: CreateLotInput): Promise<{ ok: true
       ...(common.occurredAt ? { occurredAt: common.occurredAt } : {}),
       ...(common.scheduledAt ? { scheduledAt: common.scheduledAt } : {}),
     };
-    const v = validateDeploymentBody(body);
-    if (!v.ok) return fail("err.lotRow", { n: i + 1, reason: v.error });
-    const svc = await getServiceBySlug(it.company, it.product, it.service);
+    const v = deploymentBodySchema.safeParse(body);
+    if (!v.success) return fail("err.lotRow", { n: i + 1, reason: zodErrorMessage(v.error) });
+    const svc = services.get(serviceRefKey(it));
     if (!svc) return fail("err.lotRow", { n: i + 1, reason: "err.serviceNotFound" });
     validated.push({
       data: {
-        serviceId: svc.id, environment: v.value.environment, type: "DEPLOYMENT",
-        occurredAt: v.value.occurredAt, externalId: v.value.externalId,
-        tags: v.value.tags ?? [], fields: v.value.fields,
+        serviceId: svc.id, environment: v.data.environment, type: "DEPLOYMENT",
+        occurredAt: v.data.occurredAt, externalId: v.data.externalId,
+        tags: v.data.tags ?? [], fields: v.data.fields,
       } as EventData,
     });
   }
@@ -482,7 +523,7 @@ export async function createLotAction(input: CreateLotInput): Promise<{ ok: true
     return out;
   });
 
-  for (const id of ids) emitHooks(id, "deploy.created");
+  for (const id of ids) await emitHooks(id, "deploy.created");
   revalidatePath(path);
   return { ok: true, created: ids.length };
 }

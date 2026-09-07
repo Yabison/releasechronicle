@@ -1,7 +1,15 @@
+import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/guard";
 import { auditRequest } from "@/lib/audit";
 import { createIngestSource, listGlobalIngestSources } from "@/lib/ingestSource";
 import { getActiveEnvSlugs } from "@/lib/environment";
+import { nonEmpty } from "@/lib/schemas/common";
+import { parseBody } from "@/lib/schemas/parse";
+
+const postSchema = z.object({
+  label: nonEmpty(),
+  defaultEnvironment: z.string().catch(""),
+});
 
 // Admin-only: the rows carry the plaintext CI write token.
 export async function GET(req: Request) {
@@ -13,10 +21,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const denied = await requireAdmin(req);
   if (denied) return denied;
-  const body = await req.json().catch(() => null);
-  const label = body && typeof body.label === "string" ? body.label.trim() : "";
-  const env = body && typeof body.defaultEnvironment === "string" ? body.defaultEnvironment : "";
-  if (!label) return Response.json({ error: "label is required" }, { status: 400 });
+  const parsed = await parseBody(req, postSchema);
+  if (!parsed.ok) return parsed.res;
+  const { label, defaultEnvironment: env } = parsed.value;
   const ENVS = await getActiveEnvSlugs();
   if (env !== "ALL" && !ENVS.includes(env)) return Response.json({ error: "valid defaultEnvironment (or ALL) is required" }, { status: 400 });
   const source = await createIngestSource({ scope: "GLOBAL", label, defaultEnvironment: env === "ALL" ? null : env });

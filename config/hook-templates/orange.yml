@@ -1,13 +1,38 @@
-# Template orange — MEP en cours (deploying / in progress / testing).
-# Variables: {kind} {company} {product} {service} {environment} {actor}
-#            {version} {status} {comment} {fromStatus} {toStatus} {actionUrl}
+# Template orange — release en cours.
+#
+# Every value the dispatcher knows is available. `transition` and `kindLabel`
+# are computed: `transition` is empty when there is none, so a creation no
+# longer renders as a bare arrow between two blanks, and `kindLabel` is the
+# sentence a reader understands where `kind` is the internal identifier.
+#
+#   identity     {kind} {kindLabel} {eventId} {type}
+#   where        {company} {product} {service} {environment}
+#   who / when   {actor} {when} {occurredAt}
+#   deployment   {version} {status} {fromStatus} {toStatus} {transition}
+#   incident     {incidentType}
+#   maintenance  {scheduledAt} {windowStart} {windowEnd}
+#   free text    {comment}
+#   links        {actionUrl} (deployments only) {eventUrl} (always)
 email:
-  subject: "🟠 [{product}/{service}] {kind}"
+  subject: "🟠 [{product}/{service}] {kindLabel} — {environment}"
   body: |
-    MEP en cours sur {product}/{service} ({environment})
-    Version {version} · {fromStatus} → {toStatus} · statut {status} · par {actor}
+    {kindLabel} sur {company} / {product} / {service}
+    Environnement : {environment}
+    Quand : {when}
+    Version : {version}
+    Statut : {status} {transition}
+    Par : {actor}
+    Type d'incident : {incidentType}
+    Prévu le : {scheduledAt}
+    Fenêtre : {windowStart} → {windowEnd}
+
     {comment}
+
     Action : {actionUrl}
+    Voir l'événement : {eventUrl}
 teams:
-  title: "🟠 {kind} — {product}/{service} ({environment})"
-  text: "Version {version} · {fromStatus} → {toStatus} · par {actor}. {comment} · {actionUrl}"
+  title: "🟠 {kindLabel} — {product}/{service} ({environment})"
+  text: |
+    **{version}** {transition}
+    Statut {status} · par {actor} · {when}
+    {comment}

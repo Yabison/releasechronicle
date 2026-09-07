@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
-import { validateDeploymentBody } from "@/lib/eventValidation";
+import { deploymentBodySchema } from "@/lib/schemas/event";
 import { persistValidatedEvent, ServiceNotFoundError } from "@/lib/ingest";
 import { createEvent } from "@/lib/events";
 
@@ -23,43 +23,43 @@ afterAll(async () => { await prisma.$disconnect(); });
 describe("persistValidatedEvent", () => {
   it("creates an event when the service resolves", async () => {
     await seed();
-    const v = validateDeploymentBody(body({ externalId: "dep-1" }));
-    if (!v.ok) throw new Error(v.error);
-    const ev = await persistValidatedEvent("DEPLOYMENT", v.value);
+    const v = deploymentBodySchema.safeParse(body({ externalId: "dep-1" }));
+    if (!v.success) throw new Error(v.error.message);
+    const ev = await persistValidatedEvent("DEPLOYMENT", v.data);
     expect(ev.type).toBe("DEPLOYMENT");
     expect(ev.externalId).toBe("dep-1");
   });
 
   it("upserts by externalId when an externalId path is given", async () => {
     await seed();
-    const first = validateDeploymentBody(body({ version: "1.0.0" }));
-    const second = validateDeploymentBody(body({ version: "2.0.0" }));
-    if (!first.ok || !second.ok) throw new Error("invalid");
-    await persistValidatedEvent("DEPLOYMENT", first.value, "ext-1");
-    await persistValidatedEvent("DEPLOYMENT", second.value, "ext-1");
+    const first = deploymentBodySchema.safeParse(body({ version: "1.0.0" }));
+    const second = deploymentBodySchema.safeParse(body({ version: "2.0.0" }));
+    if (!first.success || !second.success) throw new Error("invalid");
+    await persistValidatedEvent("DEPLOYMENT", first.data, "ext-1");
+    await persistValidatedEvent("DEPLOYMENT", second.data, "ext-1");
     const all = await prisma.event.findMany({ where: { externalId: "ext-1" } });
     expect(all).toHaveLength(1);
     expect(all[0].version).toBe("2.0.0");
   });
 
   it("throws ServiceNotFoundError for an unknown service", async () => {
-    const v = validateDeploymentBody(body({ service: "ghost" }));
-    if (!v.ok) throw new Error(v.error);
-    await expect(persistValidatedEvent("DEPLOYMENT", v.value)).rejects.toBeInstanceOf(ServiceNotFoundError);
+    const v = deploymentBodySchema.safeParse(body({ service: "ghost" }));
+    if (!v.success) throw new Error(v.error.message);
+    await expect(persistValidatedEvent("DEPLOYMENT", v.data)).rejects.toBeInstanceOf(ServiceNotFoundError);
   });
 });
 
 describe("createEvent initial status transition", () => {
   it("records a null -> status transition when a deployment has a deployStatus", async () => {
     await seed();
-    const v = validateDeploymentBody(body({ externalId: "dep-1", requester: "alice", deployStatus: "DEPLOYED" }));
-    if (!v.ok) throw new Error(v.error);
+    const v = deploymentBodySchema.safeParse(body({ externalId: "dep-1", requester: "alice", deployStatus: "DEPLOYED" }));
+    if (!v.success) throw new Error(v.error.message);
     // build EventData the way ingest does
     const { prisma: db } = await import("@/lib/db");
     const svc = await db.service.findFirst({ where: { slug: "payment-api" } });
     const ev = await createEvent({
       serviceId: svc!.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(),
-      externalId: "dep-1", tags: [], fields: v.value.fields as Record<string, unknown>,
+      externalId: "dep-1", tags: [], fields: v.data.fields as Record<string, unknown>,
     });
     const hist = await prisma.statusTransition.findMany({ where: { eventId: ev.id } });
     expect(hist).toHaveLength(1);

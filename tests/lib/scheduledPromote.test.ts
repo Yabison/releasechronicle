@@ -3,6 +3,7 @@ import { resetDb, prisma } from "../setup/db";
 import { createCompany, createProduct, createService } from "@/lib/hierarchy";
 import { createEvent } from "@/lib/events";
 import { promoteScheduledDeployments } from "@/lib/scheduledPromote";
+import { deleteService } from "@/lib/hierarchyDelete";
 
 async function svc() {
   const c = await createCompany({ name: "Acme" });
@@ -29,6 +30,15 @@ describe("promoteScheduledDeployments", () => {
     const t = await prisma.statusTransition.findFirst({ where: { eventId: ev.id, toStatus: "PENDING" } });
     expect(t?.fromStatus).toBe("GO_CONFIRMED");
     expect(t?.actorName).toBe("scheduler");
+  });
+  it("does not promote a due deployment whose service has been soft-deleted", async () => {
+    const s = await svc();
+    const soon = new Date(Date.now() + 5 * 60_000);
+    const ev = await scheduled(s, soon);
+    await deleteService(s);
+    const r = await promoteScheduledDeployments(new Date());
+    expect(r.promoted).toBe(0);
+    expect((await prisma.event.findUniqueOrThrow({ where: { id: ev.id } })).deployStatus).toBe("GO_CONFIRMED");
   });
   it("leaves a far-future SCHEDULED deploy untouched", async () => {
     const s = await svc();
