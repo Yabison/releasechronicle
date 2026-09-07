@@ -15,6 +15,7 @@ import { join } from "node:path";
 const root = (p: string) => join(process.cwd(), p);
 
 const IMPORT_DIR = "private/import";
+const RELEASE_NOTES_DIR = "private/releases";
 const IMPORT_EXT = /\.(csv|xlsx)$/i;
 const MEP_TRACKING_FILE = "Suivi des MEPs.xlsx";
 
@@ -27,6 +28,16 @@ export const PRIVATE_PATHS = {
    */
   mepTracking: () =>
     process.env.RC_PRIVATE_MEP_TRACKING ?? join(root(IMPORT_DIR), MEP_TRACKING_FILE),
+  /**
+   * The release-note tree: one folder per release, named `<env...> <day> <label>`,
+   * holding the note the Azure DevOps generator produced. Optional — without it no
+   * changelog is imported — so callers test existsSync() rather than
+   * requirePrivateFile().
+   *
+   * Usually a symlink or an env var pointing at wherever the team already keeps
+   * these folders; they predate this app and are not ours to move.
+   */
+  releaseNotes: () => process.env.RC_PRIVATE_RELEASE_NOTES ?? root(RELEASE_NOTES_DIR),
   /**
    * The deployment export, .csv (raw rundeck) or .xlsx (already in the app's shape).
    *

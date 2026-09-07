@@ -19,6 +19,7 @@
     "db:seed:demo": "tsx prisma/seed-demo.ts",
     "db:seed:private": "tsx prisma/seed-private.ts",
     "db:seed:private:config": "tsx prisma/seed-private.ts --config-only",
+    "db:seed:releasenotes": "tsx prisma/seed-release-notes.ts",
     "demo:tick": "tsx prisma/demo-tick.ts",
     "demo:reset": "tsx prisma/demo-reset.ts",
     "dev:up": "docker compose up -d $(docker compose config --services | grep -vx app)",
