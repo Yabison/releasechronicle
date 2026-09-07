@@ -1,6 +1,4 @@
 "use client";
-import Link from "next/link";
-import { ChangelogBody } from "./ChangelogBody";
 
 import { useRef, useState, useTransition, useMemo, useEffect } from "react";
 import { slugify } from "@/lib/slug";
@@ -31,6 +29,10 @@ function Comments({ event, path, canWrite = true }: { event: ClientEvent; path: 
   const [pending, startTransition] = useTransition();
   const { t } = useI18n();
   const { stampShort } = useTimeFormat();
+  // La zone de saisie ne s'ouvre qu'a la demande : dans une colonne etroite, un
+  // textarea toujours deploye poussait le reste de la fiche hors de l'ecran
+  // alors qu'on ne commente qu'une fois de temps en temps.
+  const [adding, setAdding] = useState(false);
   return (
     <div className={styles.section}>
       <h2 className={styles.secTitle}>{t("drawer.comments")}</h2>
@@ -49,9 +51,12 @@ function Comments({ event, path, canWrite = true }: { event: ClientEvent; path: 
         ))}
         {!event.comment && event.comments.length === 0 && <p className={styles.commentMeta}>{t("drawer.noComment")}</p>}
       </div>
-      {canWrite && (
+      {canWrite && !adding && (
+        <button type="button" className={styles.addToggle} onClick={() => setAdding(true)} title={t("drawer.addComment")} aria-label={t("drawer.addComment")}>+</button>
+      )}
+      {canWrite && adding && (
         <div className={styles.commentAdd}>
-          <textarea className={styles.commentArea} rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder={t("drawer.addComment")} />
+          <textarea className={styles.commentArea} rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder={t("drawer.addComment")} autoFocus />
           <button
             className={styles.saveBtn}
             disabled={pending || !body.trim()}
@@ -59,7 +64,7 @@ function Comments({ event, path, canWrite = true }: { event: ClientEvent; path: 
               setErr(null);
               startTransition(async () => {
                 const res = await addEventCommentAction({ eventId: event.id, body, path });
-                if (res.ok) { setBody(""); router.refresh(); } else setErr(actionMessage(t, res));
+                if (res.ok) { setBody(""); setAdding(false); router.refresh(); } else setErr(actionMessage(t, res));
               });
             }}
           >
@@ -80,6 +85,7 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { t } = useI18n();
+  const [adding, setAdding] = useState(false);
   const [tagColors, setTagColors] = useState<Record<string, string>>({});
   useEffect(() => {
     fetch("/api/v1/tags").then((r) => r.json()).then((rows: { slug: string; name: string; color: string }[]) => {
@@ -98,6 +104,10 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
     if (t && !list.includes(t)) setList([...list, t]);
     setInput("");
   };
+  // Le champ s'ouvre au +, mais reste ouvert des qu'il y a quelque chose a
+  // enregistrer : retirer une puce ne fait que changer l'etat local, et cacher
+  // le bouton Enregistrer laisserait la suppression sans issue.
+  const editing = adding || dirty;
   return (
     <div className={styles.section}>
       <h2 className={styles.secTitle}>{t("form.tags")}</h2>
@@ -109,8 +119,11 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
           </span>
         ))}
         {list.length === 0 && <span className={styles.commentMeta}>{t("drawer.noTag")}</span>}
+        {canWrite && !editing && (
+          <button type="button" className={styles.addToggle} onClick={() => setAdding(true)} title={t("form.addTag")} aria-label={t("form.addTag")}>+</button>
+        )}
       </div>
-      {canWrite && (
+      {canWrite && editing && (
       <div className={styles.tagAdd}>
         <input
           list="tag-suggestions"
@@ -118,6 +131,7 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
           placeholder={t("form.addTag")}
+          autoFocus
         />
         <datalist id="tag-suggestions">{suggestions.map((s) => <option key={s} value={s} />)}</datalist>
         <button type="button" onClick={add}>+</button>
@@ -128,7 +142,7 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
             setErr(null);
             startTransition(async () => {
               const res = await updateEventTagsAction({ eventId: event.id, tags: effective, path });
-              if (res.ok) { setList(effective); setInput(""); router.refresh(); }
+              if (res.ok) { setList(effective); setInput(""); setAdding(false); router.refresh(); }
               else setErr(actionMessage(t, res));
             });
           }}
@@ -143,7 +157,9 @@ function Tags({ event, path, suggestions, canWrite = true }: { event: ClientEven
 }
 
 /** Edit an event's date (occurredAt). */
-function DateEdit({ event, path }: { event: ClientEvent; path: string }) {
+/** Une ligne : ce qu'on lui passe en tete (le menu HO/HNO), le calendrier, OK.
+ *  Pas de libelle "Date" -- un champ datetime-local s'annonce tout seul. */
+function DateEdit({ event, path, lead }: { event: ClientEvent; path: string; lead?: React.ReactNode }) {
   const router = useRouter();
   const { toInput, fromInput } = useTimeFormat();
   const [val, setVal] = useState(toInput(event.occurredAt));
@@ -153,8 +169,8 @@ function DateEdit({ event, path }: { event: ClientEvent; path: string }) {
   const dirty = val !== toInput(event.occurredAt);
   return (
     <div className={styles.dateEdit}>
-      <span className={styles.key}>{t("common.date")}</span>
-      <input type="datetime-local" value={val} onChange={(e) => setVal(e.target.value)} />
+      {lead}
+      <input type="datetime-local" aria-label={t("common.date")} value={val} onChange={(e) => setVal(e.target.value)} />
       <button
         className={styles.saveBtn}
         disabled={pending || !dirty || !val}
@@ -180,10 +196,12 @@ function HourEdit({ event, path }: { event: ClientEvent; path: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { t } = useI18n();
+  // Sans libelle ni ligne a lui : le menu se nomme tout seul ("--", HO, HNO) et
+  // se range en tete de la ligne de date.
   return (
-    <div className={styles.dateEdit}>
-      <span className={styles.key}>{t("form.hourType")}</span>
+    <>
       <select
+        aria-label={t("form.hourType")}
         value={val}
         disabled={pending}
         onChange={(e) => {
@@ -203,7 +221,7 @@ function HourEdit({ event, path }: { event: ClientEvent; path: string }) {
         <option value="HNO">{t("form.hnoLong")}</option>
       </select>
       {err && <span className={styles.error}>{err}</span>}
-    </div>
+    </>
   );
 }
 
@@ -361,7 +379,9 @@ export function EventDrawer({
   onOpenEvent,
   canWrite = true,
   causal = { led: [] },
-  changelogHtml = null,
+  hasChangelog = false,
+  onOpenChangelog,
+  dismissDisabled = false,
 }: {
   event: ClientEvent;
   all: ClientEvent[];
@@ -380,9 +400,17 @@ export function EventDrawer({
    *  getCausalSummaries in @/lib/causal). Defaults to "no links" so callers that
    *  haven't wired it through yet degrade to "block hidden", not a crash. */
   causal?: CausalInfo;
-  /** Note de release de la version deployee, deja rendue et assainie au serveur.
-   *  null quand il n'y en a pas -- ou quand le reglage de visibilite la retire. */
-  changelogHtml?: string | null;
+  /** La version deployee a-t-elle une note ? false quand il n'y en a pas -- ou
+   *  quand le reglage de visibilite la retire. Le contenu, lui, ne descend pas
+   *  jusqu'ici : c'est la fenetre plein ecran qui va le chercher. */
+  hasChangelog?: boolean;
+  /** Ouvre la fenetre plein ecran des notes, placee sur cette version. Absent,
+   *  le bouton n'est pas rendu : il n'irait nulle part. */
+  onOpenChangelog?: () => void;
+  /** Coupe Echap pendant qu'une fenetre passe par-dessus le drawer -- sans ca,
+   *  une seule touche fermerait les deux d'un coup. Le piege a Tab, lui, reste
+   *  actif mais inerte : le focus est parti dans la fenetre du dessus. */
+  dismissDisabled?: boolean;
 }) {
   // Anonymous / read-only visitors see the full detail but no mutating controls.
   const editable = canWrite && !!path;
@@ -424,7 +452,7 @@ export function EventDrawer({
     [all, event.version],
   );
   const panelRef = useRef<HTMLDivElement>(null);
-  useModalDismiss(panelRef, onClose);
+  useModalDismiss(panelRef, onClose, { enabled: !dismissDisabled });
 
   function saveIncident() {
     if (!path) return;
@@ -522,28 +550,11 @@ export function EventDrawer({
               <div className={styles.warn}>{t("drawer.preWarn")}</div>
             )}
 
-            {editable && <DateEdit event={event} path={path} />}
-            {editable && <HourEdit event={event} path={path} />}
+            {editable && <DateEdit event={event} path={path} lead={<HourEdit event={event} path={path} />} />}
 
             <div className={styles.section}>
               <DeployTimeline event={event} path={path} canWrite={editable} />
             </div>
-
-            {changelogHtml && (
-              <div className={styles.section}>
-                {/* Repliee : la note peut etre longue, et le drawer sert d'abord a
-                    lire l'etat du deploiement. */}
-                <details>
-                  <summary className={styles.secTitle}>{t("changelog.title")}</summary>
-                  <ChangelogBody html={changelogHtml} />
-                  {path && (
-                    <Link href={`${path}/changelog`} className={styles.changelogAll}>
-                      {t("changelog.viewAll")}
-                    </Link>
-                  )}
-                </details>
-              </div>
-            )}
 
             {isMepParent && phases.length > 0 && (
               <div className={styles.section}>
@@ -560,15 +571,24 @@ export function EventDrawer({
               </div>
             )}
 
-            <Comments event={event} path={path} canWrite={editable} />
 
-            <Tags event={event} path={path} suggestions={tagSuggestions} canWrite={editable} />
 
             {trace && (
               <div className={styles.section}>
                 <hr className={styles.sep} />
                 <div className={styles.secHead}>
-                  <h2 className={styles.secTitle}>{t("drawer.buildTrace")} {event.version ?? ""}</h2>
+                  <h2 className={styles.secTitle}>
+                    {t("drawer.buildTrace")}{" "}
+                    {/* Le numero de build est la ou l'oeil cherche la version : en
+                        faire la poignee vers sa note evite un controle de plus. */}
+                    {event.version && hasChangelog && onOpenChangelog ? (
+                      <button type="button" className={styles.buildTraceLink} onClick={onOpenChangelog} title={t("changelog.open")}>
+                        {event.version}
+                      </button>
+                    ) : (
+                      event.version ?? ""
+                    )}
+                  </h2>
                   <button type="button" className={styles.detailsToggle} onClick={() => setBuildDetails((v) => !v)}>
                     {buildDetails ? t("drawer.detailsHide") : t("drawer.detailsShow")}
                   </button>
@@ -669,6 +689,10 @@ export function EventDrawer({
                 </div>
               )}
             </div>
+
+            <Tags event={event} path={path} suggestions={tagSuggestions} canWrite={editable} />
+
+            <Comments event={event} path={path} canWrite={editable} />
           </>
         ) : (
           <>

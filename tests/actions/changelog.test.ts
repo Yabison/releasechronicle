@@ -9,8 +9,9 @@ vi.mock("@/lib/auth/session", async (orig) => ({
   getSession: async () => session.user,
 }));
 
-import { setChangelogAction, releaseChangelogAction } from "@/app/actions/changelog";
+import { setChangelogAction, releaseChangelogAction, loadChangelogAction } from "@/app/actions/changelog";
 import { getChangelog, upsertChangelogFromCi } from "@/lib/changelog";
+import { setChangelogVisibility } from "@/lib/visibility";
 
 const ARGS = { company: "acme", product: "checkout", service: "api", version: "1.0.0", path: "/" };
 
@@ -90,5 +91,65 @@ describe("releaseChangelogAction", () => {
   it("refuses an anonymous caller", async () => {
     session.user = null;
     expect(await releaseChangelogAction(ARGS)).toEqual({ ok: false, error: "err.loginRequired" });
+  });
+});
+
+describe("loadChangelogAction", () => {
+  it("renders every note newest-first for a signed-in reader", async () => {
+    await upsertChangelogFromCi(await serviceId(), "1.0.0", "vieille");
+    await upsertChangelogFromCi(await serviceId(), "2.0.0", "### Récente");
+
+    const res = await loadChangelogAction({ company: "acme", product: "checkout", service: "api" });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.notes.map((n) => n.version)).toEqual(["2.0.0", "1.0.0"]);
+    expect(res.notes[0].html).toContain("<h3>Récente</h3>");
+  });
+
+  it("serves a reader with no write role — reading is not writing", async () => {
+    session.user = { sub: "u", name: "Read", roles: ["qa"] };
+    await upsertChangelogFromCi(await serviceId(), "1.0.0", "note");
+
+    const res = await loadChangelogAction({ company: "acme", product: "checkout", service: "api" });
+
+    expect(res.ok).toBe(true);
+  });
+
+  it("answers an empty list for a service with no note", async () => {
+    const res = await loadChangelogAction({ company: "acme", product: "checkout", service: "api" });
+    expect(res).toEqual({ ok: true, notes: [] });
+  });
+
+  // Une seule sortie pour « n'existe pas » et « pas le droit » : les distinguer
+  // dirait déjà que le service existe.
+  it("refuses an unknown service", async () => {
+    const res = await loadChangelogAction({ company: "acme", product: "checkout", service: "ghost" });
+    expect(res).toEqual({ ok: false, error: "err.serviceNotFound" });
+  });
+
+  it("refuses an anonymous caller in AUTHENTICATED mode, with the same answer", async () => {
+    session.user = null;
+    await prisma.company.updateMany({ data: { public: true } });
+    await prisma.product.updateMany({ data: { public: true } });
+    await prisma.service.updateMany({ data: { public: true } });
+    await upsertChangelogFromCi(await serviceId(), "1.0.0", "note");
+
+    const res = await loadChangelogAction({ company: "acme", product: "checkout", service: "api" });
+
+    expect(res).toEqual({ ok: false, error: "err.serviceNotFound" });
+  });
+
+  it("serves an anonymous caller in PUBLIC mode when the chain is public", async () => {
+    session.user = null;
+    await prisma.company.updateMany({ data: { public: true } });
+    await prisma.product.updateMany({ data: { public: true } });
+    await prisma.service.updateMany({ data: { public: true } });
+    await upsertChangelogFromCi(await serviceId(), "1.0.0", "note");
+    await setChangelogVisibility("PUBLIC");
+
+    const res = await loadChangelogAction({ company: "acme", product: "checkout", service: "api" });
+
+    expect(res.ok).toBe(true);
   });
 });

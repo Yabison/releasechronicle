@@ -94,11 +94,34 @@
 .lotVer { color: var(--muted); }
 .lotEnv { color: var(--muted); font-size: 0.9em; }
 
-.dateEdit { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.dateEdit input { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); }
+/* Date et horaire sont des retouches rares : en corps de texte plein ils
+   pesaient autant que le statut, qu'on vient lire a chaque ouverture. */
+/* Une seule ligne, dans une colonne de 420 px : le menu et le calendrier se
+   partagent la place restante (min-width:0, sans quoi un select refuse de
+   descendre sous la largeur de sa plus longue option et pousse OK a la ligne),
+   OK garde la sienne. */
+.dateEdit { display: flex; align-items: center; flex-wrap: nowrap; gap: 6px; margin-bottom: 8px; font-size: 0.8em; }
+.dateEdit input, .dateEdit select { font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); min-width: 0; flex: 1 1 auto; }
+.dateEdit > button { flex: none; padding: 3px 12px; }
 
 .warn { background: var(--warning-bg); color: var(--warning-text); border: 1px solid var(--warning-line); border-radius: var(--radius); padding: 6px 10px; font-size: 0.85em; margin-bottom: 10px; }
 
 /* Sortie vers la page complete, sous la note repliee. */
-.changelogAll { display: inline-block; margin-top: 8px; font-size: 0.8em; color: var(--muted); }
-.changelogAll:hover { text-decoration: underline; }
+
+
+/* Le + qui ouvre la saisie des tags ou d'un commentaire. Rond et discret : il
+   se range parmi les puces sans se faire passer pour l'une d'elles. */
+.addToggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 0; line-height: 1;
+  font: inherit; font-size: 0.95em; color: var(--muted);
+  background: none; border: 1px dashed var(--line); border-radius: 50%; cursor: pointer;
+}
+.addToggle:hover { border-style: solid; border-color: var(--accent); color: var(--accent); }
+
+/* Le numero de build dans le titre du parcours : porte vers sa note. */
+.buildTraceLink {
+  font: inherit; color: var(--accent); background: none; border: none;
+  padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.buildTraceLink:hover { text-decoration-thickness: 2px; }

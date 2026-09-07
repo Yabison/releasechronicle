@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { changelogStr } from "@/lib/schemas/common";
 import { getServiceBySlug } from "@/lib/hierarchy";
 import { setManualChangelog, releaseChangelogToCi } from "@/lib/changelog";
+import { loadServiceChangelog, type RenderedNote } from "@/lib/changelogPage";
 import { getSession } from "@/lib/auth/session";
 import { canWrite } from "@/lib/visibility";
 import { recordAudit } from "@/lib/audit";
@@ -59,4 +60,26 @@ export async function releaseChangelogAction(input: Target): Promise<{ ok: true 
   await recordAudit({ action: "changelog.release", actor: auth.session.name, target: targetLabel(input) });
   revalidatePath(input.path);
   return { ok: true };
+}
+
+/**
+ * Les notes d'un service, rendues et assainies ICI.
+ *
+ * La fenêtre changelog est un composant client : sans cette action, il faudrait
+ * soit sérialiser toutes les notes dans la page (payload payé même sans ouvrir),
+ * soit embarquer le moteur Markdown et son assainisseur dans le bundle. Elle ne
+ * garde pas `requireWriter` — lire n'est pas écrire ; les trois portes de
+ * visibilité sont celles de loadServiceChangelog, inchangées.
+ *
+ * `err.serviceNotFound` couvre « n'existe pas » ET « pas le droit » : les
+ * distinguer dirait déjà que le service existe, comme partout ailleurs ici.
+ */
+export async function loadChangelogAction(input: {
+  company: string;
+  product: string;
+  service: string;
+}): Promise<{ ok: true; notes: RenderedNote[] } | ActionFailure> {
+  const page = await loadServiceChangelog({ ...input, session: await getSession() });
+  if (!page) return fail("err.serviceNotFound");
+  return { ok: true, notes: page.notes };
 }

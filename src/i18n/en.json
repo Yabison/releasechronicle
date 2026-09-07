@@ -313,6 +313,11 @@
   "admin.scope": "Scope",
   "admin.addTargetBtn": "+ target",
   "admin.feedEmptyHint": "(empty = deployments + maintenances)",
+  "admin.feedMergeLots": "One event per lot",
+  "admin.feedMergeLotsHint": "(the lot replaces the per-service deployments)",
+  "admin.feedMergeLotsTag": "1 evt/lot",
+  "admin.feedGroupGone": "group not found, empty feed",
+  "admin.feedGroupEmpty": "group has no member, empty feed",
   "admin.addFeedBtn": "+ calendar",
   "publicCfg.title": "Public mode",
   "publicCfg.intro": "Without login, only the items checked below are visible, read-only.",
@@ -461,10 +466,9 @@
   "hook.openAction": "Open",
   "hook.seeEvent": "See the event",
   "changelog.title": "Release notes",
-  "changelog.back": "← back to the service",
   "changelog.empty": "No release note for this service yet.",
   "changelog.handEdited": "edited by hand",
   "changelog.handEditedBy": "edited by {name}",
   "changelog.link": "Release notes",
-  "changelog.viewAll": "See all release notes"
+  "changelog.open": "Open the release note"
 }

@@ -5,8 +5,17 @@
 .crumbService { color: var(--cat-deploy); }
 /* Discret a cote du fil d'ariane : c'est une sortie vers une autre page, pas une
    action sur celle-ci. */
-.changelogLink { font-size: 0.78em; color: var(--muted); text-decoration: none; }
-.changelogLink:hover { text-decoration: underline; }
+/* Une puce, pas une legende : en texte gris nu au milieu du fil d'ariane, la
+   seule porte d'entree des notes se lisait comme un sous-titre et se cassait en
+   deux lignes contre le selecteur d'environnement. */
+.changelogLink {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  font: inherit; font-size: 0.78em; color: var(--text-soft);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px 11px; cursor: pointer;
+}
+.changelogLink:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.changelogIcon { font-size: 1.05em; line-height: 1; }
 .newBtn { composes: btnGhost from global; }
 .headActions { display: flex; align-items: center; gap: calc(var(--space) * 2); flex-wrap: wrap; }
 

@@ -1,9 +1,9 @@
 "use client";
-import Link from "next/link";
 
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { EventDrawer, type CausalInfo } from "./EventDrawer";
+import { ChangelogOverlay } from "./ChangelogOverlay";
 import { EventModal } from "./EventModal";
 import { LotModal } from "./LotModal";
 import { ExcelBar } from "./ExcelBar";
@@ -46,7 +46,7 @@ export function DetailPane({
   defaultFrom,
   olderCount,
   causal = {},
-  changelogHtml = {},
+  changelogVersions = [],
 }: {
   company: string;
   product: string;
@@ -70,8 +70,9 @@ export function DetailPane({
   /** eventId → resolved product-wide causal summary, computed server-side
    *  (getCausalSummaries in @/lib/causal) with visibility already applied. */
   causal?: Record<string, CausalInfo>;
-  /** version -> HTML de sa note de release, rendu et assaini au serveur. */
-  changelogHtml?: Record<string, string>;
+  /** Versions a l'ecran qui ont une note. Le contenu ne transite pas : la
+   *  fenetre plein ecran va le chercher elle-meme a l'ouverture. */
+  changelogVersions?: string[];
 }) {
   const { t, locale } = useI18n();
   const { mode: timeMode } = useTimeFormat();
@@ -88,6 +89,12 @@ export function DetailPane({
   // Environment groups (e.g. ALLPROD = run+secure+prod) shown as extra filter options.
   const [envGroups, setEnvGroups] = useState<{ slug: string; name: string; members: string[] }[]>([]);
   const [loadWarn, setLoadWarn] = useState(false);
+  // Les notes de release s'ouvrent en fenêtre plein écran par-dessus la timeline
+  // et le drawer, pas dans une page rangée à côté de la sidebar.
+  // null = fermee. Sinon la version sur laquelle se placer en s'ouvrant, ou ""
+  // quand on l'ouvre depuis l'en-tete, sans version de depart.
+  const [changelogAt, setChangelogAt] = useState<string | null>(null);
+  const changelogSet = useMemo(() => new Set(changelogVersions), [changelogVersions]);
   useEffect(() => {
     fetch("/api/v1/environment-groups")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
@@ -230,7 +237,9 @@ export function DetailPane({
       <div className={styles.head}>
         <div className={styles.crumb}>
           <span className={styles.crumbProduct}>{productName}</span> / <span className={styles.crumbService}>{serviceName}</span>
-          <Link href={`${path}/changelog`} className={styles.changelogLink}>{t("changelog.link")}</Link>
+          <button type="button" className={styles.changelogLink} onClick={() => setChangelogAt("")}>
+            <span className={styles.changelogIcon} aria-hidden="true">🗒</span>{t("changelog.link")}
+          </button>
           {/* Painted in the env's colour once one is picked, so the filter reads
               like the badges it narrows the list to. */}
           <select
@@ -362,12 +371,14 @@ export function DetailPane({
           envColors={envColors}
           canWrite={canWrite}
           causal={causal[selectedEvent.id] ?? { led: [] }}
-          changelogHtml={selectedEvent.version ? (changelogHtml[selectedEvent.version] ?? null) : null}
           onNewPhase={(changeType, parentId) => {
             const parent = events.find((e) => e.id === parentId);
             setPhaseDefaults({ changeType, parentId, environment: parent?.environment ?? "", parentOccurredAt: parent?.occurredAt ?? "" });
           }}
           onOpenEvent={(id) => setSelected(id)}
+          hasChangelog={!!selectedEvent.version && changelogSet.has(selectedEvent.version)}
+          onOpenChangelog={() => setChangelogAt(selectedEvent.version ?? "")}
+          dismissDisabled={changelogAt !== null}
         />
       )}
       {modal && (
@@ -387,6 +398,14 @@ export function DetailPane({
       )}
       {lotModal && (
         <LotModal path={path} company={company} onClose={() => setLotModal(false)} />
+      )}
+      {changelogAt !== null && (
+        <ChangelogOverlay
+          company={company} product={product} service={service}
+          productName={productName} serviceName={serviceName}
+          focusVersion={changelogAt || null}
+          onClose={() => setChangelogAt(null)}
+        />
       )}
     </div>
   );
