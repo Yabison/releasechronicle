@@ -71,20 +71,21 @@ export default async function ServicePage({
     events.map((e) => ({ id: e.id, causedById: e.causedById })),
     publicEventScopeWhere(scope),
   );
-  // Les notes des versions presentes a l'ecran, rendues ICI : le Markdown ne
-  // traverse pas vers le client, ni le moteur qui l'assainit. Soumis au meme
-  // reglage que la page changelog -- un anonyme en mode AUTHENTICATED n'en voit
+  // Quelles versions a l'ecran ONT une note -- pas leur contenu. Le drawer ne
+  // fait plus qu'ouvrir la fenetre plein ecran, qui va chercher les notes elle
+  // meme : serialiser ici le HTML de chaque note ferait payer a chaque visite de
+  // la timeline un contenu que la plupart n'ouvrent jamais. Soumis au meme
+  // reglage que la fenetre -- un anonyme en mode AUTHENTICATED n'en voit
   // aucune, meme en ouvrant un deploiement qu'il a le droit de lire.
-  const changelogHtml: Record<string, string> = {};
+  let changelogVersions: string[] = [];
   if (await canReadChangelog(session)) {
     const { listChangelogs } = await import("@/lib/changelog");
-    const { renderChangelog } = await import("@/lib/changelogRender");
     const onScreen = new Set(
       events.filter((e) => e.type === "DEPLOYMENT" && e.version).map((e) => e.version as string),
     );
-    for (const note of await listChangelogs(svc.id)) {
-      if (onScreen.has(note.version)) changelogHtml[note.version] = renderChangelog(note.body);
-    }
+    changelogVersions = (await listChangelogs(svc.id))
+      .map((n) => n.version)
+      .filter((v) => onScreen.has(v));
   }
 
   const causal: Record<string, CausalInfo> = {};
@@ -114,7 +115,7 @@ export default async function ServicePage({
       defaultFrom={defaultFrom}
       olderCount={olderCount}
       causal={causal}
-      changelogHtml={changelogHtml}
+      changelogVersions={changelogVersions}
     />
   );
 }

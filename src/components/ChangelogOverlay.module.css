@@ -1,0 +1,59 @@
+/* Plein écran et opaque : la fenêtre recouvre la sidebar, la timeline et le
+   drawer (z-index 50) au lieu de se ranger à côté d'eux. */
+.overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: var(--bg); color: var(--text);
+  display: flex; flex-direction: column;
+}
+
+/* L'en-tête reste visible pendant qu'on fait défiler des notes longues : sans
+   lui, la seule sortie à la souris disparaît au premier scroll. */
+.head {
+  flex: none; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  padding: 14px calc(var(--space) * 3);
+  border-bottom: 1px solid var(--line); background: var(--surface);
+}
+.title { font-size: 1.1rem; margin: 0; }
+.crumb { color: var(--muted); font-size: 0.85em; }
+.close {
+  margin-left: auto; font: inherit; font-size: 1.4rem; line-height: 1;
+  border: none; background: none; color: var(--muted); cursor: pointer; padding: 0 4px;
+}
+.close:hover { color: var(--text); }
+
+.body {
+  /* overscroll-behavior : arrive en bas des notes, la molette ne doit pas se
+     mettre a faire defiler la timeline restee derriere. */
+  flex: 1; overflow-y: auto; overscroll-behavior: contain;
+  padding: 22px calc(var(--space) * 3) 40px;
+  display: flex; flex-direction: column; gap: 22px;
+}
+/* Pleine largeur : ces notes sont surtout des tableaux de work items, et les
+   brider à une colonne de lecture les renvoyait au repliement qu'on venait de
+   fuir en sortant la note du drawer. */
+.body > * { width: 100%; }
+
+.muted { color: var(--muted); font-size: 0.9em; margin: 0; }
+.error { color: var(--cat-incident); font-size: 0.9em; margin: 0; }
+
+.release { display: flex; flex-direction: column; gap: 6px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.release:last-child { border-bottom: 0; }
+.releaseHead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.version { font-size: 0.98rem; margin: 0; font-weight: 600; }
+.meta { color: var(--muted); font-size: 0.82em; }
+.handEdited {
+  font-size: 0.75em; padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--muted);
+}
+
+/* La note d'ou l'on vient : marquee, sinon rien ne dit que la fenetre s'est
+   placee la volontairement plutot que d'avoir mal restaure un scroll. */
+/* Un aplat plutot qu'un filet a gauche : les marges negatives compensent le
+   padding, donc le texte reste aligne sur les autres notes -- un filet, lui,
+   decalait la note ciblee de quelques pixels et se lisait comme un defaut
+   d'alignement. */
+.release[data-focus="true"] {
+  background: var(--accent-bg); border-radius: var(--radius);
+  padding: 12px 16px 20px; margin: -12px -16px 0;
+  border-bottom: 0; scroll-margin-top: 4px;
+}
