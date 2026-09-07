@@ -44,7 +44,7 @@ type Service = { id: string; name: string; slug: string; type?: string; buildUrl
 type Target = { id: string; type: string; label: string; config: { to?: string[]; url?: string; locale?: string } };
 type DirUser = { id: string; username: string; name: string; email: string | null; roles: string[]; syncedAt: string };
 type TagRow = { name: string; slug: string; color: string | null; count: number };
-type CalFeed = { id: string; name: string; token: string; company: string | null; product: string | null; service: string | null; environment: string | null; types: string[] };
+type CalFeed = { id: string; name: string; token: string; company: string | null; product: string | null; service: string | null; environment: string | null; types: string[]; mergeLots: boolean };
 
 export default function AdminPage() {
   const { t: tr } = useI18n();
@@ -111,7 +111,7 @@ export default function AdminPage() {
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#6366f1");
   const [feeds, setFeeds] = useState<CalFeed[]>([]);
-  const [newFeed, setNewFeed] = useState<{ name: string; company: string; product: string; service: string; environment: string; types: string[] }>({ name: "", company: "", product: "", service: "", environment: "", types: [] });
+  const [newFeed, setNewFeed] = useState<{ name: string; company: string; product: string; service: string; environment: string; types: string[]; mergeLots: boolean }>({ name: "", company: "", product: "", service: "", environment: "", types: [], mergeLots: false });
   const [allProducts, setAllProducts] = useState<{ id: string; slug: string; name: string; company: string }[]>([]);
   const [prodServices, setProdServices] = useState<Record<string, Service[]>>({});
   // Dedicated services list for the calendar-feed form's dependent dropdown,
@@ -155,13 +155,24 @@ export default function AdminPage() {
     const res = await fetch("/api/v1/calendar-feeds", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(newFeed),
     });
-    if (res.ok) { setNewFeed({ name: "", company: "", product: "", service: "", environment: "", types: [] }); await loadFeeds(); }
+    if (res.ok) { setNewFeed({ name: "", company: "", product: "", service: "", environment: "", types: [], mergeLots: false }); await loadFeeds(); }
     else setStatus(`Error ${res.status}`);
   }
   async function deleteFeed(id: string) {
     if (!window.confirm(tr("confirm.deleteFeed"))) return;
     await fetch(`/api/v1/calendar-feeds/${id}`, { method: "DELETE" });
     await loadFeeds();
+  }
+  /**
+   * A feed scoped to a group shows the group and what it covers, because "group:allprod"
+   * alone hides the members — and a group since deleted serves an EMPTY feed, which the
+   * list must say out loud rather than let the admin read as "all environments".
+   */
+  function feedEnvLabel(environment: string | null): string | null {
+    if (!environment?.startsWith("group:")) return environment;
+    const g = envGroups.find((x) => x.slug === environment.slice("group:".length));
+    if (!g) return `${environment} — ${tr("admin.feedGroupGone")}`;
+    return g.members.length ? `${g.name} (${g.members.join(", ")})` : `${g.name} — ${tr("admin.feedGroupEmpty")}`;
   }
   function feedUrl(token: string) {
     return `${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/calendars/${token}.ics`;
@@ -1530,6 +1541,15 @@ ${fields.join(",\n")}
                   </select>
                   <select value={newFeed.environment} onChange={(e) => setNewFeed({ ...newFeed, environment: e.target.value })}>
                     <option value="">{tr("admin.allEnvsOpt")}</option>
+                    {/* A group is one option standing for its members, same "group:<slug>"
+                        value the timeline filter uses. */}
+                    {envGroups.length > 0 && (
+                      <optgroup label={tr("admin.envGroups")}>
+                        {envGroups.map((g) => (
+                          <option key={g.id} value={`group:${g.slug}`}>{g.name}</option>
+                        ))}
+                      </optgroup>
+                    )}
                     {envs.map((en) => <option key={en.id} value={en.slug}>{en.slug}</option>)}
                   </select>
                 </div>
@@ -1546,6 +1566,17 @@ ${fields.join(",\n")}
                     </button>
                   ))}
                   <span className={styles.muted}>{tr("admin.feedEmptyHint")}</span>
+                </div>
+                <div className={styles.checks}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={newFeed.mergeLots}
+                      onChange={(e) => setNewFeed({ ...newFeed, mergeLots: e.target.checked })}
+                    />
+                    {tr("admin.feedMergeLots")}
+                  </label>
+                  <span className={styles.muted}>{tr("admin.feedMergeLotsHint")}</span>
                   <button className={styles.primary} onClick={addFeed}>{tr("admin.addFeedBtn")}</button>
                 </div>
               </div>
@@ -1555,8 +1586,9 @@ ${fields.join(",\n")}
                   <li key={f.id} className={styles.listItem}>
                     <strong>{f.name}</strong>
                     <span className={styles.slug}>
-                      {[f.company, f.product, f.service, f.environment].filter(Boolean).join(" / ") || "tout"}
+                      {[f.company, f.product, f.service, feedEnvLabel(f.environment)].filter(Boolean).join(" / ") || "tout"}
                       {f.types.length ? ` · ${f.types.join(", ")}` : ""}
+                      {f.mergeLots ? ` · ${tr("admin.feedMergeLotsTag")}` : ""}
                     </span>
                     <button onClick={() => navigator.clipboard?.writeText(feedUrl(f.token))} title={tr("admin.copyIcs")}>{tr("admin.copyUrl")}</button>
                     <a href={feedUrl(f.token)} target="_blank" rel="noreferrer" className={styles.slug}>{tr("admin.open")}</a>

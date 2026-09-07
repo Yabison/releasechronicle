@@ -4,13 +4,16 @@ import { requestScope } from "@/lib/apiVisibility";
 
 /** Subscribable iCalendar feed of deployments (planned/occurred) + maintenance windows.
  *  Readable without a session, but an anonymous subscriber only gets what public
- *  mode exposes. Filter with ?company=&product=&service=&environment=. */
+ *  mode exposes. Filter with ?company=&product=&service=&environment=, where the
+ *  environment may be `group:<slug>`; ?mergeLots=1 serves one event per lot instead
+ *  of one per member service. */
 export async function GET(req: Request) {
   const u = new URL(req.url);
   const s = (k: string) => { const v = u.searchParams.get(k)?.trim(); return v ? v : undefined; };
   const scope = await requestScope(req);
   const items = await queryCalendar({
     company: s("company"), product: s("product"), service: s("service"), environment: s("environment"),
+    mergeLots: u.searchParams.get("mergeLots") === "1" || u.searchParams.get("mergeLots") === "true",
     ...(scope.anonymous ? { publicScope: { envs: scope.envs, types: scope.types } } : {}),
   });
   return new Response(buildCalendar(items), {

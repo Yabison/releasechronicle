@@ -38,6 +38,52 @@ describe("calendar feeds", () => {
     expect(body).toContain("[MEP] checkout/api");
   });
 
+  /**
+   * The two options a feed carries beyond its scope: a group standing for several
+   * environments, and the choice to serve one event per lot rather than per service.
+   * Both must survive the round trip to the .ics, since the feed row is the only
+   * place a subscriber's settings live.
+   */
+  it("serves one event per lot when the feed merges them", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const api = await createService({ productId: p.id, name: "API", type: "API" });
+    const web = await createService({ productId: p.id, name: "Web", type: "APP" });
+    for (const s of [api, web]) {
+      await createEvent({ serviceId: s.id, environment: "PROD", type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+        fields: { version: "2.1.0", requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: "release-08" } });
+    }
+
+    const created = await (await POST(post({ name: "Lots", environment: "PROD", types: ["DEPLOYMENT"], mergeLots: true }, AUTH))).json();
+    expect(created.mergeLots).toBe(true);
+
+    const body = await (await icsGET(new Request("http://x"), { params: Promise.resolve({ token: created.token }) })).text();
+
+    expect(body).toContain("[MEP] lot release-08 (PROD)");
+    expect(body).not.toContain("[MEP] checkout/api");
+    expect(body.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+  });
+
+  it("serves every environment of a group the feed is scoped to", async () => {
+    const c = await createCompany({ name: "Acme" });
+    const p = await createProduct({ companyId: c.id, name: "Checkout" });
+    const s = await createService({ productId: p.id, name: "API", type: "API" });
+    await prisma.environmentGroup.create({ data: { slug: "allprod", name: "ALLPROD", members: ["PROD", "SECURE"], sortOrder: 0 } });
+    for (const [environment, version] of [["PROD", "in-prod"], ["SECURE", "in-secure"], ["RECETTE", "in-recette"]]) {
+      await createEvent({ serviceId: s.id, environment, type: "DEPLOYMENT", occurredAt: new Date(), tags: [],
+        fields: { version, requester: "ci", changeType: "NORMAL", deployStatus: "DEPLOYED", lot: null } });
+    }
+
+    const created = await (await POST(post({ name: "All prod", environment: "group:allprod", types: ["DEPLOYMENT"] }, AUTH))).json();
+    expect(created.environment).toBe("group:allprod");
+
+    const body = await (await icsGET(new Request("http://x"), { params: Promise.resolve({ token: created.token }) })).text();
+
+    expect(body).toContain("in-prod");
+    expect(body).toContain("in-secure");
+    expect(body).not.toContain("in-recette");
+  });
+
   it("404s an unknown token", async () => {
     const res = await icsGET(new Request("http://x"), { params: Promise.resolve({ token: "nope.ics" }) });
     expect(res.status).toBe(404);

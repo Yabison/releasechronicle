@@ -150,8 +150,11 @@ model CalendarFeed {
   company     String?
   product     String?
   service     String?
+  /// An environment slug, or "group:<slug>" standing for that group's members.
   environment String?
   types       String[] @default([])
+  /// Serve one event per lot instead of one per member service.
+  mergeLots   Boolean  @default(false)
   createdAt   DateTime @default(now())
 }
 
