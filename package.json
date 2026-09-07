@@ -21,8 +21,8 @@
     "db:seed:private:config": "tsx prisma/seed-private.ts --config-only",
     "demo:tick": "tsx prisma/demo-tick.ts",
     "demo:reset": "tsx prisma/demo-reset.ts",
-    "dev:up": "docker compose up -d db db_test mailpit ldap",
-    "dev:down": "docker compose stop db db_test mailpit ldap",
+    "dev:up": "docker compose up -d $(docker compose config --services | grep -vx app)",
+    "dev:down": "docker compose stop",
     "dev:reset": "prisma migrate deploy && npm run db:seed:demo"
   },
   "prisma": {

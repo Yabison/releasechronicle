@@ -9,7 +9,7 @@ Next SWC binary, so host dev is the reliable path.
 
 ```bash
 cp .env.example .env          # first time
-npm run dev:up                # docker: db, db_test, mailpit, ldap
+npm run dev:up                # docker: everything but the app (make up-deps)
 npm run dev:reset             # prisma migrate deploy + seed (import dataset)
 npm run dev                   # app on http://localhost:3000
 ```

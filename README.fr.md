@@ -368,12 +368,23 @@ pour que les liens pointent vers le bon hôte.
 Flux abonnable des MEP planifiées et fenêtres de maintenance :
 
 ```
-GET /api/v1/calendar.ics?company=&product=&service=&environment=
+GET /api/v1/calendar.ics?company=&product=&service=&environment=&mergeLots=
 ```
 
 `Content-Type: text/calendar`. S'abonner depuis Outlook / Google / Apple Calendar via
 l'URL. Les déploiements utilisent `scheduledAt` (sinon `occurredAt`) ; les maintenances
 la fenêtre `windowStart → windowEnd`.
+
+`environment` accepte un environnement (`PROD`) ou un **groupe** (`group:allprod`), qui
+vaut pour tous ses membres. Un groupe supprimé ou vidé rend le flux vide — jamais « tous
+les environnements », ce qui exposerait précisément ce que le groupe excluait.
+
+`mergeLots=1` sert **un seul événement par lot** : il couvre de la première à la dernière
+MEP du lot, liste ses apps dans la description, et remplace les événements par service.
+Les lots à un seul membre et les MEP sans lot ne changent pas.
+
+Les deux options se règlent aussi par calendrier abonnable dans l'admin (onglet
+« Calendriers .ics »), où elles sont enregistrées avec le jeton du flux.
 
 ---
 

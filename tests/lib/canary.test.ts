@@ -6,7 +6,7 @@ const T0 = new Date("2026-01-29T12:00:00Z").getTime();
 
 /** A minimal deploy row; only the fields the merge reasons about are interesting. */
 const row = (minutes: number, over: Partial<ImportRow> = {}): ImportRow => ({
-  product: "weda",
+  product: "checkout",
   environment: "RUN",
   externalId: String(minutes),
   occurredAt: new Date(T0 + minutes * 60_000),

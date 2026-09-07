@@ -371,12 +371,23 @@ by a consumed `jti`, so a second click does nothing; the token expires after 48 
 A subscribable feed of scheduled releases and maintenance windows:
 
 ```
-GET /api/v1/calendar.ics?company=&product=&service=&environment=
+GET /api/v1/calendar.ics?company=&product=&service=&environment=&mergeLots=
 ```
 
 `Content-Type: text/calendar`. Subscribe from Outlook / Google / Apple Calendar with
 the URL. Deployments use `scheduledAt` (falling back to `occurredAt`); maintenance
 uses the `windowStart → windowEnd` window.
+
+`environment` takes either an environment (`PROD`) or a **group** (`group:allprod`),
+which stands for every member. A group that is deleted or emptied empties the feed —
+never "every environment", which would expose exactly what the group excluded.
+
+`mergeLots=1` serves **one event per lot**: it spans the lot's first to last deployment,
+lists its apps in the description, and replaces the per-service events. Lots of a single
+member, and deployments with no lot, are unaffected.
+
+Both options are also per-feed settings in the admin (".ics calendars" tab), stored
+alongside the feed token.
 
 ---
 

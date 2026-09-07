@@ -18,7 +18,7 @@ const DEFAULTS: Record<(typeof COLUMNS)[number], string> = {
   date_debut: "2026-09-04T11:11:30+00:00",
   date_fin: "2026-09-04T11:16:19+00:00",
   duree_min: "4.8",
-  produit: "WedaRoutine",
+  produit: "CheckoutRoutine",
   projet: "WD",
   environnement: "secure",
   job: "Deploy app - SECURE",
@@ -45,7 +45,7 @@ describe("parseRundeckCsv", () => {
     const [parsed] = parseRundeckCsv(csv(row()));
 
     expect(parsed).toEqual({
-      product: "wedaroutine",
+      product: "checkoutroutine",
       environment: "SECURE",
       externalId: "26700",
       occurredAt: new Date("2026-09-04T11:11:30+00:00"),

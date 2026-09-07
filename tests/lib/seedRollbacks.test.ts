@@ -5,7 +5,7 @@ const T0 = new Date("2026-05-01T08:00:00Z").getTime();
 
 const point = (id: string, build: string | null, minutes: number, over: Partial<BuildPoint> = {}): BuildPoint => ({
   id,
-  serviceId: "svc-weda",
+  serviceId: "svc-api",
   environment: "RUN",
   at: new Date(T0 + minutes * 60_000),
   build,
