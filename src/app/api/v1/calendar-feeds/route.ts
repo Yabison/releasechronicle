@@ -21,6 +21,8 @@ const postSchema = z.object({
   product: scopeField(),
   service: scopeField(),
   environment: scopeField(),
+  // Same tolerance as the scope fields: a non-boolean is ignored, not refused.
+  mergeLots: z.preprocess((v) => v === true, z.boolean()),
 });
 
 export async function GET(req: Request) {
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
     service: parsed.value.service,
     environment: parsed.value.environment,
     types: parsed.value.types,
+    mergeLots: parsed.value.mergeLots,
   });
   return Response.json(feed, { status: 201 });
 }

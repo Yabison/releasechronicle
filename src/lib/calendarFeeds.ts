@@ -5,7 +5,7 @@ import type { CalendarFilter } from "@/lib/calendarQuery";
 export type CalendarFeedRow = {
   id: string; name: string; token: string;
   company: string | null; product: string | null; service: string | null;
-  environment: string | null; types: string[];
+  environment: string | null; types: string[]; mergeLots: boolean;
 };
 
 export function listCalendarFeeds(): Promise<CalendarFeedRow[]> {
@@ -19,6 +19,7 @@ export function getCalendarFeedByToken(token: string) {
 export function createCalendarFeed(input: {
   name: string; company?: string | null; product?: string | null;
   service?: string | null; environment?: string | null; types?: string[];
+  mergeLots?: boolean;
 }): Promise<CalendarFeedRow> {
   return prisma.calendarFeed.create({
     data: {
@@ -29,6 +30,7 @@ export function createCalendarFeed(input: {
       service: input.service || null,
       environment: input.environment || null,
       types: input.types ?? [],
+      mergeLots: input.mergeLots ?? false,
     },
   });
 }
@@ -45,5 +47,6 @@ export function feedFilter(feed: CalendarFeedRow): CalendarFilter {
     service: feed.service ?? undefined,
     environment: feed.environment ?? undefined,
     types: feed.types.length ? feed.types : undefined,
+    mergeLots: feed.mergeLots,
   };
 }

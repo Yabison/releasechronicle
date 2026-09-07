@@ -64,3 +64,18 @@ export async function updateEnvironmentGroup(id: string, data: { name?: string; 
 export async function softDeleteEnvironmentGroup(id: string): Promise<void> {
   await prisma.environmentGroup.update({ where: { id }, data: { deletedAt: new Date() } });
 }
+
+/** Prefix marking a filter value as a GROUP slug rather than an environment slug. */
+export const ENV_GROUP_PREFIX = "group:";
+
+/**
+ * Member environments of a `group:<slug>` filter value, or null when the value names
+ * a plain environment. An unknown, deleted or emptied group resolves to an empty
+ * list — never to "every environment", which would expose what the group excluded.
+ */
+export async function resolveEnvGroupMembers(value: string): Promise<string[] | null> {
+  if (!value.startsWith(ENV_GROUP_PREFIX)) return null;
+  const slug = value.slice(ENV_GROUP_PREFIX.length);
+  const g = await prisma.environmentGroup.findFirst({ where: { ...active, slug } });
+  return g?.members ?? [];
+}
