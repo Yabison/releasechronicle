@@ -66,6 +66,7 @@ leaves the machine — open http://localhost:8025 to read what the email hooks s
 | `npm run db:seed:demo`     | Yabison demo: 90 days of activity, relative to now (default) |
 | `npm run db:seed:private`     | Real hierarchy + rundeck history — needs `private/`, below |
 | `npm run db:seed:private:config` | Real hierarchy only, no events                          |
+| `npm run db:seed:releasenotes` | Import the release-note tree into the changelog — dry run unless `-- --write` |
 | `npm run db:wipe`          | Empty every table                                          |
 
 Two datasets, deliberately separate: the demo one is committed and publishable, the
@@ -83,6 +84,7 @@ production data:
 | Company/product/service names | `private/hierarchy.yml` | `RC_PRIVATE_HIERARCHY` |
 | The deployment export | the single `.csv` or `.xlsx` in `private/import/` | `RC_PRIVATE_IMPORT` |
 | MEP tracking sheet *(optional)* | `private/import/Suivi des MEPs.xlsx` | `RC_PRIVATE_MEP_TRACKING` |
+| Release-note tree *(optional)* | `private/releases/` | `RC_PRIVATE_RELEASE_NOTES` |
 
 The export may be a raw rundeck execution CSV (translated on the way in) or a
 spreadsheet already using the app's own column names. `private/import/` is expected to
@@ -93,6 +95,40 @@ metrics look wrong.
 A missing hierarchy or export fails with a message pointing at the demo seeder. The
 tracking sheet is optional: without it the import simply carries no hotfix information
 and says so.
+
+### Importing the release notes
+
+`db:seed:releasenotes` reads a tree of release folders — one per release, named
+`<env...> <day> <label>`, holding whatever the Azure DevOps generator produced:
+
+```
+secure 2026-09-03 - Hotfix Security/releasenote.md
+run secure 2026-02-04 kc-migration/releasenote_WEDA_20260204.md
+secure 2026-03-11/releasenote 20260311.html
+```
+
+Markdown and HTML are read, Markdown winning when a folder holds both. An HTML note
+is a whole document, so its shell is stripped and the rest put on one line: left
+indented, Markdown would read it as a code block and the note would render as its own
+source. The `.docx` and `.pdf` sitting in the same folders are ignored.
+
+A folder names an environment and a day, never a version — but a changelog row is
+keyed by service and version. So the join is by **day and environment**, the same one
+`mep-tracking.ts` makes, walking deployments (which know both) and asking whether a
+note covers each. A release train that shipped nine services on one day therefore
+attaches its note to all nine.
+
+Two cases are reported and never written, because a wrong note is invisible once
+saved while a missing one is not:
+
+- **ambiguous** — that day holds notes that disagree.
+- **conflict** — one service and version claimed by two different notes. A build
+  promoted to the next environment the following day hits this whenever both days
+  have their own note. Services whose version never moves (`0.1.0`) hit it often.
+
+The command is a **dry run by default** and prints the whole plan; `npm run
+db:seed:releasenotes -- --write` applies it. Notes already edited in the UI keep
+their text — the write goes through the same lock the CI ingest respects.
 
 ### What the import derives
 
